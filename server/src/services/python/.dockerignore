@@ -1,0 +1,23 @@
+# Python .dockerignore
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.env
+.env.*
+venv/
+env/
+.venv/
+.pytest_cache/
+.coverage
+.git/
+.gitignore
+*.log
+cache/*
+!cache/.gitkeep

@@ -1,0 +1,53 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+venv_temp/
+*.env
+*.env.*
+
+# Virtual Envs in services/python
+server/src/services/python/venv/
+server/src/services/python/venv_temp/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Build output
+dist/
+build/
+.cache/
+coverage/
+
+# Editor/IDE settings
+.vscode/
+.idea/
+
+# Project-specific
+.env
+.env.*
+*.sqlite
+*.db
+debug.log
+
+# Ignore compiled/bundled JS
+*.map
+*.bundle.js
+
+# Ignore lock files from different systems
+bun.lockb
+pnpm-lock.yaml

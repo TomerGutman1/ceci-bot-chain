@@ -1,0 +1,18 @@
+# Frontend .dockerignore
+node_modules/
+dist/
+.env
+.env.*
+.git/
+.gitignore
+*.log
+.DS_Store
+coverage/
+.vscode/
+.idea/
+server/
+supabase/
+deploy/
+*.md
+*.sh
+*.bat

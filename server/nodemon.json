@@ -1,0 +1,17 @@
+{
+    "watch": ["dist"],
+    "ext": "js",
+    "exec": "node dist/main.js",
+    "verbose": true,
+    "stdout": true,
+    "env": {
+        "DEBUG": "true",
+        "FORCE_COLOR": "0"
+    },
+    "events": {
+        "restart": "echo '🔄 Nodemon: Restarting server...'",
+        "start": "echo '🚀 Nodemon: Starting server...'",
+        "crash": "echo '💥 Nodemon: Server crashed!'",
+        "exit": "echo '🛑 Nodemon: Server exited'"
+    }
+}
