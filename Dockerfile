@@ -36,7 +36,7 @@ RUN apk add --no-cache curl
 
 # Copy built application from builder
 COPY --from=builder /app/dist /usr/share/nginx/html
-
+COPY --from=builder /app/public/favicon.ico /usr/share/nginx/html/favicon.ico
 # Copy custom nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
