@@ -1,8 +1,8 @@
 #!/bin/bash
 # init-letsencrypt.sh - Initialize SSL certificates
 
-if ! [ -x "$(command -v docker-compose)" ]; then
-  echo 'Error: docker-compose is not installed.' >&2
+if ! [ -x "$(command -v docker compose)" ]; then
+  echo 'Error: docker compose is not installed.' >&2
   exit 1
 fi
 
@@ -16,7 +16,7 @@ if [ -z "$DOMAIN_NAME" ] || [ -z "$ADMIN_EMAIL" ]; then
   exit 1
 fi
 
-domains=($DOMAIN_NAME www.$DOMAIN_NAME)
+domains=($DOMAIN_NAME)
 rsa_key_size=4096
 data_path="./certbot"
 staging=0 # Set to 1 for testing
@@ -44,7 +44,7 @@ docker run --rm -v "$PWD/$data_path/conf:/etc/letsencrypt" \
     -subj '/CN=localhost'"
 
 echo "### Starting nginx..."
-docker-compose up -d nginx
+docker compose up -d nginx
 
 echo "### Deleting dummy certificate for $domains..."
 docker run --rm -v "$PWD/$data_path/conf:/etc/letsencrypt" \
@@ -76,4 +76,4 @@ docker run --rm -v "$PWD/$data_path/conf:/etc/letsencrypt" \
     --force-renewal"
 
 echo "### Reloading nginx..."
-docker-compose exec nginx nginx -s reload
+docker compose exec nginx nginx -s reload
