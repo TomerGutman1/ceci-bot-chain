@@ -21,6 +21,7 @@
     "http-errors": "^2.0.0",
     "http-status-codes": "^2.3.0",
     "openai": "^4.86.2",
+    "uuid": "^9.0.1",
     "winston": "^3.11.0"
   },
   "devDependencies": {
@@ -28,6 +29,7 @@
     "@types/cors": "^2.8.18",
     "@types/express": "^5.0.0",
     "@types/node": "^22.15.32",
+    "@types/uuid": "^9.0.7",
     "concurrently": "^9.1.2",
     "eslint": "^9.21.0",
     "globals": "^15.15.0",

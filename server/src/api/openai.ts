@@ -41,7 +41,7 @@ export async function callFunction(
     
     // Handle search_decisions tool - NOT SUPPORTED ANYMORE
     if (toolName === 'search_decisions') {
-      return [undefined, 'חיפוש החלטות נעשה כעת דרך PandasAI. אנא השתמש בממשק הצ\'אט הראשי.'];
+      return [undefined, 'חיפוש החלטות נעשה כעת דרך הממשק. אנא השתמש בממשק הצ\'אט הראשי.'];
     }
 
     // Handle evaluation tools (existing code)

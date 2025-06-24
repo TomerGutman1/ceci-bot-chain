@@ -1,73 +1,154 @@
-# Welcome to your Lovable project
+# 🚀 CECI-AI - מערכת חיפוש החלטות ממשלה חכמה
 
-## Project info
+<div align="center">
+  <img src="docs/logo.png" alt="CECI-AI Logo" width="200"/>
+  
+  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+  [![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
+  [![Docker](https://img.shields.io/badge/docker-%3E%3D20.10-blue)](https://www.docker.com/)
+</div>
 
-**URL**: https://lovable.dev/projects/1515cad7-ba82-4307-9a87-3fd90019a650
+## 📖 תיאור
 
-## How can I edit this code?
+CECI-AI היא מערכת חכמה לחיפוש וניתוח החלטות ממשלת ישראל באמצעות בינה מלאכותית. המערכת מאפשרת שאילתות בשפה טבעית בעברית ומחזירה תוצאות מדויקות ורלוונטיות.
 
-There are several ways of editing your application.
+### ✨ תכונות עיקריות
 
-**Use Lovable**
+- 🔍 **חיפוש חכם** - שאילתות בשפה טבעית בעברית
+- 🤖 **AI מתקדם** - שימוש ב-GPT לניתוח שאילתות
+- 📊 **24,716 החלטות** - מסד נתונים מקיף
+- 🚀 **ביצועים מעולים** - SQL Engine מהיר ומדויק
+- 🔒 **אבטחה** - HTTPS, rate limiting, security headers
+- 📱 **ממשק מודרני** - React + TypeScript
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/1515cad7-ba82-4307-9a87-3fd90019a650) and start prompting.
+## 🛠️ טכנולוגיות
 
-Changes made via Lovable will be committed automatically to this repo.
+- **Frontend**: React, TypeScript, Vite, TailwindCSS
+- **Backend**: Node.js, Express, TypeScript
+- **Database**: Supabase (PostgreSQL)
+- **AI**: OpenAI GPT-3.5, SQL Query Engine
+- **Infrastructure**: Docker, Nginx, Redis
+- **Security**: Let's Encrypt SSL, Rate Limiting
 
-**Use your preferred IDE**
+## 📋 דרישות מערכת
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+- Docker >= 20.10
+- Docker Compose >= 2.0
+- Domain name (for HTTPS)
+- OpenAI API Key
+- Supabase account
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## 🚀 התקנה מהירה
 
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+### 1. Clone the repository
+```bash
+git clone https://github.com/your-username/ceci-ai.git
+cd ceci-ai
 ```
 
-**Edit a file directly in GitHub**
+### 2. הגדרת Environment Variables
+```bash
+cp .env.example .env
+# ערוך את .env עם הפרטים שלך
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### 3. הרצה לוקלית (HTTP)
+```bash
+docker compose up -d
+```
 
-**Use GitHub Codespaces**
+### 4. הרצה ב-Production (HTTPS)
+```bash
+# הגדר DOMAIN_NAME ו-ADMIN_EMAIL ב-.env
+./init-letsencrypt.sh
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## 📚 מדריך שימוש
 
-## What technologies are used for this project?
+### דוגמאות לשאילתות
 
-This project is built with:
+- "כמה החלטות קיבלה ממשלה 37?"
+- "הבא לי החלטות בנושא חינוך משנת 2023"
+- "מה עשה נתניהו בנושא ביטחון?"
+- "החלטה 660 של ממשלה 35"
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### API Endpoints
 
-## How can I deploy this project?
+```bash
+POST /api/chat
+Content-Type: application/json
+{
+  "message": "השאילתה שלך",
+  "sessionId": "optional-session-id"
+}
+```
 
-Simply open [Lovable](https://lovable.dev/projects/1515cad7-ba82-4307-9a87-3fd90019a650) and click on Share -> Publish.
+## 🔧 פיתוח
 
-## Can I connect a custom domain to my Lovable project?
+### הרצת סביבת פיתוח
+```bash
+# Frontend
+cd src && npm install && npm run dev
 
-Yes, you can!
+# Backend
+cd server && npm install && npm run dev
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+# SQL Engine
+cd sql-engine && npm install && npm run dev
+```
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+### הרצת בדיקות
+```bash
+cd TESTS
+./test-sql-engine.sh
+```
+
+## 📊 ארכיטקטורה
+
+```
+┌─────────────┐     ┌──────────────┐     ┌─────────────┐
+│   Nginx     │────▶│   Backend    │────▶│ SQL Engine  │
+│  (Reverse   │◀────│  (Node.js)   │◀────│ (Node.js)   │
+│   Proxy)    │     │              │     │             │
+└─────────────┘     └──────────────┘     └─────────────┘
+       │                    │                     │
+       ▼                    ▼                     ▼
+┌─────────────┐     ┌──────────────┐     ┌─────────────┐
+│  Frontend   │     │    Redis     │     │  Supabase   │
+│   (React)   │     │   (Cache)    │     │    (DB)     │
+└─────────────┘     └──────────────┘     └─────────────┘
+```
+
+## 🔒 אבטחה
+
+- HTTPS עם Let's Encrypt
+- Security headers (CSP, HSTS, etc.)
+- Rate limiting
+- Input validation
+- SQL injection protection
+
+## 📝 רישיון
+
+MIT License - ראה קובץ [LICENSE](LICENSE)
+
+## 🤝 תרומה
+
+אנו מזמינים תרומות! אנא קרא את [CONTRIBUTING.md](CONTRIBUTING.md)
+
+## 📞 יצירת קשר
+
+- Email: your-email@example.com
+- Issues: [GitHub Issues](https://github.com/your-username/ceci-ai/issues)
+
+## 🙏 תודות
+
+- צוות Anthropic על Claude
+- OpenAI על GPT-3.5
+- Supabase על הפלטפורמה המעולה
+
+---
+
+<div align="center">
+  נבנה עם ❤️ על ידי צוות CECI-AI
+</div>

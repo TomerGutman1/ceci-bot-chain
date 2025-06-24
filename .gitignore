@@ -1,53 +1,74 @@
+# Environment files
+.env
+.env.*
+!.env.example
+
 # Node
 node_modules/
+dist/
+build/
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+bun.lockb
 
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
+*$py.class
+*.so
 .Python
-env/
 venv/
-venv_temp/
-*.env
-*.env.*
+env/
+ENV/
 
-# Virtual Envs in services/python
-server/src/services/python/venv/
-server/src/services/python/venv_temp/
-
-# OS metadata
-.DS_Store
-Thumbs.db
-
-# Logs
+# Docker
 *.log
+docker-compose.override.yml
 
-# Build output
-dist/
-build/
-.cache/
-coverage/
-
-# Editor/IDE settings
+# IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+.DS_Store
 
-# Project-specific
-.env
-.env.*
-*.sqlite
-*.db
-debug.log
+# Certificates
+*.pem
+*.key
+*.crt
+*.csr
+/deploy/nginx/ssl/
+/certbot/
 
-# Ignore compiled/bundled JS
-*.map
-*.bundle.js
+# Data
+*.xlsx
+*.csv
+decisions.json
 
-# Ignore lock files from different systems
-bun.lockb
-pnpm-lock.yaml
+# Backups
+*.backup
+*.bak
+*_backup_*
+
+# Test outputs
+TESTS/debug/debug_results.md
+TESTS/*.log
+test_*.json
+test_*.md
+test_*.txt
+
+# Redis data
+dump.rdb
+
+# Temporary files
+ERROR
+[frontend
+.env.local.txt
+
+# Deployment scripts (local only)
+start-*.ps1
+start-*.bat
+setup-*.sh
+deploy-edge-functions.sh

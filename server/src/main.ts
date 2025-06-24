@@ -75,7 +75,7 @@ async function initializeServices() {
     console.log(`[Main] Loaded ${status.decisionCount} decisions in ${loadTime}s from ${status.source}`);
   } catch (error) {
     console.error('[Main] Failed to initialize data provider service:', error);
-    console.error('[Main] PandasAI will need to load its own data');
+    console.error('[Main] SQL Engine will connect directly to Supabase');
   }
 }
 

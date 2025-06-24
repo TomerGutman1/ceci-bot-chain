@@ -1,7 +1,7 @@
 import { Router } from 'express';
 
 import { postChatSchema } from '../schemas/chatSchemas'
-import { chatController, getChatHealth } from '../controllers/chat';
+import { chatController, getChatHealth, testSQLEngine } from '../controllers/chat';
 import { validateData } from '../middleware/validationMiddleware';
 
 const router = Router();
@@ -16,4 +16,9 @@ router.post('/', (req, _res, next) => {
 // GET /api/chat/health
 router.get('/health', getChatHealth);
 
-export default router
+// POST /api/chat/test-sql - Test SQL engine directly
+router.post('/test-sql', async (req, res) => {
+  await testSQLEngine(req, res);
+});
+
+export default router;
