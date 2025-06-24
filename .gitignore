@@ -72,3 +72,4 @@ start-*.ps1
 start-*.bat
 setup-*.sh
 deploy-edge-functions.sh
+docker-compose.override.yml
