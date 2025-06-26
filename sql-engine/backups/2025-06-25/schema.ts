@@ -13,7 +13,6 @@ export interface ColumnDefinition {
   notes?: string;
   computed?: boolean;
   current_value?: any;
-  synonyms?: string[];
 }
 
 export interface SchemaDefinition {
@@ -72,11 +71,7 @@ export const DECISIONS_SCHEMA: SchemaDefinition = {
       hebrew_name: 'תחומי מדיניות',
       searchable: true,
       examples: ['חינוך', 'בריאות', 'תחבורה', 'ביטחון'],
-      notes: 'Multiple tags separated by ;',
-      synonyms: [
-        'איכות הסביבה', 'פנסיה', 'קורונה', 'מדע', 'בריאות הציבור',
-        'חינוך מיוחד', 'נדלן', 'נדל"ן', 'בראות', 'חנוך', 'בטחון'
-      ]
+      notes: 'Multiple tags separated by ;'
     },
     {
       name: 'tags_government_body',

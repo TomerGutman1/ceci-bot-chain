@@ -16,13 +16,11 @@ export interface QueryResult {
   formatted: string;
   metadata?: {
     sql_query?: string;
-    params?: any[];  // ADD THIS LINE!
     execution_time?: number;
     row_count?: number;
     session_id?: string;
     query_id?: string;
     confidence?: number;
-    template_used?: string;  // ADD THIS LINE!
   };
   error?: string;
 }
@@ -59,23 +57,7 @@ export class SQLQueryEngineService {
     sessionId?: string
   ): Promise<QueryResult> {
     const queryId = uuid();
-    const startTime = Date.now();
-    
-    console.log(`[SQLQueryEngine] ${new Date().toISOString()} - Starting query processing`);
-    console.log(`[SQLQueryEngine] Query ID: ${queryId}`);
-    console.log(`[SQLQueryEngine] Session ID: ${sessionId || 'no-session'}`);
-    console.log(`[SQLQueryEngine] Original query: "${naturalQuery}"`);
-    
-    // Metrics tracking
-    const metrics = {
-      query_id: queryId,
-      session_id: sessionId,
-      start_time: startTime,
-      conversion_time: 0,
-      execution_time: 0,
-      formatting_time: 0,
-      total_time: 0
-    };
+    console.log(`[SQLQueryEngine] Processing query: "${naturalQuery}" (ID: ${queryId})`);
     
     try {
       // Ensure service is initialized
@@ -85,31 +67,9 @@ export class SQLQueryEngineService {
 
       // Step 1: Convert natural language to SQL
       console.log('[SQLQueryEngine] Step 1: Converting to SQL...');
-      const conversionStart = Date.now();
       const conversion = await this.converter.convertToSQL(naturalQuery);
-      metrics.conversion_time = Date.now() - conversionStart;
-      
       console.log('[SQLQueryEngine] SQL generated:', conversion.sql);
       console.log('[SQLQueryEngine] Parameters:', conversion.params);
-      console.log('[SQLQueryEngine] Conversion time:', metrics.conversion_time, 'ms');
-      console.log('[SQLQueryEngine] Template used:', conversion.templateUsed);
-      console.log('[SQLQueryEngine] Confidence:', conversion.confidence);
-      
-      // Handle unclear/vague queries
-      if (conversion.templateUsed === 'UNCLEAR_QUERY' || conversion.templateUsed === 'LOW_CONFIDENCE') {
-        return {
-          success: true,
-          type: 'error',
-          data: [],
-          formatted: conversion.explanation,
-          metadata: {
-            execution_time: Date.now() - startTime,
-            query_id: queryId,
-            session_id: sessionId,
-            confidence: conversion.confidence
-          }
-        };
-      }
       
       // Validate SQL
       if (!this.converter.validateSQL(conversion.sql)) {
@@ -118,23 +78,19 @@ export class SQLQueryEngineService {
       
       // Step 2: Execute the SQL query
       console.log('[SQLQueryEngine] Step 2: Executing query...');
-      const executionStart = Date.now();
       const executionResult = await this.executor.execute(
         conversion.sql, 
         conversion.params
       );
-      metrics.execution_time = Date.now() - executionStart;
       
       if (!executionResult.success) {
         throw new Error(executionResult.error || 'Query execution failed');
       }
       
       console.log(`[SQLQueryEngine] Query executed successfully. Rows: ${executionResult.rowCount}`);
-      console.log('[SQLQueryEngine] Execution time:', metrics.execution_time, 'ms');
       
       // Step 3: Format the results
       console.log('[SQLQueryEngine] Step 3: Formatting results...');
-      const formattingStart = Date.now();
       const formatted = this.formatter.format(
         executionResult,
         conversion.expectedType,
@@ -145,11 +101,6 @@ export class SQLQueryEngineService {
           confidence: conversion.confidence
         }
       );
-      metrics.formatting_time = Date.now() - formattingStart;
-      metrics.total_time = Date.now() - startTime;
-      
-      console.log('[SQLQueryEngine] Formatting time:', metrics.formatting_time, 'ms');
-      console.log('[SQLQueryEngine] Total processing time:', metrics.total_time, 'ms');
       
       // Step 4: Return complete result
       return {
@@ -159,13 +110,11 @@ export class SQLQueryEngineService {
         formatted,
         metadata: {
           sql_query: conversion.sql,
-          params: conversion.params,  // ADD THIS LINE!
           execution_time: executionResult.executionTime,
           row_count: executionResult.rowCount,
           session_id: sessionId,
           query_id: queryId,
-          confidence: conversion.confidence,
-          template_used: conversion.templateUsed
+          confidence: conversion.confidence
         }
       };
       

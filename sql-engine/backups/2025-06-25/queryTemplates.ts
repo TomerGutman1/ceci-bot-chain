@@ -15,7 +15,7 @@ export interface QueryTemplate {
 }
 
 export const QUERY_TEMPLATES: Record<string, QueryTemplate> = {
-  // Count decisions by government - FIXED
+  // Count decisions by government - NEW HIGH PRIORITY TEMPLATE
   COUNT_BY_GOVERNMENT: {
     name: 'ספירת החלטות לפי ממשלה',
     description: 'כמה החלטות קיבלה ממשלה מסוימת',
@@ -23,12 +23,12 @@ export const QUERY_TEMPLATES: Record<string, QueryTemplate> = {
     sql: (gov: string) => `
       SELECT COUNT(*) as count 
       FROM israeli_government_decisions 
-      WHERE government_number = $1 OR government_number = $2
+      WHERE government_number = $1 OR government_number = $1 || '.0'
     `,
-    params: (gov: string) => [gov, gov + '.0'],
+    params: (gov: string) => [gov],
     expectedType: 'count',
     examples: ['כמה החלטות קיבלה ממשלה 37?', 'כמה החלטות יש לממשלה 36?'],
-    priority: 7
+    priority: 7  // Lower to avoid catching topic+year queries // High priority
   },
 
   // Single decision by number with government
@@ -80,38 +80,7 @@ export const QUERY_TEMPLATES: Record<string, QueryTemplate> = {
     priority: 10
   },
 
-  // Decisions by government - NEW
-  DECISIONS_BY_GOVERNMENT: {
-    name: 'החלטות לפי ממשלה',
-    description: 'כל ההחלטות של ממשלה מסוימת',
-    pattern: /החלטות\s+(?:של\s+)?ממשלה\s+(?:מס(?:פר)?\s*)?(\d+)/,
-    sql: (_gov: string) => `
-      SELECT * FROM israeli_government_decisions 
-      WHERE government_number = $1 OR government_number = $2
-      ORDER BY decision_date DESC
-    `,
-    params: (gov: string) => [gov, gov + '.0'],
-    expectedType: 'multiple',
-    examples: ['החלטות של ממשלה 37', 'החלטות ממשלה 36'],
-    priority: 15 // High priority to match before PM pattern
-  },
-
-  // Decisions by topic and government - NEW
-  DECISIONS_BY_TOPIC_AND_GOVERNMENT: {
-    name: 'החלטות לפי נושא וממשלה',
-    description: 'החלטות בנושא מסוים של ממשלה מסוימת',
-    pattern: /החלטות\s+בנושא\s+([֐-׿\s]+?)\s+של\s+ממשלה\s+(\d+)/,
-    sql: (_topic: string, _gov: string) => `
-      SELECT * FROM israeli_government_decisions 
-      WHERE tags_policy_area ILIKE $1
-      AND (government_number = $2 OR government_number = $3)
-      ORDER BY decision_date DESC
-    `,
-    params: (topic: string, gov: string) => [`%${topic.trim()}%`, gov, gov + '.0'],
-    expectedType: 'multiple',
-    examples: ['החלטות בנושא חינוך של ממשלה 37'],
-    priority: 16 // Higher priority
-  },
+  // Decisions by committee - HIGH PRIORITY
   DECISIONS_BY_COMMITTEE: {
     name: 'החלטות לפי ועדה',
     description: 'החלטות של ועדה מסוימת',
@@ -319,30 +288,6 @@ export const QUERY_TEMPLATES: Record<string, QueryTemplate> = {
     priority: 5
   },
 
-  // Decisions by Hebrew month and year
-  DECISIONS_BY_HEBREW_MONTH: {
-    name: 'החלטות לפי חודש עברי ושנה',
-    description: 'החלטות שהתקבלו בחודש מסוים בשנה מסוימת',
-    pattern: /החלטות\s+(?:מ|מחודש)\s*(ינואר|פברואר|מרץ|מרס|מארס|אפריל|מאי|יוני|יולי|אוגוסט|ספטמבר|אוקטובר|נובמבר|דצמבר)\s+(\d{4})/,
-    sql: (_month: string, _year: string) => `
-      SELECT * FROM israeli_government_decisions 
-      WHERE EXTRACT(MONTH FROM decision_date) = $1
-      AND EXTRACT(YEAR FROM decision_date) = $2
-      ORDER BY decision_date DESC
-    `,
-    params: (month: string, year: string) => {
-      const monthMap: Record<string, number> = {
-        'ינואר': 1, 'פברואר': 2, 'מרץ': 3, 'מרס': 3, 'מארס': 3, 'אפריל': 4,
-        'מאי': 5, 'יוני': 6, 'יולי': 7, 'אוגוסט': 8,
-        'ספטמבר': 9, 'אוקטובר': 10, 'נובמבר': 11, 'דצמבר': 12
-      };
-      return [monthMap[month] || 1, parseInt(year)];
-    },
-    expectedType: 'multiple',
-    examples: ['החלטות ממרץ 2023', 'החלטות מחודש דצמבר 2024'],
-    priority: 8
-  },
-
   // Count queries
   COUNT_BY_YEAR: {
     name: 'ספירת החלטות לפי שנה',
@@ -483,92 +428,6 @@ export const QUERY_TEMPLATES: Record<string, QueryTemplate> = {
     expectedType: 'aggregate',
     examples: ['כמה החלטות חינוך לעומת בריאות ב-2024?'],
     priority: 6
-  },
-
-  // Decisions since date by topic (tags + content)
-  DECISIONS_SINCE_DATE_BY_TOPIC: {
-    name: 'החלטות מאז תאריך בנושא',
-    description: 'החלטות מאז תאריך מסוים שעוסקות בנושא (חיפוש בתגיות ובתוכן)',
-    pattern: /(?:תמצא|חפש|הבא)\s+(?:לי\s+)?(?:את\s+)?(?:כל\s+)?ה?החלטות\s+(?:מאז|החל\s+מ)\s*(?:ה-)?(?:(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})|(\d{4}))\s+(?:ש)?(?:עוסקות|שקשורות|בנושא)\s+(?:ב|ל)?([֐-׿\s]+)/,
-    sql: (day?: string, month?: string, year?: string, yearOnly?: string, topic?: string) => {
-      // Determine which parameter contains the topic based on what was captured
-      let actualTopic = '';
-      if (yearOnly) {
-        // When only year is captured, topic is in the 5th parameter
-        actualTopic = topic || '';
-      } else if (day && month && year) {
-        // When full date is captured, topic is still in the 5th parameter
-        actualTopic = topic || '';
-      }
-      
-      return `
-        SELECT * FROM israeli_government_decisions 
-        WHERE decision_date >= $1
-        AND (tags_policy_area ILIKE $2 
-             OR summary ILIKE $3 
-             OR decision_content ILIKE $4
-             OR decision_title ILIKE $5)
-        ORDER BY decision_date DESC
-      `;
-    },
-    params: (day?: string, month?: string, year?: string, yearOnly?: string, topic?: string) => {
-      let dateStr: string;
-      let actualTopic = '';
-      
-      if (yearOnly) {
-        // Year only format
-        dateStr = `${yearOnly}-01-01`;
-        actualTopic = topic || '';
-      } else if (day && month && year) {
-        // Full date format: normalize day/month/year
-        const actualYear = year.length === 2 ? `20${year}` : year;
-        const normalizedMonth = month.padStart(2, '0');
-        const normalizedDay = day.padStart(2, '0');
-        dateStr = `${actualYear}-${normalizedMonth}-${normalizedDay}`;
-        actualTopic = topic || '';
-      } else {
-        // Fallback - should not happen
-        dateStr = '2020-01-01';
-        actualTopic = '';
-      }
-      
-      const searchTerm = `%${actualTopic.trim()}%`;
-      return [dateStr, searchTerm, searchTerm, searchTerm, searchTerm];
-    },
-    expectedType: 'multiple',
-    examples: [
-      'תמצא לי את כל ההחלטות מאז ה-1.1.2023 שעוסקות בחינוך',
-      'החלטות מאז 2022 בנושא בריאות',
-      'חפש החלטות החל מ-15/06/2023 שקשורות לתחבורה'
-    ],
-    priority: 9
-  },
-
-  // Decisions since year by topic (simplified version)
-  DECISIONS_SINCE_YEAR_BY_TOPIC: {
-    name: 'החלטות משנה בנושא',
-    description: 'החלטות משנה מסוימת ואילך בנושא מסוים',
-    pattern: /(?:תמצא|חפש|הבא)\s+(?:לי\s+)?(?:את\s+)?(?:כל\s+)?ה?החלטות\s+(?:מ|משנת)\s*(\d{4})\s+(?:ואילך\s+)?(?:ש)?(?:עוסקות|שקשורות|בנושא)\s+(?:ב|ל)?([֐-׿\s]+)/,
-    sql: (_year: string, _topic: string) => `
-      SELECT * FROM israeli_government_decisions 
-      WHERE EXTRACT(YEAR FROM decision_date) >= $1
-      AND (tags_policy_area ILIKE $2 
-           OR summary ILIKE $3 
-           OR decision_content ILIKE $4
-           OR decision_title ILIKE $5)
-      ORDER BY decision_date DESC
-    `,
-    params: (year: string, topic: string) => {
-      const searchTerm = `%${topic.trim()}%`;
-      return [parseInt(year), searchTerm, searchTerm, searchTerm, searchTerm];
-    },
-    expectedType: 'multiple',
-    examples: [
-      'תמצא החלטות מ2023 שעוסקות בחינוך',
-      'החלטות משנת 2022 ואילך בנושא בריאות',
-      'חפש לי כל החלטות מ2021 שקשורות לסביבה'
-    ],
-    priority: 8
   },
 
   // Top committees
@@ -840,49 +699,6 @@ export const QUERY_TEMPLATES: Record<string, QueryTemplate> = {
     priority: 6
   },
 
-  // General topic search (tags + content) - NEW TEMPLATE
-  TOPIC_SEARCH_COMPREHENSIVE: {
-    name: 'חיפוש נושא מקיף',
-    description: 'חיפוש החלטות בנושא - בתגיות, בתקציר ובתוכן',
-    pattern: /(?:תמצא|חפש|הבא)\s+(?:לי\s+)?(?:את\s+)?(?:כל\s+)?ה?החלטות\s+(?:ש)?(?:עוסקות|שקשורות|בנושא|על)\s+(?:ב|ל)?([֐-׿\s]+?)(?:\s*(?:מאז|מ)שנת\s+(\d{4}))?/,
-    sql: (topic: string, year?: string) => {
-      if (year) {
-        return `
-          SELECT * FROM israeli_government_decisions 
-          WHERE (tags_policy_area ILIKE $1 
-                 OR summary ILIKE $2 
-                 OR decision_content ILIKE $3
-                 OR decision_title ILIKE $4)
-          AND EXTRACT(YEAR FROM decision_date) >= $5
-          ORDER BY decision_date DESC
-        `;
-      }
-      return `
-        SELECT * FROM israeli_government_decisions 
-        WHERE tags_policy_area ILIKE $1 
-           OR summary ILIKE $2 
-           OR decision_content ILIKE $3
-           OR decision_title ILIKE $4
-        ORDER BY decision_date DESC
-        LIMIT 20
-      `;
-    },
-    params: (topic: string, year?: string) => {
-      const searchTerm = `%${topic.trim()}%`;
-      if (year) {
-        return [searchTerm, searchTerm, searchTerm, searchTerm, parseInt(year)];
-      }
-      return [searchTerm, searchTerm, searchTerm, searchTerm];
-    },
-    expectedType: 'multiple',
-    examples: [
-      'תמצא לי החלטות שעוסקות בחינוך',
-      'חפש החלטות על תחבורה משנת 2023',
-      'הבא כל החלטות שקשורות לסביבה'
-    ],
-    priority: 7
-  },
-
   // Contextual follow-up queries
   CONTEXTUAL_TOPIC: {
     name: 'שאילתת המשך נושא',
@@ -898,47 +714,6 @@ export const QUERY_TEMPLATES: Record<string, QueryTemplate> = {
     expectedType: 'multiple',
     examples: ['ובנושא רפואה?', 'בנושא חינוך?'],
     priority: 12
-  },
-
-  // NEW TEMPLATE: Count by tag and year
-  COUNT_BY_TAG_AND_YEAR: {
-    name: 'ספירת החלטות לפי תג ושנה',
-    description: 'כמה החלטות בנושא מסוים בשנה מסוימת',
-    pattern: /כמה\s+החלטות\s+בנושא\s+([\u0590-\u05FF\s]+?)\s+(?:היו\s+)?(?:ב|מ)שנת\s+(\d{4})/,
-    sql: (_topic: string, _year: string) => `
-      SELECT COUNT(*) as count 
-      FROM israeli_government_decisions 
-      WHERE tags_policy_area ILIKE $1
-      AND EXTRACT(YEAR FROM decision_date) = $2
-    `,
-    params: (topic: string, year: string) => [`%${topic.trim()}%`, parseInt(year)],
-    expectedType: 'count',
-    examples: ['כמה החלטות בנושא חינוך בשנת 2023', 'כמה החלטות בנושא בריאות היו ב2022'],
-    priority: 9
-  },
-
-  // NEW TEMPLATE: List by PM and topic
-  LIST_BY_PM_AND_TOPIC: {
-    name: 'רשימת החלטות לפי ראש ממשלה ונושא',
-    description: 'החלטות של ראש ממשלה מסוים בנושא מסוים',
-    pattern: /(?:הבא|תן|הצג)\s+(?:לי\s+)?החלטות\s+של\s+([\u0590-\u05FF\s]+?)\s+בנושא\s+([\u0590-\u05FF\s]+)/,
-    sql: (_pm: string, _topic: string) => `
-      SELECT * FROM israeli_government_decisions
-      WHERE prime_minister ILIKE $1
-      AND (tags_policy_area ILIKE $2 
-           OR summary ILIKE $3 
-           OR decision_content ILIKE $4)
-      ORDER BY decision_date DESC
-    `,
-    params: (pm: string, topic: string) => [
-      `%${pm.trim()}%`,
-      `%${topic.trim()}%`,
-      `%${topic.trim()}%`,
-      `%${topic.trim()}%`
-    ],
-    expectedType: 'multiple',
-    examples: ['הבא החלטות של נתניהו בנושא ביטחון', 'תן לי החלטות של בנט בנושא קורונה'],
-    priority: 8
   }
 };
 
@@ -953,14 +728,6 @@ function normalizeDate(dateStr: string): string {
     return `${year}-${month}-${day}`;
   }
   return dateStr;
-}
-
-// Helper to build proper PostgreSQL date string
-function buildPostgreSQLDate(day: string, month: string, year: string): string {
-  const normalizedYear = year.length === 2 ? `20${year}` : year;
-  const normalizedMonth = month.padStart(2, '0');
-  const normalizedDay = day.padStart(2, '0');
-  return `${normalizedYear}-${normalizedMonth}-${normalizedDay}`;
 }
 
 // Get all patterns for testing

@@ -13,6 +13,7 @@ export interface IntentResult {
     detectedSpellingErrors?: string[];
     questionType?: string;
     suggestedTools?: string[];
+    originalIntent?: string;
   };
 }
 
@@ -28,6 +29,11 @@ const INTENT_DETECTION_PROMPT = `אתה עוזר AI של מערכת CECI לחי�
    
 3. UNCLEAR - הבקשה לא ברורה ודורשת הבהרה
    דוגמאות: "xyzabc", "????", טקסט קצר מאוד ללא הקשר
+
+כללים חשובים:
+- אם ההודעה קצרה מ-3 תווים או לא מכילה עברית - החזר UNCLEAR עם confidence נמוך (0.3)
+- אם ההודעה מכילה רק מילה אחת כללית כמו "משהו" - החזר UNCLEAR
+- אם ההודעה מכילה רק סימני שאלה או תווים מיוחדים - החזר UNCLEAR
 
 תיקוני שגיאות כתיב נפוצות:
 - "הבא ליי" → "הבא לי"
@@ -67,9 +73,24 @@ export async function detectIntentWithGPT(
     const result = JSON.parse(response.choices[0].message.content || '{}');
     
     // Validate and provide defaults
+    const confidence = result.confidence || 0.5;
+    
+    // Confidence gate - if too low, return UNCLEAR
+    if (confidence < 0.55 && result.intent !== 'UNCLEAR') {
+      return {
+        intent: 'UNCLEAR',
+        confidence: confidence,
+        guidance: 'השאילתה לא ברורה מספיק. אנא נסה לנסח מחדש או הוסף פרטים.',
+        metadata: {
+          originalIntent: result.intent,
+          suggestedTools: ['נסה לציין נושא ספציפי', 'הוסף טווח תאריכים', 'ציין מספר החלטה']
+        }
+      };
+    }
+    
     return {
       intent: result.intent || 'UNCLEAR',
-      confidence: result.confidence || 0.5,
+      confidence: confidence,
       correctedQuery: result.correctedQuery,
       guidance: result.guidance,
       metadata: result.metadata

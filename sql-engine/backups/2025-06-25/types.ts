@@ -19,17 +19,6 @@ export interface Decision {
   operativity?: string;
 }
 
-export interface ExtractedEntities {
-  topic?: string;
-  date_from?: string;
-  date_to?: string;
-  year?: number;
-  limit?: number;
-  government_number?: number;
-  prime_minister?: string;
-  decision_number?: string;
-}
-
 export interface QueryRequest {
   query: string;
   sessionId?: string;
