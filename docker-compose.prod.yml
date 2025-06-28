@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   # Override for production with HTTPS
@@ -20,8 +19,5 @@ services:
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
 
   # Close development ports in production
-  sql-engine:
-    ports: []
-  
   redis:
     ports: []

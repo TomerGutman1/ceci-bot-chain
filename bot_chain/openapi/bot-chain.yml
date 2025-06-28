@@ -1,0 +1,800 @@
+openapi: 3.0.3
+info:
+  title: CECI-AI Bot Chain API
+  description: API specification for the Bot Chain microservices
+  version: 1.0.0
+  contact:
+    name: CECI-AI Team
+    email: tomer@example.com
+
+servers:
+  - url: http://localhost:8002
+    description: Local development server
+  - url: https://api.ceci-ai.com
+    description: Production server
+
+paths:
+  /rewrite:
+    post:
+      summary: Clean and rewrite user text
+      description: Improves Hebrew phrasing and normalizes entities
+      operationId: rewriteText
+      tags:
+        - 0_MAIN_REWRITE_BOT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RewriteRequest'
+      responses:
+        '200':
+          description: Successfully rewritten text
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewriteResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  
+  /intent:
+    post:
+      summary: Extract intent and entities
+      description: Analyzes text to determine user intent and extract entities
+      operationId: extractIntent
+      tags:
+        - 1_MAIN_INTENT_BOT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntentRequest'
+      responses:
+        '200':
+          description: Successfully extracted intent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  
+  /sqlgen:
+    post:
+      summary: Generate SQL query
+      description: Generates parameterized SQL query based on intent
+      operationId: generateSQL
+      tags:
+        - 2Q_QUERY_SQL_GEN_BOT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SQLGenRequest'
+      responses:
+        '200':
+          description: Successfully generated SQL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SQLGenResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  
+  /context:
+    post:
+      summary: Route based on context
+      description: Fetches conversation context and decides routing
+      operationId: routeContext
+      tags:
+        - 2X_MAIN_CTX_ROUTER_BOT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContextRequest'
+      responses:
+        '200':
+          description: Successfully routed context
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContextResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  
+  /evaluate:
+    post:
+      summary: Evaluate results
+      description: Performs weighted scoring and quality evaluation
+      operationId: evaluateResults
+      tags:
+        - 2E_EVAL_EVALUATOR_BOT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvaluateRequest'
+      responses:
+        '200':
+          description: Successfully evaluated results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  
+  /clarify:
+    post:
+      summary: Generate clarification question
+      description: Creates follow-up question for ambiguous queries
+      operationId: generateClarification
+      tags:
+        - 2C_CLARIFY_CLARIFY_BOT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClarifyRequest'
+      responses:
+        '200':
+          description: Successfully generated clarification
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClarifyResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  
+  /rank:
+    post:
+      summary: Rank results
+      description: Ranks results using BM25 and GPT reranking
+      operationId: rankResults
+      tags:
+        - 3Q_QUERY_RANKER_BOT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RankRequest'
+      responses:
+        '200':
+          description: Successfully ranked results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RankResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  
+  /format:
+    post:
+      summary: Format results
+      description: Formats results into markdown or JSON
+      operationId: formatResults
+      tags:
+        - 4_MAIN_FORMATTER
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FormatRequest'
+      responses:
+        '200':
+          description: Successfully formatted results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormatResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns health status of the service
+      operationId: healthCheck
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+components:
+  schemas:
+    RewriteRequest:
+      type: object
+      required:
+        - text
+        - conv_id
+      properties:
+        text:
+          type: string
+          description: Original user text in Hebrew
+          example: "תביא לי את ההחלטות של ממשלה 37 בנושא חינוך"
+        conv_id:
+          type: string
+          format: uuid
+          description: Conversation ID for tracking
+        trace_id:
+          type: string
+          format: uuid
+          description: Request trace ID
+        metadata:
+          type: object
+          additionalProperties: true
+    
+    RewriteResponse:
+      type: object
+      required:
+        - conv_id
+        - clean_text
+        - original_text
+        - timestamp
+      properties:
+        conv_id:
+          type: string
+          format: uuid
+        clean_text:
+          type: string
+          description: Cleaned and rewritten text
+          example: "החלטות ממשלה 37 בנושא חינוך"
+        original_text:
+          type: string
+          description: Original input text
+        corrections:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum: [spelling, grammar, normalization]
+              original:
+                type: string
+              corrected:
+                type: string
+        timestamp:
+          type: string
+          format: date-time
+        layer:
+          type: string
+          default: "0_MAIN_REWRITE_BOT"
+        token_usage:
+          $ref: '#/components/schemas/TokenUsage'
+    
+    IntentRequest:
+      type: object
+      required:
+        - text
+        - conv_id
+      properties:
+        text:
+          type: string
+          description: Cleaned text from rewrite bot
+        conv_id:
+          type: string
+          format: uuid
+        trace_id:
+          type: string
+          format: uuid
+        context:
+          type: object
+          description: Previous conversation context
+    
+    IntentResponse:
+      type: object
+      required:
+        - conv_id
+        - intent
+        - confidence
+        - timestamp
+      properties:
+        conv_id:
+          type: string
+          format: uuid
+        intent:
+          type: string
+          enum: [search, count, specific_decision, comparison, clarification_needed]
+        entities:
+          type: object
+          properties:
+            government_number:
+              type: integer
+            decision_number:
+              type: integer
+            topic:
+              type: string
+            date_range:
+              type: object
+              properties:
+                start:
+                  type: string
+                  format: date
+                end:
+                  type: string
+                  format: date
+            ministries:
+              type: array
+              items:
+                type: string
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        route_flags:
+          type: object
+          properties:
+            needs_clarification:
+              type: boolean
+            has_context:
+              type: boolean
+            is_follow_up:
+              type: boolean
+        timestamp:
+          type: string
+          format: date-time
+        layer:
+          type: string
+          default: "1_MAIN_INTENT_BOT"
+        token_usage:
+          $ref: '#/components/schemas/TokenUsage'
+    
+    SQLGenRequest:
+      type: object
+      required:
+        - intent
+        - entities
+        - conv_id
+      properties:
+        intent:
+          type: string
+        entities:
+          type: object
+        conv_id:
+          type: string
+          format: uuid
+        trace_id:
+          type: string
+          format: uuid
+    
+    SQLGenResponse:
+      type: object
+      required:
+        - conv_id
+        - sql_query
+        - timestamp
+      properties:
+        conv_id:
+          type: string
+          format: uuid
+        sql_query:
+          type: string
+          description: Generated SQL query
+        parameters:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              value:
+                type: string
+              type:
+                type: string
+        template_used:
+          type: string
+          description: Name of template if used
+        validation_passed:
+          type: boolean
+        timestamp:
+          type: string
+          format: date-time
+        layer:
+          type: string
+          default: "2Q_QUERY_SQL_GEN_BOT"
+        token_usage:
+          $ref: '#/components/schemas/TokenUsage'
+    
+    ContextRequest:
+      type: object
+      required:
+        - conv_id
+        - current_query
+      properties:
+        conv_id:
+          type: string
+          format: uuid
+        current_query:
+          type: string
+        intent:
+          type: string
+        entities:
+          type: object
+    
+    ContextResponse:
+      type: object
+      required:
+        - conv_id
+        - routing_decision
+        - timestamp
+      properties:
+        conv_id:
+          type: string
+          format: uuid
+        routing_decision:
+          type: string
+          enum: [new_query, follow_up, clarification_needed]
+        merged_context:
+          type: object
+          description: Merged entities from previous context
+        conversation_history:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+                format: date-time
+              query:
+                type: string
+              response_summary:
+                type: string
+        timestamp:
+          type: string
+          format: date-time
+        layer:
+          type: string
+          default: "2X_MAIN_CTX_ROUTER_BOT"
+        token_usage:
+          $ref: '#/components/schemas/TokenUsage'
+    
+    EvaluateRequest:
+      type: object
+      required:
+        - conv_id
+        - results
+        - query_intent
+      properties:
+        conv_id:
+          type: string
+          format: uuid
+        results:
+          type: array
+          items:
+            type: object
+        query_intent:
+          type: object
+    
+    EvaluateResponse:
+      type: object
+      required:
+        - conv_id
+        - evaluated_results
+        - timestamp
+      properties:
+        conv_id:
+          type: string
+          format: uuid
+        evaluated_results:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              score:
+                type: number
+                minimum: 0
+                maximum: 1
+              relevance_factors:
+                type: object
+                properties:
+                  topic_match:
+                    type: number
+                  date_relevance:
+                    type: number
+                  entity_match:
+                    type: number
+              anomaly_flags:
+                type: array
+                items:
+                  type: string
+        explanation:
+          type: string
+          description: SHAP-style explanation
+        timestamp:
+          type: string
+          format: date-time
+        layer:
+          type: string
+          default: "2E_EVAL_EVALUATOR_BOT"
+        token_usage:
+          $ref: '#/components/schemas/TokenUsage'
+    
+    ClarifyRequest:
+      type: object
+      required:
+        - conv_id
+        - ambiguous_query
+        - possible_intents
+      properties:
+        conv_id:
+          type: string
+          format: uuid
+        ambiguous_query:
+          type: string
+        possible_intents:
+          type: array
+          items:
+            type: string
+        entities:
+          type: object
+    
+    ClarifyResponse:
+      type: object
+      required:
+        - conv_id
+        - clarification_question
+        - timestamp
+      properties:
+        conv_id:
+          type: string
+          format: uuid
+        clarification_question:
+          type: string
+          description: Follow-up question in Hebrew (≤200 chars)
+          maxLength: 200
+        options:
+          type: array
+          items:
+            type: string
+          description: Suggested answer options
+        timestamp:
+          type: string
+          format: date-time
+        layer:
+          type: string
+          default: "2C_CLARIFY_CLARIFY_BOT"
+        token_usage:
+          $ref: '#/components/schemas/TokenUsage'
+    
+    RankRequest:
+      type: object
+      required:
+        - conv_id
+        - results
+        - query
+      properties:
+        conv_id:
+          type: string
+          format: uuid
+        results:
+          type: array
+          items:
+            type: object
+        query:
+          type: string
+        ranking_method:
+          type: string
+          enum: [bm25, gpt_rerank, hybrid]
+          default: hybrid
+    
+    RankResponse:
+      type: object
+      required:
+        - conv_id
+        - ranked_results
+        - timestamp
+      properties:
+        conv_id:
+          type: string
+          format: uuid
+        ranked_results:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              rank:
+                type: integer
+              score:
+                type: number
+              bm25_score:
+                type: number
+              gpt_score:
+                type: number
+        ranking_metadata:
+          type: object
+          properties:
+            method_used:
+              type: string
+            total_results:
+              type: integer
+            top_k:
+              type: integer
+        timestamp:
+          type: string
+          format: date-time
+        layer:
+          type: string
+          default: "3Q_QUERY_RANKER_BOT"
+        token_usage:
+          $ref: '#/components/schemas/TokenUsage'
+    
+    FormatRequest:
+      type: object
+      required:
+        - conv_id
+        - results
+        - format_type
+      properties:
+        conv_id:
+          type: string
+          format: uuid
+        results:
+          type: array
+          items:
+            type: object
+        format_type:
+          type: string
+          enum: [markdown, json, html]
+          default: markdown
+        include_full_content:
+          type: boolean
+          default: false
+        user_query:
+          type: string
+    
+    FormatResponse:
+      type: object
+      required:
+        - conv_id
+        - formatted_output
+        - timestamp
+      properties:
+        conv_id:
+          type: string
+          format: uuid
+        formatted_output:
+          type: string
+          description: Formatted results in requested format
+        summary:
+          type: string
+          description: Brief summary of results
+        metadata:
+          type: object
+          properties:
+            total_results:
+              type: integer
+            format_type:
+              type: string
+            has_full_content:
+              type: boolean
+        timestamp:
+          type: string
+          format: date-time
+        layer:
+          type: string
+          default: "4_MAIN_FORMATTER"
+    
+    TokenUsage:
+      type: object
+      properties:
+        prompt_tokens:
+          type: integer
+        completion_tokens:
+          type: integer
+        total_tokens:
+          type: integer
+        model:
+          type: string
+    
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, error]
+        layer:
+          type: string
+        version:
+          type: string
+        uptime_seconds:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+    
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+        - timestamp
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+        request_id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+  
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+tags:
+  - name: 0_MAIN_REWRITE_BOT
+    description: Text rewriting and normalization
+  - name: 1_MAIN_INTENT_BOT
+    description: Intent detection and entity extraction
+  - name: 2Q_QUERY_SQL_GEN_BOT
+    description: SQL query generation
+  - name: 2X_MAIN_CTX_ROUTER_BOT
+    description: Context-based routing
+  - name: 2E_EVAL_EVALUATOR_BOT
+    description: Result evaluation and scoring
+  - name: 2C_CLARIFY_CLARIFY_BOT
+    description: Clarification question generation
+  - name: 3Q_QUERY_RANKER_BOT
+    description: Result ranking
+  - name: 4_MAIN_FORMATTER
+    description: Output formatting
+  - name: Health
+    description: Health check endpoints

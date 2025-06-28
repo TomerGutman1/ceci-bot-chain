@@ -1,104 +1,22 @@
+version: '3.8'
 
 services:
+  # Common infrastructure
   redis:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "6380:6379"
+      - "6379:6379"
     volumes:
-      - redis-data:/data
+      - bot_redis_data:/data
     networks:
-      - ceci-network
+      - bot-chain-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  backend:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    ports:
-      - "5001:5173"
-    env_file:
-      - .env.prod
-    environment:
-      - REDIS_URL=redis://redis:6379
-      - SQL_ENGINE_URL=http://localhost:5000
-      - SQL_ENGINE_ENABLED=true
-      - SQL_ENGINE_PERCENTAGE=100
-      - BOT_CHAIN_ENABLED=true
-      - REWRITE_BOT_URL=http://rewrite-bot:8010
-      - INTENT_BOT_URL=http://intent-bot:8011
-      - SQL_GEN_BOT_URL=http://sql-gen-bot:8012
-      - CONTEXT_ROUTER_BOT_URL=http://context-router-bot:8013
-      - EVALUATOR_BOT_URL=http://evaluator-bot:8014
-      - CLARIFY_BOT_URL=http://clarify-bot:8015
-      - RANKER_BOT_URL=http://ranker-bot:8016
-      - FORMATTER_BOT_URL=http://formatter-bot:8017
-      - BOT_CHAIN_TIMEOUT=30000
-    depends_on:
-      - redis
-      - rewrite-bot
-      - intent-bot
-      - sql-gen-bot
-      - context-router-bot
-      - evaluator-bot
-      - clarify-bot
-      - ranker-bot
-      - formatter-bot
-    networks:
-      - ceci-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5173/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    env_file:
-      - .env.prod
-    depends_on:
-      - backend
-    networks:
-      - ceci-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  nginx:
-    build:
-      context: ./deploy/nginx
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./certbot/conf:/etc/letsencrypt:ro
-      - ./certbot/www:/var/www/certbot:ro
-    depends_on:
-      - frontend
-      - backend
-    networks:
-      - ceci-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Bot Chain Services
   postgres:
     image: postgres:15
     restart: unless-stopped
@@ -107,21 +25,26 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./bot_chain/schemas/database_schema.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - bot_postgres_data:/var/lib/postgresql/data
+      - ./schemas/database_schema.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
-      - ceci-network
+      - bot-chain-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+  # Bot Chain Services
+  
+  # Note: Using workaround for Python module naming issue
+  # These would normally be named with numbers but that causes import issues
+  
   rewrite-bot:
     build:
-      context: ./bot_chain
+      context: .
       dockerfile: ./MAIN_REWRITE_BOT_0/Dockerfile
     restart: unless-stopped
     ports:
@@ -136,7 +59,7 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - ceci-network
+      - bot-chain-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
       interval: 30s
@@ -146,7 +69,7 @@ services:
 
   intent-bot:
     build:
-      context: ./bot_chain
+      context: .
       dockerfile: ./MAIN_INTENT_BOT_1/Dockerfile
     restart: unless-stopped
     ports:
@@ -161,7 +84,7 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - ceci-network
+      - bot-chain-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8011/health"]
       interval: 30s
@@ -171,7 +94,7 @@ services:
 
   sql-gen-bot:
     build:
-      context: ./bot_chain
+      context: .
       dockerfile: ./QUERY_SQL_GEN_BOT_2Q/Dockerfile
     restart: unless-stopped
     ports:
@@ -188,7 +111,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - ceci-network
+      - bot-chain-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8012/health"]
       interval: 30s
@@ -196,9 +119,10 @@ services:
       retries: 3
       start_period: 40s
 
+  # Context Router Bot - Conversation context management and routing
   context-router-bot:
     build:
-      context: ./bot_chain
+      context: .
       dockerfile: ./MAIN_CTX_ROUTER_BOT_2X/Dockerfile
     restart: unless-stopped
     ports:
@@ -213,7 +137,7 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - ceci-network
+      - bot-chain-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8013/health"]
       interval: 30s
@@ -221,9 +145,10 @@ services:
       retries: 3
       start_period: 40s
 
+  # Evaluator Bot - Result evaluation and quality scoring
   evaluator-bot:
     build:
-      context: ./bot_chain
+      context: .
       dockerfile: ./EVAL_EVALUATOR_BOT_2E/Dockerfile
     restart: unless-stopped
     ports:
@@ -238,7 +163,7 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - ceci-network
+      - bot-chain-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8014/health"]
       interval: 30s
@@ -246,9 +171,10 @@ services:
       retries: 3
       start_period: 40s
 
+  # Clarification Bot - Generate clarification questions for ambiguous queries
   clarify-bot:
     build:
-      context: ./bot_chain
+      context: .
       dockerfile: ./CLARIFY_CLARIFY_BOT_2C/Dockerfile
     restart: unless-stopped
     ports:
@@ -263,7 +189,7 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - ceci-network
+      - bot-chain-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8015/health"]
       interval: 30s
@@ -271,9 +197,10 @@ services:
       retries: 3
       start_period: 40s
 
+  # Ranking Bot - Rank and prioritize search results
   ranker-bot:
     build:
-      context: ./bot_chain
+      context: .
       dockerfile: ./QUERY_RANKER_BOT_3Q/Dockerfile
     restart: unless-stopped
     ports:
@@ -288,7 +215,7 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - ceci-network
+      - bot-chain-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8016/health"]
       interval: 30s
@@ -296,9 +223,10 @@ services:
       retries: 3
       start_period: 40s
 
-  formatter-bot:
+  # Formatter Bot - Format search results into user-friendly responses
+  formatter:
     build:
-      context: ./bot_chain
+      context: .
       dockerfile: ./MAIN_FORMATTER_4/Dockerfile
     restart: unless-stopped
     ports:
@@ -313,7 +241,7 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - ceci-network
+      - bot-chain-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8017/health"]
       interval: 30s
@@ -321,24 +249,72 @@ services:
       retries: 3
       start_period: 40s
 
-  certbot:
-    image: certbot/certbot:latest
+  # Bot Chain Orchestrator (main entry point)
+  bot-chain-api:
+    image: nginx:alpine
     restart: unless-stopped
+    ports:
+      - "8002:80"
     volumes:
-      - ./certbot/conf:/etc/letsencrypt
-      - ./certbot/www:/var/www/certbot
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+      - ./nginx-bot-chain.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - rewrite-bot
+      - intent-bot
+      - sql-gen-bot
     networks:
-      - ceci-network
+      - bot-chain-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Monitoring and observability
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - bot-chain-network
+    profiles:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+    networks:
+      - bot-chain-network
+    profiles:
+      - monitoring
 
 volumes:
-  redis-data:
-  postgres_data:
+  bot_redis_data:
+  bot_postgres_data:
+  prometheus_data:
+  grafana_data:
 
 networks:
-  ceci-network:
-    name: ceci-ai-prod-network
+  bot-chain-network:
+    name: ceci-bot-chain-network
     driver: bridge
     ipam:
       config:
-        - subnet: 172.26.0.0/16
+        - subnet: 172.27.0.0/16

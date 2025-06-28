@@ -1,0 +1,141 @@
+name: Taxonomy Schema Lint
+
+on:
+  push:
+    paths:
+      - 'bot_chain/schemas/**'
+      - '.github/workflows/taxonomy-lint.yml'
+  pull_request:
+    paths:
+      - 'bot_chain/schemas/**'
+
+jobs:
+  yaml-lint:
+    name: YAML Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install yamllint
+        run: |
+          python -m pip install --upgrade pip
+          pip install yamllint
+      
+      - name: Create yamllint config
+        run: |
+          cat > .yamllint.yml << 'EOF'
+          extends: default
+          rules:
+            document-start: disable
+            line-length:
+              max: 120
+            indentation:
+              spaces: 2
+            trailing-spaces: enable
+            empty-lines:
+              max: 2
+          EOF
+      
+      - name: Lint YAML files
+        run: |
+          echo "=== YAML Linting ==="
+          find bot_chain/schemas -name "*.yml" -o -name "*.yaml" | while read file; do
+            echo "Linting: $file"
+            yamllint -c .yamllint.yml "$file"
+          done
+          echo "✓ All YAML files passed linting"
+  
+  schema-validation:
+    name: Schema Structure Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install pyyaml jsonschema
+      
+      - name: Validate intent taxonomy structure
+        run: |
+          python3 << 'EOF'
+          import yaml
+          import sys
+          
+          def validate_intent_taxonomy():
+              with open('bot_chain/schemas/intent_taxonomy.yml', 'r', encoding='utf-8') as f:
+                  data = yaml.safe_load(f)
+              
+              # Check required top-level keys
+              required_keys = ['intents', 'entities', 'routing_rules', 'confidence_factors']
+              for key in required_keys:
+                  if key not in data:
+                      print(f"❌ Missing required key: {key}")
+                      return False
+              
+              # Validate intents structure
+              for intent_name, intent_data in data['intents'].items():
+                  if 'description' not in intent_data:
+                      print(f"❌ Intent {intent_name} missing description")
+                      return False
+                  if 'confidence_threshold' not in intent_data:
+                      print(f"❌ Intent {intent_name} missing confidence_threshold")
+                      return False
+                  if not (0 <= intent_data['confidence_threshold'] <= 1):
+                      print(f"❌ Intent {intent_name} has invalid confidence_threshold")
+                      return False
+              
+              # Validate entities structure
+              for entity_name, entity_data in data['entities'].items():
+                  if 'type' not in entity_data:
+                      print(f"❌ Entity {entity_name} missing type")
+                      return False
+                  if 'description' not in entity_data:
+                      print(f"❌ Entity {entity_name} missing description")
+                      return False
+              
+              print("✓ Intent taxonomy structure is valid")
+              return True
+          
+          if not validate_intent_taxonomy():
+              sys.exit(1)
+          EOF
+  
+  coverage-check:
+    name: Schema Coverage Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Check schema coverage
+        run: |
+          echo "=== Schema Coverage Report ==="
+          
+          # Count defined intents
+          intent_count=$(grep -c "^  [a-z_]:" bot_chain/schemas/intent_taxonomy.yml | head -1)
+          echo "Defined intents: $intent_count"
+          
+          # Count defined entities
+          entity_count=$(grep -c "^  [a-z_]:" bot_chain/schemas/intent_taxonomy.yml | tail -1)
+          echo "Defined entities: $entity_count"
+          
+          # List all intents
+          echo ""
+          echo "=== Intents ==="
+          grep "^  [a-z_]:" bot_chain/schemas/intent_taxonomy.yml | sed 's/:.*$//' | sed 's/^  /- /'
+          
+          echo ""
+          echo "=== Quality Targets ==="
+          grep -A 5 "quality_thresholds:" bot_chain/schemas/intent_taxonomy.yml | grep "target" | sed 's/^  //'
+          
+          echo ""
+          echo "✓ Coverage check completed"

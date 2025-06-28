@@ -1,0 +1,238 @@
+# Routing Rules Engine Configuration
+# Used by 2X Context Router Bot to make routing decisions
+# Version: 1.0
+
+# Meta information
+meta:
+  version: "1.0"
+  description: "Routing rules for CECI-AI Bot Chain context management"
+  language: "Hebrew"
+  last_updated: "2025-06-27"
+
+# Clarification triggers - conditions that require clarification
+clarification_triggers:
+  # Confidence thresholds
+  confidence_thresholds:
+    low_confidence: 0.70    # Below this requires clarification
+    medium_confidence: 0.80 # Between low and high = maybe clarify
+    high_confidence: 0.85   # Above this can proceed
+  
+  # Hebrew ambiguous time references
+  ambiguous_entities:
+    time_references:
+      - "תקופה"          # period
+      - "זמן"            # time  
+      - "מתי"            # when
+      - "לאחרונה"        # recently
+      - "בעבר"           # in the past
+      - "השנה"          # this year
+      - "אמש"            # yesterday
+      - "עכשיו"          # now
+    
+    vague_topics:
+      - "זה"             # this/it
+      - "דבר"            # thing
+      - "עניין"          # matter
+      - "משהו"           # something
+      - "עם"             # with
+      - "על"             # about
+      - "כל"             # all/every
+      
+    incomplete_questions:
+      - "מה"             # what
+      - "איך"            # how
+      - "למה"            # why
+      - "כמה"            # how much/many
+      - "מי"             # who
+      - "איפה"           # where
+
+  # Entity completeness requirements by intent
+  required_entities:
+    search:
+      mandatory:
+        - "topic"         # Must have a topic to search for
+      preferred:
+        - "government_number"  # Preferred but can search without
+        - "date_range"
+    
+    count:
+      mandatory:
+        - "government_number"  # Need to know which government to count
+      preferred:
+        - "topic"         # Can count all or by topic
+    
+    specific_decision:
+      mandatory:
+        - "government_number"  # Required for specific lookup
+        - "decision_number"    # Required for specific lookup
+      preferred: []
+    
+    comparison:
+      mandatory:
+        - "governments"   # Need at least 2 governments to compare
+        - "topic"         # Need what aspect to compare
+      preferred:
+        - "date_range"
+
+# Direct SQL routing conditions
+direct_sql_conditions:
+  # High confidence with complete entities can bypass additional bots
+  high_confidence_threshold: 0.85
+  
+  # Entity completeness scores for direct routing
+  entity_completeness:
+    search:
+      minimum_score: 0.8  # Need 80% entity completeness
+      weights:
+        topic: 0.4
+        government_number: 0.3
+        date_range: 0.2
+        ministries: 0.1
+    
+    count:
+      minimum_score: 0.7
+      weights:
+        government_number: 0.6
+        topic: 0.3
+        date_range: 0.1
+    
+    specific_decision:
+      minimum_score: 1.0  # Need 100% for specific decisions
+      weights:
+        government_number: 0.5
+        decision_number: 0.5
+    
+    comparison:
+      minimum_score: 0.9
+      weights:
+        governments: 0.4
+        topic: 0.4
+        date_range: 0.2
+
+# Context scoring weights
+context_weights:
+  previous_queries: 0.30    # Weight of conversation history
+  extracted_entities: 0.40  # Weight of accumulated entities
+  intent_confidence: 0.30   # Weight of current confidence
+
+# Context management settings
+context_management:
+  max_queries_stored: 5     # Maximum queries to keep in context
+  cache_ttl_hours: 2        # Context TTL in Redis
+  max_entities_per_type: 3  # Prevent entity accumulation overflow
+
+# Route destinations
+routes:
+  clarify: "2C_CLARIFY_CLARIFY_BOT"
+  direct_sql: "2Q_QUERY_SQL_GEN_BOT" 
+  next_bot: "2E_EVAL_EVALUATOR_BOT"
+  
+# Clarification types and their handling
+clarification_types:
+  low_confidence:
+    priority: "high"
+    message_template: "אני לא בטוח שהבנתי את השאלה שלך. האם תוכל לנסח אותה שוב?"
+    
+  ambiguous_time:
+    priority: "medium"
+    message_template: "איזו תקופה זמן אתה מתכוון? אנא ציין שנה או תאריך ספציפי."
+    
+  vague_topic:
+    priority: "medium" 
+    message_template: "על איזה נושא ספציפי אתה מתכוון? אנא פרט את התחום שמעניין אותך."
+    
+  missing_entities:
+    priority: "high"
+    message_template: "חסרים פרטים חשובים לביצוע החיפוש. איזו ממשלה אתה מתכוון?"
+    
+  incomplete_query:
+    priority: "high"
+    message_template: "השאלה לא ברורה לי. האם תוכל לספק יותר הקשר?"
+
+# Performance tuning parameters
+performance:
+  cache_warming:
+    enabled: true
+    common_patterns:
+      - "החלטות ממשלה {government}"
+      - "החלטות בנושא {topic}"
+      - "{topic} ממשלה {government}"
+  
+  batch_processing:
+    enabled: true
+    max_batch_size: 10
+    
+  circuit_breaker:
+    enabled: true
+    failure_threshold: 5
+    recovery_timeout_seconds: 30
+
+# Hebrew language specific rules
+hebrew_processing:
+  # Number words to digits conversion patterns
+  number_normalization:
+    words_to_digits:
+      "שלושים ושבע": "37"
+      "שלושים וחמש": "35"
+      "שלושים ושש": "36"
+      "שלושים ושמונה": "38"
+      "שלושים ותשע": "39"
+      "ארבעים": "40"
+    
+  # Common government decision patterns
+  decision_patterns:
+    - "החלטה {number} של ממשלה {government}"
+    - "החלטה מספר {number}"
+    - "החלטת ממשלה {government}"
+    - "ממשלה {government} החליטה"
+  
+  # Ministry name normalization
+  ministry_aliases:
+    "משרד החינוך": ["חינוך", "משה\"ח", "חינוך ותרבות"]
+    "משרד הביטחון": ["ביטחון", "מיב\"ט", "ביטחון פנים"]
+    "משרד הבריאות": ["בריאות", "בריאות הציבור"]
+    "משרד הפנים": ["פנים", "מספ\"ים"]
+    "משרד האוצר": ["אוצר", "כלכלה", "פיננסים"]
+
+# Validation rules for routing decisions
+validation:
+  # Ensure routing decisions are consistent
+  consistency_checks:
+    - "If confidence > 0.9 and entities complete, prefer direct_sql"
+    - "If confidence < 0.7, always route to clarify"
+    - "If missing mandatory entities, route to clarify"
+  
+  # Quality gates
+  quality_gates:
+    min_reasoning_length: 10  # Minimum chars in reasoning field
+    required_fields: ["route", "needs_clarification", "reasoning"]
+    
+# Monitoring and metrics
+monitoring:
+  track_metrics:
+    - "route_distribution"      # Which routes are chosen most
+    - "clarification_rate"      # How often clarification needed
+    - "confidence_distribution" # Distribution of confidence scores
+    - "entity_completeness"     # How complete entities typically are
+  
+  alert_thresholds:
+    clarification_rate_too_high: 0.6  # Alert if >60% need clarification
+    direct_sql_rate_too_low: 0.2      # Alert if <20% go direct to SQL
+    average_confidence_too_low: 0.7   # Alert if avg confidence <70%
+
+# Debug and testing
+debug:
+  log_all_decisions: false    # Set to true for detailed debugging
+  include_entity_details: true
+  include_confidence_breakdown: true
+  
+# A/B testing configurations
+ab_testing:
+  enabled: false
+  experiments:
+    confidence_threshold_test:
+      variants:
+        control: 0.70
+        variant_a: 0.65
+        variant_b: 0.75
+      traffic_split: [50, 25, 25]  # Control, A, B

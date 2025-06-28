@@ -1,0 +1,68 @@
+name: CI Skeleton - Smoke Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  smoke-test:
+    name: Basic Smoke Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Echo test
+        run: |
+          echo "✓ CI pipeline is working!"
+          echo "Repository: ${{ github.repository }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+      
+      - name: List repository structure
+        run: |
+          echo "=== Repository Structure ==="
+          ls -la
+          echo ""
+          echo "=== Key directories ==="
+          for dir in src server bot_chain tests .github; do
+            if [ -d "$dir" ]; then
+              echo "✓ $dir exists"
+            else
+              echo "✗ $dir missing"
+            fi
+          done
+      
+      - name: Check environment
+        run: |
+          echo "=== System Info ==="
+          echo "OS: $(uname -s)"
+          echo "Node: $(node --version || echo 'Not installed')"
+          echo "Python: $(python3 --version || echo 'Not installed')"
+          echo "Docker: $(docker --version || echo 'Not installed')"
+      
+      - name: Verify critical files
+        run: |
+          echo "=== Critical Files Check ==="
+          files=(
+            "package.json"
+            "README.md"
+            "docker-compose.yml"
+            ".github/workflows/ci-skeleton.yml"
+          )
+          
+          for file in "${files[@]}"; do
+            if [ -f "$file" ]; then
+              echo "✓ $file exists"
+            else
+              echo "✗ $file missing"
+            fi
+          done
+      
+      - name: Exit successfully
+        run: |
+          echo "=== Smoke test completed successfully! ==="
+          exit 0

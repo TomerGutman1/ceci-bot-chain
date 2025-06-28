@@ -1,0 +1,245 @@
+name: Database Migration CI
+
+on:
+  push:
+    paths:
+      - 'bot_chain/schemas/**'
+      - '.github/workflows/db-migrate.yml'
+  pull_request:
+    paths:
+      - 'bot_chain/schemas/**'
+
+jobs:
+  validate-schema:
+    name: Validate SQL Schema
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ceci_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      
+      - name: Test database connection
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d ceci_test -c "SELECT version();"
+      
+      - name: Run schema migration
+        run: |
+          echo "Running database schema migration..."
+          PGPASSWORD=postgres psql -h localhost -U postgres -d ceci_test -f bot_chain/schemas/database_schema.sql
+      
+      - name: Validate tables created
+        run: |
+          echo "=== Validating table creation ==="
+          PGPASSWORD=postgres psql -h localhost -U postgres -d ceci_test -c "
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            ORDER BY table_name;
+          "
+      
+      - name: Validate indexes created
+        run: |
+          echo "=== Validating indexes ==="
+          PGPASSWORD=postgres psql -h localhost -U postgres -d ceci_test -c "
+            SELECT indexname, tablename 
+            FROM pg_indexes 
+            WHERE schemaname = 'public' 
+            ORDER BY tablename, indexname;
+          "
+      
+      - name: Validate functions created
+        run: |
+          echo "=== Validating functions ==="
+          PGPASSWORD=postgres psql -h localhost -U postgres -d ceci_test -c "
+            SELECT routine_name, routine_type 
+            FROM information_schema.routines 
+            WHERE routine_schema = 'public'
+            ORDER BY routine_name;
+          "
+      
+      - name: Test sample data insertion
+        run: |
+          echo "=== Testing sample data ==="
+          PGPASSWORD=postgres psql -h localhost -U postgres -d ceci_test -c "
+            SELECT government_number, prime_minister 
+            FROM governments 
+            ORDER BY government_number;
+          "
+      
+      - name: Test Hebrew functions
+        run: |
+          echo "=== Testing Hebrew processing functions ==="
+          PGPASSWORD=postgres psql -h localhost -U postgres -d ceci_test -c "
+            SELECT extract_government_number('ממשלה 37 החליטה') as gov_num;
+            SELECT extract_decision_number('החלטה 660 של הממשלה') as decision_num;
+            SELECT normalize_hebrew_text('  טקסט   עם   רווחים  ') as normalized;
+          "
+  
+  performance-test:
+    name: Query Performance Test
+    runs-on: ubuntu-latest
+    needs: validate-schema
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ceci_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      
+      - name: Setup database
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d ceci_test -f bot_chain/schemas/database_schema.sql
+      
+      - name: Insert test data for performance
+        run: |
+          echo "Inserting test data..."
+          PGPASSWORD=postgres psql -h localhost -U postgres -d ceci_test -c "
+            INSERT INTO government_decisions (government_number, decision_number, title, content, topics, ministries, decision_date)
+            SELECT 
+              37 as government_number,
+              generate_series(1, 1000) as decision_number,
+              'החלטה מספר ' || generate_series(1, 1000) as title,
+              'תוכן החלטה ' || generate_series(1, 1000) || ' בנושא חינוך וביטחון' as content,
+              ARRAY['חינוך', 'ביטחון'] as topics,
+              ARRAY['משרד החינוך', 'משרד הביטחון'] as ministries,
+              '2023-01-01'::date + (generate_series(1, 1000) || ' days')::interval as decision_date;
+          "
+      
+      - name: Test search query performance
+        run: |
+          echo "=== Testing search performance ==="
+          PGPASSWORD=postgres psql -h localhost -U postgres -d ceci_test -c "
+            EXPLAIN ANALYZE 
+            SELECT * FROM government_decisions 
+            WHERE government_number = 37 
+            AND 'חינוך' = ANY(topics) 
+            LIMIT 10;
+          "
+      
+      - name: Test full-text search performance
+        run: |
+          echo "=== Testing full-text search performance ==="
+          PGPASSWORD=postgres psql -h localhost -U postgres -d ceci_test -c "
+            EXPLAIN ANALYZE 
+            SELECT * FROM government_decisions 
+            WHERE to_tsvector('hebrew', content) @@ to_tsquery('hebrew', 'חינוך') 
+            LIMIT 10;
+          "
+      
+      - name: Test aggregation performance
+        run: |
+          echo "=== Testing aggregation performance ==="
+          PGPASSWORD=postgres psql -h localhost -U postgres -d ceci_test -c "
+            EXPLAIN ANALYZE 
+            SELECT government_number, COUNT(*) 
+            FROM government_decisions 
+            GROUP BY government_number;
+          "
+  
+  schema-validation:
+    name: Schema Constraint Validation
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ceci_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      
+      - name: Setup database
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d ceci_test -f bot_chain/schemas/database_schema.sql
+      
+      - name: Test constraint violations
+        run: |
+          echo "=== Testing constraint violations ==="
+          
+          # Test invalid government number
+          if PGPASSWORD=postgres psql -h localhost -U postgres -d ceci_test -c "
+            INSERT INTO government_decisions (government_number, decision_number, title) 
+            VALUES (0, 1, 'test');
+          " 2>/dev/null; then
+            echo "❌ Should have failed on invalid government number"
+            exit 1
+          else
+            echo "✓ Government number constraint working"
+          fi
+          
+          # Test duplicate government-decision combination
+          PGPASSWORD=postgres psql -h localhost -U postgres -d ceci_test -c "
+            INSERT INTO government_decisions (government_number, decision_number, title) 
+            VALUES (37, 999, 'test decision');
+          "
+          
+          if PGPASSWORD=postgres psql -h localhost -U postgres -d ceci_test -c "
+            INSERT INTO government_decisions (government_number, decision_number, title) 
+            VALUES (37, 999, 'duplicate decision');
+          " 2>/dev/null; then
+            echo "❌ Should have failed on duplicate government-decision"
+            exit 1
+          else
+            echo "✓ Unique constraint working"
+          fi
+      
+      - name: Validate Hebrew text processing
+        run: |
+          echo "=== Testing Hebrew text processing ==="
+          
+          # Test government number extraction
+          result=$(PGPASSWORD=postgres psql -h localhost -U postgres -d ceci_test -t -c "
+            SELECT extract_government_number('החלטות ממשלה שלושים ושבע');
+          " | xargs)
+          
+          if [ "$result" = "37" ]; then
+            echo "✓ Hebrew government number extraction working"
+          else
+            echo "❌ Hebrew government number extraction failed: got '$result', expected '37'"
+            exit 1
+          fi

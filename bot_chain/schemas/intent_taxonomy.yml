@@ -1,0 +1,276 @@
+# Intent Taxonomy for CECI-AI Bot Chain
+# Version: 1.0.0
+# Purpose: Define parameter structures for intent detection
+
+intents:
+  search:
+    description: "User wants to search for government decisions"
+    confidence_threshold: 0.8
+    entities:
+      required:
+        - topic
+      optional:
+        - government_number
+        - date_range
+        - ministries
+        - decision_type
+    examples:
+      - "החלטות בנושא חינוך"
+      - "מה קרה עם הביטחון ב-2023"
+      - "החלטות משרד הפנים"
+  
+  count:
+    description: "User wants to count government decisions"
+    confidence_threshold: 0.85
+    entities:
+      required:
+        - count_target
+      optional:
+        - government_number
+        - topic
+        - date_range
+        - ministries
+    examples:
+      - "כמה החלטות קיבלה ממשלה 37"
+      - "מספר החלטות בנושא תחבורה"
+      - "כמה פעמים דנו בביטחון"
+  
+  specific_decision:
+    description: "User asks about a specific decision"
+    confidence_threshold: 0.9
+    entities:
+      required:
+        - decision_number
+      optional:
+        - government_number
+    examples:
+      - "החלטה 660 של ממשלה 37"
+      - "החלטה מספר 1205"
+      - "מה אמרה החלטה 450"
+  
+  comparison:
+    description: "User wants to compare decisions or governments"
+    confidence_threshold: 0.75
+    entities:
+      required:
+        - comparison_target
+      optional:
+        - government_numbers
+        - topics
+        - date_ranges
+    examples:
+      - "השוואה בין ממשלה 35 ל-37"
+      - "הבדלים בחינוך בין השנים"
+      - "מה השתנה בביטחון"
+  
+  clarification_needed:
+    description: "Query is ambiguous and needs clarification"
+    confidence_threshold: 0.6
+    entities:
+      optional:
+        - partial_topic
+        - partial_date
+        - partial_government
+    examples:
+      - "מה עם החינוך"
+      - "ממשלה זה"
+      - "אתמול"
+
+entities:
+  government_number:
+    type: integer
+    description: "Israeli government number (e.g., 35, 36, 37)"
+    validation:
+      min: 1
+      max: 50
+    normalization_patterns:
+      - pattern: "ממשלה (\\d+)"
+        extraction: "\\1"
+      - pattern: "ממשלה ([א-ת ]+)"
+        action: "convert_hebrew_to_number"
+    examples:
+      - "ממשלה 37"
+      - "ממשלה שלושים ושבע"
+      - "הממשלה הנוכחית"
+  
+  decision_number:
+    type: integer
+    description: "Government decision number"
+    validation:
+      min: 1
+      max: 9999
+    normalization_patterns:
+      - pattern: "החלטה (\\d+)"
+        extraction: "\\1"
+      - pattern: "החלטה מספר (\\d+)"
+        extraction: "\\1"
+      - pattern: "החלטה ([א-ת ]+)"
+        action: "convert_hebrew_to_number"
+    examples:
+      - "החלטה 660"
+      - "החלטה מספר 1205"
+      - "החלטה אלף ומאתיים"
+  
+  topic:
+    type: string
+    description: "Main topic or subject area"
+    normalization:
+      standardize_case: true
+      remove_prefixes: ["בנושא", "על", "לגבי"]
+    categories:
+      - "חינוך"
+      - "ביטחון"
+      - "כלכלה"
+      - "בריאות"
+      - "תחבורה"
+      - "סביבה"
+      - "משפט"
+      - "תרבות"
+      - "דת"
+      - "חקלאות"
+      - "תיירות"
+      - "מדע וטכנולוגיה"
+      - "עבודה ורווחה"
+      - "פנים"
+      - "חוץ"
+    examples:
+      - "חינוך"
+      - "ביטחון ישראל"
+      - "מדיניות כלכלית"
+  
+  date_range:
+    type: object
+    description: "Date range for filtering decisions"
+    properties:
+      start:
+        type: date
+        format: "YYYY-MM-DD"
+      end:
+        type: date
+        format: "YYYY-MM-DD"
+    normalization_patterns:
+      - pattern: "ב?(\\d{4})"
+        action: "year_to_range"
+      - pattern: "מאז (\\d{4})"
+        action: "from_year_to_now"
+      - pattern: "עד (\\d{4})"
+        action: "from_start_to_year"
+      - pattern: "השנה"
+        action: "current_year"
+      - pattern: "אתמול|הפעם הקודמת"
+        action: "recent_period"
+    examples:
+      - "2023"
+      - "מאז 2020"
+      - "בין 2021 ל-2023"
+  
+  ministries:
+    type: array
+    items:
+      type: string
+    description: "Government ministries involved"
+    normalization:
+      standardize_names: true
+      expand_abbreviations: true
+    standard_names:
+      - "משרד החינוך"
+      - "משרד הביטחון"
+      - "משרד האוצר"
+      - "משרד הבריאות"
+      - "משרד התחבורה"
+      - "משרד הפנים"
+      - "משרד החוץ"
+      - "משרד המשפטים"
+      - "משרד הכלכלה"
+      - "משרד הסביבה"
+    examples:
+      - "משרד החינוך"
+      - "משה\"ב" # משרד הביטחון
+      - "האוצר"
+  
+  count_target:
+    type: string
+    description: "What to count"
+    enum:
+      - "decisions"
+      - "meetings"
+      - "topics"
+      - "ministries"
+    normalization_patterns:
+      - pattern: "החלטות"
+        value: "decisions"
+      - pattern: "ישיבות"
+        value: "meetings"
+      - pattern: "נושאים"
+        value: "topics"
+    examples:
+      - "החלטות"
+      - "ישיבות ממשלה"
+      - "נושאים שנדונו"
+  
+  comparison_target:
+    type: string
+    description: "What to compare"
+    enum:
+      - "governments"
+      - "periods"
+      - "topics"
+      - "decisions"
+    examples:
+      - "ממשלות"
+      - "תקופות זמן"
+      - "נושאים"
+
+routing_rules:
+  needs_clarification:
+    conditions:
+      - "confidence < 0.7"
+      - "missing required entities"
+      - "ambiguous topic"
+    actions:
+      - route_to: "2C_CLARIFY_CLARIFY_BOT"
+      - priority: "high"
+  
+  has_context:
+    conditions:
+      - "conversation_id exists in redis"
+      - "contains pronouns (זה, זו, אלה)"
+      - "relative time references (אתמול, השנה)"
+    actions:
+      - route_to: "2X_MAIN_CTX_ROUTER_BOT"
+      - priority: "medium"
+  
+  direct_execution:
+    conditions:
+      - "confidence >= 0.8"
+      - "all required entities present"
+      - "clear intent"
+    actions:
+      - route_to: "2Q_QUERY_SQL_GEN_BOT"
+      - priority: "low"
+
+confidence_factors:
+  exact_patterns:
+    weight: 0.4
+    description: "Direct matches to known patterns"
+  
+  entity_presence:
+    weight: 0.3
+    description: "Required entities are present and valid"
+  
+  context_consistency:
+    weight: 0.2
+    description: "Consistent with conversation context"
+  
+  topic_clarity:
+    weight: 0.1
+    description: "Topic is clearly identifiable"
+
+quality_thresholds:
+  precision_target: 0.95
+  recall_target: 0.90
+  f1_target: 0.92
+  latency_target_ms: 500
+
+schema_version: "1.0.0"
+last_updated: "2025-06-27"

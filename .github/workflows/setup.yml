@@ -1,0 +1,30 @@
+name: Setup and Verify Repository
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  verify-structure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Verify directory structure
+        run: |
+          echo "Checking repository structure..."
+          test -d src || (echo "src/ directory missing" && exit 1)
+          test -d tests || (echo "tests/ directory missing" && exit 1)
+          test -d .github || (echo ".github/ directory missing" && exit 1)
+          test -d bot_chain || (echo "bot_chain/ directory missing" && exit 1)
+          test -d server || (echo "server/ directory missing" && exit 1)
+          echo "✓ Repository structure verified"
+      
+      - name: Check for essential files
+        run: |
+          test -f README.md || (echo "README.md missing" && exit 1)
+          test -f package.json || (echo "package.json missing" && exit 1)
+          test -f docker-compose.yml || (echo "docker-compose.yml missing" && exit 1)
+          echo "✓ Essential files present"
