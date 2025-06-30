@@ -19,6 +19,7 @@ RUN pip install --no-cache-dir \
     fastapi==0.104.1 \
     uvicorn[standard]==0.24.0 \
     openai==0.28.1 \
+    requests==2.31.0 \
     pydantic==2.5.0 \
     python-multipart==0.0.6 \
     pyyaml==6.0.1

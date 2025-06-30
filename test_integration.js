@@ -15,23 +15,23 @@ async function testHealthEndpoints() {
   console.log('\n🏥 Testing Health Endpoints...');
   
   try {
-    // Test enhanced health endpoint
+    // Test health endpoint
     const healthResponse = await axios.get(`${BACKEND_URL}/api/chat/health`);
-    console.log('✅ Enhanced health check:', healthResponse.data);
+    console.log('✅ Health check:', healthResponse.data);
     
     // Check if bot chain is available
     const services = healthResponse.data.services || {};
     const botChainAvailable = services.botChain?.available || false;
-    const activeEngine = healthResponse.data.activeEngine;
+    const botChainEnabled = services.botChain?.enabled || false;
     
-    console.log(`📊 Active Engine: ${activeEngine}`);
+    console.log(`📊 Status: ${healthResponse.data.status}`);
     console.log(`🤖 Bot Chain Available: ${botChainAvailable}`);
-    console.log(`🔧 SQL Engine Available: ${services.sqlEngine?.available || false}`);
+    console.log(`⚙️ Bot Chain Enabled: ${botChainEnabled}`);
     
-    return { botChainAvailable, activeEngine };
+    return { botChainAvailable, botChainEnabled };
   } catch (error) {
     console.error('❌ Health check failed:', error.message);
-    return { botChainAvailable: false, activeEngine: 'unknown' };
+    return { botChainAvailable: false, botChainEnabled: false };
   }
 }
 
@@ -118,7 +118,6 @@ async function testChatEndpoint() {
     if (responseEvents.length > 0) {
       const lastResponse = responseEvents[responseEvents.length - 1];
       console.log(`   Engine Used: ${lastResponse.metadata?.engine || 'unknown'}`);
-      console.log(`   Service: ${lastResponse.metadata?.service || 'unknown'}`);
       console.log(`   Response Preview: ${(lastResponse.content || '').substring(0, 100)}...`);
     }
     
@@ -137,7 +136,7 @@ async function testChatEndpoint() {
 }
 
 async function runIntegrationTests() {
-  console.log('🚀 Starting CECI-AI Frontend-to-Bot-Chain Integration Tests');
+  console.log('🚀 Starting CECI-AI Bot Chain Integration Tests');
   console.log('='.repeat(70));
   console.log(`📍 Backend URL: ${BACKEND_URL}`);
   console.log(`📝 Test Query: "${TEST_QUERY}"`);
@@ -150,14 +149,16 @@ async function runIntegrationTests() {
   };
   
   // Test 1: Health Check
-  const { botChainAvailable, activeEngine } = await testHealthEndpoints();
-  results.health = true; // Health endpoint itself worked
+  const { botChainAvailable, botChainEnabled } = await testHealthEndpoints();
+  results.health = botChainAvailable && botChainEnabled;
   
   // Test 2: Bot Chain Direct (if available)
-  if (botChainAvailable) {
+  if (botChainAvailable && botChainEnabled) {
     results.botChainDirect = await testBotChainDirect();
   } else {
-    console.log('\n⚠️ Skipping Bot Chain Direct Test (not available)');
+    console.log('\n❌ Bot Chain not available or not enabled');
+    console.log('   - Available:', botChainAvailable);
+    console.log('   - Enabled:', botChainEnabled);
   }
   
   // Test 3: Chat Endpoint
@@ -169,8 +170,8 @@ async function runIntegrationTests() {
   console.log('='.repeat(70));
   console.log(`✅ Health Check: ${results.health ? 'PASS' : 'FAIL'}`);
   console.log(`🤖 Bot Chain Available: ${botChainAvailable ? 'YES' : 'NO'}`);
-  console.log(`🎯 Active Engine: ${activeEngine}`);
-  console.log(`🔗 Bot Chain Direct: ${results.botChainDirect ? 'PASS' : 'SKIP/FAIL'}`);
+  console.log(`⚙️ Bot Chain Enabled: ${botChainEnabled ? 'YES' : 'NO'}`);
+  console.log(`🔗 Bot Chain Direct: ${results.botChainDirect ? 'PASS' : 'FAIL'}`);
   console.log(`💬 Chat Endpoint: ${results.chatEndpoint ? 'PASS' : 'FAIL'}`);
   
   const passed = Object.values(results).filter(Boolean).length;
@@ -178,19 +179,26 @@ async function runIntegrationTests() {
   
   console.log(`\n🎯 Overall: ${passed}/${total} tests passed`);
   
-  if (results.chatEndpoint) {
-    console.log('\n🎉 SUCCESS: Frontend-to-Bot-Chain integration is working!');
+  if (results.chatEndpoint && results.botChainDirect) {
+    console.log('\n🎉 SUCCESS: Bot Chain integration is fully working!');
     console.log('   ✅ Frontend can send queries to backend');
-    console.log('   ✅ Backend can route to appropriate engine');
+    console.log('   ✅ Backend routes to bot chain');
+    console.log('   ✅ Bot chain processes queries successfully');
     console.log('   ✅ Response pipeline is functional');
   } else {
-    console.log('\n⚠️ PARTIAL SUCCESS: Some integration issues detected');
-    console.log('   🔧 Check docker-compose services are running');
-    console.log('   🔧 Verify bot chain environment variables');
-    console.log('   🔧 Check backend logs for errors');
+    console.log('\n⚠️ ISSUES DETECTED:');
+    if (!botChainEnabled) {
+      console.log('   ❌ Bot chain is disabled - set BOT_CHAIN_ENABLED=true');
+    }
+    if (!botChainAvailable) {
+      console.log('   ❌ Bot chain services not running - start docker containers');
+    }
+    if (!results.chatEndpoint) {
+      console.log('   ❌ Chat endpoint failed - check backend logs');
+    }
   }
   
-  return results.chatEndpoint;
+  return results.chatEndpoint && results.botChainDirect;
 }
 
 // Run the tests

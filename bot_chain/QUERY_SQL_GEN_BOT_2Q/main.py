@@ -38,8 +38,8 @@ class SQLGenRequest(BaseModel):
     """Request model for SQL generation."""
     intent: str = Field(..., description="Intent from intent bot")
     entities: Dict[str, Any] = Field(..., description="Extracted entities")
-    conv_id: UUID4 = Field(..., description="Conversation ID for tracking")
-    trace_id: Optional[UUID4] = Field(None, description="Request trace ID")
+    conv_id: str = Field(..., description="Conversation ID for tracking")
+    trace_id: Optional[str] = Field(None, description="Request trace ID")
 
 
 class SQLParameter(BaseModel):
@@ -59,7 +59,7 @@ class TokenUsage(BaseModel):
 
 class SQLGenResponse(BaseModel):
     """Response model for SQL generation."""
-    conv_id: UUID4
+    conv_id: str
     sql_query: str
     parameters: List[SQLParameter]
     template_used: Optional[str] = None
@@ -267,8 +267,8 @@ async def generate_sql(request: SQLGenRequest) -> SQLGenResponse:
     start = datetime.utcnow()
     
     logger.info(f"SQL generation request received", extra={
-        "conv_id": str(request.conv_id),
-        "trace_id": str(request.trace_id) if request.trace_id else None,
+        "conv_id": request.conv_id,
+        "trace_id": request.trace_id if request.trace_id else None,
         "intent": request.intent,
         "entities_count": len(request.entities)
     })
@@ -297,14 +297,14 @@ async def generate_sql(request: SQLGenRequest) -> SQLGenResponse:
                 ))
             
             logger.info(f"SQL generated using template: {template_used}", extra={
-                "conv_id": str(request.conv_id),
+                "conv_id": request.conv_id,
                 "template": template_used
             })
         
         else:
             # Fallback to GPT generation
             logger.info("Falling back to GPT SQL generation", extra={
-                "conv_id": str(request.conv_id)
+                "conv_id": request.conv_id
             })
             
             gpt_response = await call_gpt_for_sql(request.intent, request.entities)
@@ -328,7 +328,7 @@ async def generate_sql(request: SQLGenRequest) -> SQLGenResponse:
         
         if not validation_passed:
             logger.error(f"Generated SQL failed validation", extra={
-                "conv_id": str(request.conv_id),
+                "conv_id": request.conv_id,
                 "sql": sql_query
             })
             raise HTTPException(status_code=500, detail="Generated SQL failed validation")
@@ -347,7 +347,7 @@ async def generate_sql(request: SQLGenRequest) -> SQLGenResponse:
         # Log success
         duration_ms = (datetime.utcnow() - start).total_seconds() * 1000
         logger.info(f"SQL generation completed", extra={
-            "conv_id": str(request.conv_id),
+            "conv_id": request.conv_id,
             "duration_ms": duration_ms,
             "method": "template" if template_used else "gpt",
             "parameter_count": len(parameters)

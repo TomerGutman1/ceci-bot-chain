@@ -32,8 +32,8 @@ openai.api_key = config.openai_api_key
 class RewriteRequest(BaseModel):
     """Request model for text rewriting."""
     text: str = Field(..., description="Original user text in Hebrew")
-    conv_id: UUID4 = Field(..., description="Conversation ID for tracking")
-    trace_id: Optional[UUID4] = Field(None, description="Request trace ID")
+    conv_id: str = Field(..., description="Conversation ID for tracking")
+    trace_id: Optional[str] = Field(None, description="Request trace ID")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
@@ -55,7 +55,7 @@ class TokenUsage(BaseModel):
 
 class RewriteResponse(BaseModel):
     """Response model for text rewriting."""
-    conv_id: UUID4
+    conv_id: str
     clean_text: str
     original_text: str
     corrections: List[Correction] = Field(default_factory=list)

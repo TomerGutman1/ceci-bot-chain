@@ -207,13 +207,13 @@ def needs_clarification(
             return True, "ambiguous_time", f"Query contains ambiguous time reference: '{ambiguous}'"
     
     # Check for vague topics
-    vague_topics = triggers["ambiguous_entities"]["vague_topics"]
+    vague_topics = triggers.get("vague_topics", [])
     for vague in vague_topics:
         if vague in query_lower:
             return True, "vague_topic", f"Query contains vague topic reference: '{vague}'"
     
     # Check for incomplete queries (questions without sufficient context)
-    incomplete_questions = triggers["ambiguous_entities"]["incomplete_questions"]
+    incomplete_questions = triggers.get("incomplete_questions", [])
     if any(incomplete in query_lower for incomplete in incomplete_questions):
         if not context.extracted_entities and len(context.user_queries) == 1:
             return True, "incomplete_query", "Question word without sufficient context in first query"

@@ -13,7 +13,7 @@ from uuid import uuid4
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, UUID4
-import openai
+import requests
 import uvicorn
 
 # Add parent directory to path for common imports
@@ -28,18 +28,18 @@ config = get_config('MAIN_INTENT_BOT_1')
 app = FastAPI(title="MAIN_INTENT_BOT_1", version="1.0.0")
 
 # Configure OpenAI
-openai.api_key = config.openai_api_key
+# openai.api_key = config.openai_api_key
 
 # Load taxonomy
-with open('../schemas/intent_taxonomy.yml', 'r', encoding='utf-8') as f:
+with open('/app/schemas/intent_taxonomy.yml', 'r', encoding='utf-8') as f:
     TAXONOMY = yaml.safe_load(f)
 
 
 class IntentRequest(BaseModel):
     """Request model for intent detection."""
     text: str = Field(..., description="Cleaned text from rewrite bot")
-    conv_id: UUID4 = Field(..., description="Conversation ID for tracking")
-    trace_id: Optional[UUID4] = Field(None, description="Request trace ID")
+    conv_id: str = Field(..., description="Conversation ID for tracking")
+    trace_id: Optional[str] = Field(None, description="Request trace ID")
     context: Optional[Dict[str, Any]] = Field(None, description="Previous conversation context")
 
 
@@ -59,6 +59,7 @@ class IntentEntities(BaseModel):
     ministries: Optional[List[str]] = None
     count_target: Optional[str] = None
     comparison_target: Optional[str] = None
+    limit: Optional[int] = None
 
 
 class TokenUsage(BaseModel):
@@ -71,7 +72,7 @@ class TokenUsage(BaseModel):
 
 class IntentResponse(BaseModel):
     """Response model for intent detection."""
-    conv_id: UUID4
+    conv_id: str
     intent: str = Field(..., pattern="^(search|count|specific_decision|comparison|clarification_needed)$")
     entities: IntentEntities
     confidence: float = Field(..., ge=0, le=1)
@@ -101,43 +102,69 @@ async def call_gpt_for_intent(text: str, context: Dict[str, Any] = None) -> Dict
         prompt = build_intent_prompt(text, context)
         
         messages = [
-            {"role": "system", "content": "You are an expert Hebrew intent extraction system."},
+            {"role": "system", "content": "You are an expert Hebrew intent extraction system. Always respond with valid JSON."},
             {"role": "user", "content": prompt}
         ]
         
-        response = await asyncio.to_thread(
-            openai.ChatCompletion.create,
-            model=config.model,
-            messages=messages,
-            temperature=config.temperature,
-            max_tokens=config.max_tokens,
-            response_format={"type": "json_object"}
-        )
+        # Debug log
+        logger.info(f"Calling GPT with prompt length: {len(prompt)}")
         
-        # Extract response
-        content = response.choices[0].message.content
+        # Call OpenAI API using requests
+        headers = {
+            "Authorization": f"Bearer {config.openai_api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "model": config.model,
+            "messages": messages,
+            "temperature": config.temperature,
+            "max_tokens": config.max_tokens,
+            "response_format": {"type": "json_object"}
+        }
+        
+        try:
+            response = requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers=headers,
+                json=data,
+                timeout=30
+            )
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request to OpenAI failed: {e}")
+            raise HTTPException(status_code=500, detail=f"OpenAI API request failed: {str(e)}")
+        
+        if response.status_code != 200:
+            logger.error(f"OpenAI API error: {response.status_code} - {response.text}")
+            raise HTTPException(status_code=500, detail=f"OpenAI API error: {response.status_code}")
+        
+        response_data = response.json()
+        content = response_data['choices'][0]['message']['content']
+        logger.info(f"GPT raw response: {content[:200]}...")  # Log first 200 chars
+        
         result = json.loads(content)
         
         # Validate response structure
         if not validate_intent_response(result):
+            logger.error(f"Invalid response structure: {result}")
             raise ValueError("Invalid response structure from GPT")
         
         # Log token usage
-        usage = response.usage
+        usage = response_data['usage']
         log_gpt_usage(
             logger,
             model=config.model,
-            prompt_tokens=usage.prompt_tokens,
-            completion_tokens=usage.completion_tokens,
-            total_tokens=usage.total_tokens
+            prompt_tokens=usage['prompt_tokens'],
+            completion_tokens=usage['completion_tokens'],
+            total_tokens=usage['total_tokens']
         )
         
         return {
             "result": result,
             "usage": {
-                "prompt_tokens": usage.prompt_tokens,
-                "completion_tokens": usage.completion_tokens,
-                "total_tokens": usage.total_tokens,
+                "prompt_tokens": usage['prompt_tokens'],
+                "completion_tokens": usage['completion_tokens'],
+                "total_tokens": usage['total_tokens'],
                 "model": config.model
             }
         }
@@ -152,7 +179,8 @@ async def call_gpt_for_intent(text: str, context: Dict[str, Any] = None) -> Dict
     except Exception as e:
         logger.error(f"GPT call failed: {e}", extra={
             "error_type": type(e).__name__,
-            "error_message": str(e)
+            "error_message": str(e),
+            "traceback": str(e.__traceback__)
         })
         raise HTTPException(status_code=500, detail=f"GPT call failed: {str(e)}")
 
@@ -202,7 +230,8 @@ def normalize_entities(entities: Dict[str, Any]) -> IntentEntities:
         date_range=entities.get("date_range"),
         ministries=ministries,
         count_target=entities.get("count_target"),
-        comparison_target=entities.get("comparison_target")
+        comparison_target=entities.get("comparison_target"),
+        limit=entities.get("limit")
     )
 
 
@@ -213,7 +242,9 @@ def determine_routing(intent: str, confidence: float, entities: IntentEntities, 
     is_follow_up = False
     
     # Check if clarification is needed
-    if confidence < TAXONOMY['routing_rules']['needs_clarification']['conditions'][0].split('<')[1].strip():
+    threshold_str = TAXONOMY['routing_rules']['needs_clarification']['conditions'][0].split('<')[1].strip()
+    threshold = float(threshold_str)
+    if confidence < threshold:
         needs_clarification = True
     
     if intent == "clarification_needed":

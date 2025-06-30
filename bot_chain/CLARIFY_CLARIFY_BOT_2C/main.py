@@ -27,7 +27,7 @@ logger = setup_logging('CLARIFY_CLARIFY_BOT_2C')
 config = get_config('CLARIFY_CLARIFY_BOT_2C')
 
 # Configure OpenAI
-openai.api_key = config.get('OPENAI_API_KEY', os.getenv('OPENAI_API_KEY'))
+openai.api_key = config.openai_api_key
 
 app = FastAPI(
     title="CLARIFY_CLARIFY_BOT_2C",
@@ -450,7 +450,7 @@ async def get_clarification_templates():
 if __name__ == "__main__":
     import uvicorn
     
-    port = int(config.get('PORT', 8015))
+    port = config.port
     logger.info(f"Starting CLARIFY_CLARIFY_BOT_2C on port {port}")
     
     uvicorn.run(

@@ -20,8 +20,7 @@ def get_logger_config(layer_name: str) -> Dict[str, Any]:
         'disable_existing_loggers': False,
         'formatters': {
             'json': {
-                '()': 'bot_chain.common.logging.JSONFormatter',
-                'layer': layer_name
+                'format': '%(message)s'  # Use simple format for now
             },
             'standard': {
                 'format': f'%(asctime)s - {layer_name} - %(name)s - %(levelname)s - %(message)s',

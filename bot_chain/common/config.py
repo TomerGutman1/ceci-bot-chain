@@ -58,7 +58,7 @@ BOT_CONFIGS = {
     "MAIN_INTENT_BOT_1": BotConfig(
         layer_name="MAIN_INTENT_BOT_1",
         port=8011,
-        model="gpt-4-turbo",
+        model="gpt-3.5-turbo",
         temperature=0.2,
         max_tokens=800
     ),
@@ -83,22 +83,22 @@ BOT_CONFIGS = {
         temperature=0.3,
         max_tokens=1000
     ),
-    "2C_CLARIFY_CLARIFY_BOT": BotConfig(
-        layer_name="2C_CLARIFY_CLARIFY_BOT",
+    "CLARIFY_CLARIFY_BOT_2C": BotConfig(
+        layer_name="CLARIFY_CLARIFY_BOT_2C",
         port=8015,
         model="gpt-3.5-turbo",
         temperature=0.5,
         max_tokens=200
     ),
-    "3Q_QUERY_RANKER_BOT": BotConfig(
-        layer_name="3Q_QUERY_RANKER_BOT",
+    "QUERY_RANKER_BOT_3Q": BotConfig(
+        layer_name="QUERY_RANKER_BOT_3Q",
         port=8016,
         model="gpt-3.5-turbo",
         temperature=0.2,
         max_tokens=800
     ),
-    "4_MAIN_FORMATTER": BotConfig(
-        layer_name="4_MAIN_FORMATTER",
+    "MAIN_FORMATTER_4": BotConfig(
+        layer_name="MAIN_FORMATTER_4",
         port=8017,
         model="",  # No GPT model for formatter
         temperature=0,

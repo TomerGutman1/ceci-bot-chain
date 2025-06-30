@@ -687,7 +687,7 @@ async def get_format_template(format_name: str):
 if __name__ == "__main__":
     import uvicorn
     
-    port = int(config.get('PORT', 8017))
+    port = config.port
     logger.info(f"Starting MAIN_FORMATTER_4 on port {port}")
     
     uvicorn.run(

@@ -71,10 +71,10 @@ Backend
 Frontend (displays formatted response)
 ```
 
-### Fallback Strategy:
-- ✅ **Primary**: Bot Chain (if `BOT_CHAIN_ENABLED=true` and healthy)
-- ✅ **Fallback**: Original SQL Engine (if bot chain fails)
-- ✅ **Error Handling**: Graceful degradation with user-friendly messages
+### Processing Strategy:
+- ✅ **Only Engine**: Bot Chain (always enabled)
+- ✅ **No Fallback**: System returns error if bot chain is unavailable
+- ✅ **Error Handling**: Clear error messages for troubleshooting
 
 ---
 
@@ -82,8 +82,8 @@ Frontend (displays formatted response)
 
 ### Environment Variables Added:
 ```bash
-# Enable/disable bot chain
-BOT_CHAIN_ENABLED=true
+# Bot chain is always enabled (hard-coded in service)
+# BOT_CHAIN_ENABLED is ignored - bot chain is always active
 
 # Individual bot service URLs
 REWRITE_BOT_URL=http://rewrite-bot:8010

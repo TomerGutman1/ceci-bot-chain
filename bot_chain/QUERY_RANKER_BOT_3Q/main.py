@@ -34,7 +34,7 @@ logger = setup_logging('QUERY_RANKER_BOT_3Q')
 config = get_config('QUERY_RANKER_BOT_3Q')
 
 # Configure OpenAI
-openai.api_key = config.get('OPENAI_API_KEY', os.getenv('OPENAI_API_KEY'))
+openai.api_key = config.openai_api_key
 
 app = FastAPI(
     title="QUERY_RANKER_BOT_3Q",
@@ -551,7 +551,7 @@ async def get_ranking_stats():
 if __name__ == "__main__":
     import uvicorn
     
-    port = int(config.get('PORT', 8016))
+    port = config.port
     logger.info(f"Starting QUERY_RANKER_BOT_3Q on port {port}")
     
     uvicorn.run(

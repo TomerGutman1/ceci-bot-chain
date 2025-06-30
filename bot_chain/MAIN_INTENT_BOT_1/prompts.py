@@ -15,7 +15,8 @@ You must return a JSON object with this exact structure:
         "date_range": {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"} or null,
         "ministries": ["array of strings"] or null,
         "count_target": "decisions|meetings|topics|ministries" or null,
-        "comparison_target": "string" or null
+        "comparison_target": "string" or null,
+        "limit": integer or null
     },
     "route_flags": {
         "needs_clarification": boolean,
@@ -27,11 +28,14 @@ You must return a JSON object with this exact structure:
 
 Key rules:
 1. Convert Hebrew numbers to digits (שלושים ושבע -> 37)
-2. Normalize topics to standard categories
-3. Extract date ranges from various Hebrew expressions
-4. Set confidence based on query clarity
-5. Flag for clarification if ambiguous
-6. Identify context dependencies (pronouns, relative references)
+2. IMPORTANT: When a number appears before words like "החלטות", "ישיבות", "נושאים" - it's a COUNT, not a government number!
+   Examples: "3 החלטות" = count_target with value 3, NOT government_number 3
+3. Normalize topics to standard categories
+4. Extract date ranges from various Hebrew expressions
+5. Set confidence based on query clarity
+6. Flag for clarification if ambiguous
+7. Identify context dependencies (pronouns, relative references)
+8. Government numbers are typically mentioned as "ממשלה X" or "ממשלת X"
 """
 
 INTENT_EXAMPLES = [
@@ -55,6 +59,29 @@ INTENT_EXAMPLES = [
                 "is_follow_up": False
             },
             "explanation": "Clear search intent for education decisions from government 37"
+        }
+    },
+    {
+        "query": "3 החלטות בנושא חינוך",
+        "expected": {
+            "intent": "search",
+            "confidence": 0.9,
+            "entities": {
+                "government_number": None,
+                "decision_number": None,
+                "topic": "חינוך",
+                "date_range": None,
+                "ministries": None,
+                "count_target": None,
+                "limit": 3,
+                "comparison_target": None
+            },
+            "route_flags": {
+                "needs_clarification": False,
+                "has_context": False,
+                "is_follow_up": False
+            },
+            "explanation": "User requests 3 decisions about education - limit is 3, not government number"
         }
     },
     {
@@ -215,13 +242,41 @@ INTENT_EXAMPLES = [
 
 FEW_SHOT_PROMPT = """Here are examples of correct intent extraction:
 
+Query: "3 החלטות בנושא חינוך"
+Response: {
+    "intent": "search",
+    "confidence": 0.9,
+    "entities": {
+        "government_number": null,
+        "decision_number": null,
+        "topic": "חינוך",
+        "date_range": null,
+        "ministries": null,
+        "count_target": null,
+        "comparison_target": null,
+        "limit": 3
+    },
+    "route_flags": {
+        "needs_clarification": false,
+        "has_context": false,
+        "is_follow_up": false
+    },
+    "explanation": "User requests 3 decisions about education - limit is 3"
+}
+
 Query: "החלטות ממשלה 37 בנושא חינוך"
 Response: {
     "intent": "search",
     "confidence": 0.95,
     "entities": {
         "government_number": 37,
-        "topic": "חינוך"
+        "decision_number": null,
+        "topic": "חינוך",
+        "date_range": null,
+        "ministries": null,
+        "count_target": null,
+        "comparison_target": null,
+        "limit": null
     },
     "route_flags": {
         "needs_clarification": false,
@@ -237,7 +292,12 @@ Response: {
     "confidence": 0.9,
     "entities": {
         "government_number": 37,
-        "count_target": "decisions"
+        "decision_number": null,
+        "topic": null,
+        "date_range": null,
+        "ministries": null,
+        "count_target": "decisions",
+        "comparison_target": null
     },
     "route_flags": {
         "needs_clarification": false,
@@ -252,7 +312,13 @@ Response: {
     "intent": "clarification_needed",
     "confidence": 0.4,
     "entities": {
-        "topic": "חינוך"
+        "government_number": null,
+        "decision_number": null,
+        "topic": "חינוך",
+        "date_range": null,
+        "ministries": null,
+        "count_target": null,
+        "comparison_target": null
     },
     "route_flags": {
         "needs_clarification": true,
@@ -268,7 +334,9 @@ Response:"""
 
 def build_intent_prompt(query: str, context: dict = None) -> str:
     """Build the complete prompt for intent extraction."""
-    prompt = INTENT_SYSTEM_PROMPT + "\n\n" + FEW_SHOT_PROMPT.format(query=query)
+    # Replace query placeholder in FEW_SHOT_PROMPT
+    prompt_with_query = FEW_SHOT_PROMPT.replace("{query}", query)
+    prompt = INTENT_SYSTEM_PROMPT + "\n\n" + prompt_with_query
     
     if context:
         context_info = f"\n\nConversation context:\n{context}"
