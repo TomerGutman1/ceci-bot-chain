@@ -33,14 +33,34 @@ router.get('/usage-stats', async (_req, res) => {
       stats: {
         ...stats,
         cacheHitRatePercent: (stats.cacheHitRate * 100).toFixed(2) + '%',
-        avgCostPerRequestFormatted: ' + stats.avgCostPerRequest.toFixed(4),
-        totalCostFormatted: ' + stats.totalCostUSD.toFixed(2)
+        avgCostPerRequestFormatted: '$' + stats.avgCostPerRequest.toFixed(4),
+        totalCostFormatted: '$' + stats.totalCostUSD.toFixed(2)
       }
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       error: 'Failed to get usage statistics'
+    });
+  }
+});
+
+// GET /api/chat/recent-usage - Get recent token usage history
+router.get('/recent-usage', async (_req, res) => {
+  try {
+    const botChainService = getBotChainService();
+    // Get the last 10 requests - need to implement this method
+    const stats = botChainService.getUsageStats();
+    
+    res.json({
+      success: true,
+      message: 'Recent usage tracking available through logs and individual responses',
+      current_stats: stats
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get recent usage'
     });
   }
 });

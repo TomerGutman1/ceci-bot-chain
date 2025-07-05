@@ -38,7 +38,7 @@ services:
       - CLARIFY_BOT_URL=http://clarify-bot:8015
       - RANKER_BOT_URL=http://ranker-bot:8016
       - FORMATTER_BOT_URL=http://formatter-bot:8017
-      - BOT_CHAIN_TIMEOUT=30000
+      - BOT_CHAIN_TIMEOUT=120000
     depends_on:
       - redis
       - rewrite-bot
@@ -146,16 +146,13 @@ services:
 
   intent-bot:
     build:
-      context: ./bot_chain
-      dockerfile: ./MAIN_INTENT_BOT_1/Dockerfile
+      context: ./bot_chain/INTENT_RCGNZR_0
+      dockerfile: Dockerfile
     restart: unless-stopped
     ports:
       - "8011:8011"
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
-      - REDIS_URL=redis://redis:6379
+      - PORT=8011
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     depends_on:
       redis:
@@ -167,7 +164,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
 
   sql-gen-bot:
     build:

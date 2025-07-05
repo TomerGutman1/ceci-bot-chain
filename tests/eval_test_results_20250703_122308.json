@@ -1,0 +1,283 @@
+[
+  {
+    "query": "נתח לעומק את החלטה 1 ממשלה 37",
+    "conv_id": "test_1751534529_910",
+    "timestamp": "2025-07-03T12:22:09.326030",
+    "steps": {
+      "health_checks": {
+        "success": true
+      },
+      "intent_detection": {
+        "success": true,
+        "result": {
+          "conv_id": "test_1751534529_910",
+          "intent_type": "EVAL",
+          "entities": {
+            "government_number": 37,
+            "decision_number": 1,
+            "topic": null,
+            "date_range": null,
+            "ministries": null,
+            "count_target": null,
+            "comparison_target": null,
+            "limit": null
+          },
+          "confidence": 1,
+          "route_flags": {
+            "needs_clarification": false,
+            "has_context": false,
+            "is_follow_up": false,
+            "needs_context": false,
+            "is_statistical": false,
+            "is_comparison": false
+          },
+          "timestamp": "2025-07-03T09:22:09.337Z",
+          "layer": "1_MAIN_INTENT_BOT",
+          "token_usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "model": "deterministic"
+          },
+          "explanation": "Deep analysis request"
+        }
+      },
+      "sql_generation": {
+        "success": true,
+        "result": {
+          "conv_id": "test_1751534529_910",
+          "sql_query": "\n        SELECT \n            id, government_number, decision_number, decision_date,\n            title, summary, topics, ministries\n        FROM government_decisions \n        WHERE status = 'active'\n        AND government_number = %(government_number)s\n        \n        ORDER BY decision_date DESC, government_number DESC, decision_number DESC\n        LIMIT %(limit)s;\n        ",
+          "parameters": [
+            {
+              "name": "government_number",
+              "value": 37,
+              "type": "int"
+            },
+            {
+              "name": "limit",
+              "value": 20,
+              "type": "int"
+            }
+          ],
+          "template_used": "recent_decisions",
+          "validation_passed": true,
+          "timestamp": "2025-07-03T09:22:09.343056",
+          "layer": "2Q_QUERY_SQL_GEN_BOT",
+          "token_usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "model": "template"
+          }
+        }
+      },
+      "eval_bot_direct": {
+        "success": true,
+        "result": {
+          "overall_score": 0.5,
+          "relevance_level": "partially_relevant",
+          "quality_metrics": [],
+          "content_analysis": {
+            "error": "שגיאה בפיענוח תוצאות הניתוח"
+          },
+          "recommendations": [
+            "נדרש ניתוח מחדש"
+          ],
+          "confidence": 0.3,
+          "explanation": "ניתוח ישימות נכשל - שגיאת JSON: Expecting ',' delimiter: line 82 column 25 (char 2072)",
+          "processing_time_ms": 27963.627,
+          "token_usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "model": "fallback"
+          }
+        }
+      },
+      "backend_pipeline": {
+        "success": false,
+        "result": null
+      }
+    }
+  },
+  {
+    "query": "אני רוצה ניתוח מעמיק של החלטה 2 ממשלה 37",
+    "conv_id": "test_1751534559_86",
+    "timestamp": "2025-07-03T12:22:39.318052",
+    "steps": {
+      "health_checks": {
+        "success": true
+      },
+      "intent_detection": {
+        "success": true,
+        "result": {
+          "conv_id": "test_1751534559_86",
+          "intent_type": "EVAL",
+          "entities": {
+            "government_number": 37,
+            "decision_number": 2,
+            "topic": null,
+            "date_range": null,
+            "ministries": null,
+            "count_target": null,
+            "comparison_target": null,
+            "limit": null
+          },
+          "confidence": 1,
+          "route_flags": {
+            "needs_clarification": false,
+            "has_context": false,
+            "is_follow_up": false,
+            "needs_context": false,
+            "is_statistical": false,
+            "is_comparison": false
+          },
+          "timestamp": "2025-07-03T09:22:39.329Z",
+          "layer": "1_MAIN_INTENT_BOT",
+          "token_usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "model": "deterministic"
+          },
+          "explanation": "Deep analysis request"
+        }
+      },
+      "sql_generation": {
+        "success": true,
+        "result": {
+          "conv_id": "test_1751534559_86",
+          "sql_query": "\n        SELECT \n            id, government_number, decision_number, decision_date,\n            title, summary, topics, ministries\n        FROM government_decisions \n        WHERE status = 'active'\n        AND government_number = %(government_number)s\n        \n        ORDER BY decision_date DESC, government_number DESC, decision_number DESC\n        LIMIT %(limit)s;\n        ",
+          "parameters": [
+            {
+              "name": "government_number",
+              "value": 37,
+              "type": "int"
+            },
+            {
+              "name": "limit",
+              "value": 20,
+              "type": "int"
+            }
+          ],
+          "template_used": "recent_decisions",
+          "validation_passed": true,
+          "timestamp": "2025-07-03T09:22:39.334476",
+          "layer": "2Q_QUERY_SQL_GEN_BOT",
+          "token_usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "model": "template"
+          }
+        }
+      },
+      "eval_bot_direct": {
+        "success": true,
+        "result": {
+          "overall_score": 0.75,
+          "relevance_level": "relevant",
+          "quality_metrics": [
+            {
+              "name": "לוח זמנים מחייב",
+              "score": 1.0,
+              "weight": 0.17,
+              "explanation": "ההחלטה כוללת לוח זמנים מפורט עם אבני דרך רבעוניות."
+            },
+            {
+              "name": "צוות מתכלל",
+              "score": 0.8,
+              "weight": 0.07,
+              "explanation": "מוזכרת אחריות של גורמים במשרדי הממשלה אך לא מפורט במיוחד איזה גוף מוביל."
+            },
+            {
+              "name": "גורם מתכלל יחיד",
+              "score": 0.4,
+              "weight": 0.05,
+              "explanation": "לא מוזכר אדם ספציפי שאחראי על היישום."
+            },
+            {
+              "name": "מנגנון דיווח/בקרה",
+              "score": 1.0,
+              "weight": 0.09,
+              "explanation": "קיים מנגנון דיווח חודשי למשרד ראש הממשלה ובקרה חיצונית על ידי משרד האוצר."
+            },
+            {
+              "name": "מנגנון מדידה והערכה",
+              "score": 0.6,
+              "weight": 0.06,
+              "explanation": "ההחלטה לא מפרטת במפורש את אופן מדידת השפעתה."
+            },
+            {
+              "name": "מנגנון ביקורת חיצונית",
+              "score": 1.0,
+              "weight": 0.04,
+              "explanation": "קיים מנגנון ביקורת חיצוני על ידי משרד האוצר."
+            },
+            {
+              "name": "משאבים נדרשים",
+              "score": 1.0,
+              "weight": 0.19,
+              "explanation": "ההחלטה כוללת הקצאת תקציב של 50 מיליון שקל."
+            },
+            {
+              "name": "מעורבות של מספר דרגים בתהליך",
+              "score": 0.8,
+              "weight": 0.07,
+              "explanation": "מעורבות של משרדי ממשלה וארגונים ציבוריים."
+            },
+            {
+              "name": "מבנה סעיפים וחלוקת עבודה ברורה",
+              "score": 0.8,
+              "weight": 0.09,
+              "explanation": "ההחלטה מפורטת אך לא מפורשת לחלוטין חלוקת העבודה."
+            },
+            {
+              "name": "מנגנון יישום בשטח",
+              "score": 0.6,
+              "weight": 0.09,
+              "explanation": "לא מפורט במיוחד כיצד ייושמו ההחלטות בשטח."
+            },
+            {
+              "name": "גורם מכריע",
+              "score": 0.4,
+              "weight": 0.03,
+              "explanation": "לא מוזכר מנגנון הכרעה במחלוקות."
+            },
+            {
+              "name": "שותפות בין מגזרית",
+              "score": 0.8,
+              "weight": 0.03,
+              "explanation": "קיימת מעורבות של ארגונים ציבוריים."
+            },
+            {
+              "name": "מדדי תוצאה ומרכיבי הצלחה",
+              "score": 0.4,
+              "weight": 0.02,
+              "explanation": "לא מוגדרים במפורש יעדים ומדדי הצלחה."
+            }
+          ],
+          "content_analysis": {
+            "feasibility_analysis": "ההחלטה מציגה תוכנית מפורטת עם לוח זמנים ומשאבים מוקצים, אך חסרה בה מדדים ברורים להערכת ההשפעה ומנגנון הכרעה במחלוקות."
+          },
+          "recommendations": [
+            "ציון ישימות כולל: 75/100"
+          ],
+          "confidence": 0.9,
+          "explanation": "ניתוח ישימות החלטה 2 של ממשלה 37:\n\nההחלטה מציגה תוכנית מפורטת עם לוח זמנים ומשאבים מוקצים, אך חסרה בה מדדים ברורים להערכת ההשפעה ומנגנון הכרעה במחלוקות.\n\nציון סופי: 75/100",
+          "processing_time_ms": 28286.728,
+          "token_usage": {
+            "prompt_tokens": 2455,
+            "completion_tokens": 1363,
+            "total_tokens": 3818,
+            "model": "gpt-4-turbo"
+          }
+        }
+      },
+      "backend_pipeline": {
+        "success": false,
+        "result": null
+      }
+    }
+  }
+]

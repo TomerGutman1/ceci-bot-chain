@@ -2,7 +2,16 @@ import { Request, Response } from 'express';
 import { getBotChainService } from '../services/botChainService';
 
 export async function handleChatRequestWithBotChain(req: Request, res: Response) {
-  const { message, sessionId, preferences = {} } = req.body;
+  const { message, conversationId, sessionId, preferences = {} } = req.body;
+  const effectiveSessionId = conversationId || sessionId;
+  
+  console.log('[Chat] Request details:', {
+    message: message?.substring(0, 50) + '...',
+    conversationId,
+    sessionId,
+    effectiveSessionId,
+    bodyKeys: Object.keys(req.body)
+  });
 
   // Set up SSE headers
   res.writeHead(200, {
@@ -48,7 +57,7 @@ export async function handleChatRequestWithBotChain(req: Request, res: Response)
     // Process with bot chain
     const botChainResult = await botChainService.processQuery({
       message,
-      sessionId,
+      sessionId: effectiveSessionId,
       outputFormat: preferences.outputFormat || 'markdown',
       presentationStyle: preferences.presentationStyle || 'detailed',
       includeMetadata: preferences.includeMetadata !== false,
@@ -62,9 +71,10 @@ export async function handleChatRequestWithBotChain(req: Request, res: Response)
         content: botChainResult.response,
         metadata: {
           ...botChainResult.metadata,
-          session_id: sessionId,
+          session_id: effectiveSessionId,
           engine: 'bot-chain'
-        }
+        },
+        final: true
       })}\n\n`);
     } else {
       // Bot chain failed
@@ -125,7 +135,8 @@ export async function getChatHealthWithBotChain(_req: Request, res: Response) {
 // Test endpoint for bot chain
 export async function testBotChain(req: Request, res: Response) {
   try {
-    const { query, sessionId = 'test', preferences = {} } = req.body;
+    const { query, conversationId, sessionId = 'test', preferences = {} } = req.body;
+    const effectiveSessionId = conversationId || sessionId;
     
     if (!query) {
       return res.status(400).json({
@@ -143,7 +154,7 @@ export async function testBotChain(req: Request, res: Response) {
     
     const result = await botChainService.processQuery({
       message: query,
-      sessionId,
+      sessionId: effectiveSessionId,
       outputFormat: preferences.outputFormat,
       presentationStyle: preferences.presentationStyle,
       includeMetadata: preferences.includeMetadata,

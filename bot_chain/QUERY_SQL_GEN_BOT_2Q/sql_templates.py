@@ -26,11 +26,10 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            title, summary, topics, ministries
+            title, summary, topics, ministries, decision_url
         FROM government_decisions 
         WHERE government_number = %(government_number)s
         AND %(topic)s = ANY(topics)
-        AND status = 'active'
         ORDER BY decision_date DESC, decision_number DESC
         LIMIT %(limit)s;
         """,
@@ -50,10 +49,9 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            title, summary, topics, ministries
+            title, summary, topics, ministries, decision_url
         FROM government_decisions 
         WHERE %(topic)s = ANY(topics)
-        AND status = 'active'
         ORDER BY decision_date DESC, government_number DESC, decision_number DESC
         LIMIT %(limit)s;
         """,
@@ -72,11 +70,10 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            title, content, summary, topics, ministries, decision_type
+            title, content, summary, topics, ministries, decision_type, decision_url
         FROM government_decisions 
         WHERE government_number = %(government_number)s
-        AND decision_number = %(decision_number)s
-        AND status = 'active';
+        AND decision_number = %(decision_number)s;
         """,
         required_params=["government_number", "decision_number"],
         optional_params=[],
@@ -84,7 +81,26 @@ SQL_TEMPLATES = {
             "government_number": 37,
             "decision_number": 660
         },
-        intent_match=["specific_decision"]
+        intent_match=["specific_decision", "search"]
+    ),
+    
+    "decision_by_number_only": SQLTemplate(
+        name="decision_by_number_only",
+        description="Search for a decision by number across all governments",
+        sql="""
+        SELECT 
+            id, government_number, decision_number, decision_date,
+            title, content, summary, topics, ministries, decision_type, decision_url
+        FROM government_decisions 
+        WHERE decision_number = %(decision_number)s
+        ORDER BY government_number DESC;
+        """,
+        required_params=["decision_number"],
+        optional_params=[],
+        example_params={
+            "decision_number": 2700
+        },
+        intent_match=["search"]
     ),
     
     "count_decisions_by_government": SQLTemplate(
@@ -98,7 +114,6 @@ SQL_TEMPLATES = {
             MAX(decision_date) as last_decision
         FROM government_decisions 
         WHERE government_number = %(government_number)s
-        AND status = 'active'
         GROUP BY government_number;
         """,
         required_params=["government_number"],
@@ -119,7 +134,6 @@ SQL_TEMPLATES = {
             COUNT(*) as decision_count
         FROM government_decisions 
         WHERE %(topic)s = ANY(topics)
-        AND status = 'active'
         {government_filter}
         GROUP BY government_number
         ORDER BY government_number DESC;
@@ -139,11 +153,10 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            title, summary, topics, ministries
+            title, summary, topics, ministries, decision_url
         FROM government_decisions 
         WHERE decision_date >= %(start_date)s
         AND decision_date <= %(end_date)s
-        AND status = 'active'
         {topic_filter}
         {government_filter}
         ORDER BY decision_date DESC, government_number DESC, decision_number DESC
@@ -166,10 +179,9 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            title, summary, topics, ministries
+            title, summary, topics, ministries, decision_url
         FROM government_decisions 
         WHERE %(ministry)s = ANY(ministries)
-        AND status = 'active'
         {government_filter}
         {topic_filter}
         ORDER BY decision_date DESC, government_number DESC, decision_number DESC
@@ -191,11 +203,10 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            title, summary, topics, ministries,
+            title, summary, topics, ministries, decision_url,
             ts_rank(to_tsvector('hebrew', content), to_tsquery('hebrew', %(search_term)s)) as relevance_score
         FROM government_decisions 
         WHERE to_tsvector('hebrew', content) @@ to_tsquery('hebrew', %(search_term)s)
-        AND status = 'active'
         {government_filter}
         ORDER BY relevance_score DESC, decision_date DESC
         LIMIT %(limit)s;
@@ -224,7 +235,6 @@ SQL_TEMPLATES = {
             ) as topic_percentage
         FROM government_decisions 
         WHERE government_number IN %(government_list)s
-        AND status = 'active'
         GROUP BY government_number
         ORDER BY government_number;
         """,
@@ -243,9 +253,9 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            title, summary, topics, ministries
+            title, summary, topics, ministries, decision_url
         FROM government_decisions 
-        WHERE status = 'active'
+        WHERE 1=1
         {government_filter}
         {topic_filter}
         ORDER BY decision_date DESC, government_number DESC, decision_number DESC
@@ -271,7 +281,7 @@ SQL_TEMPLATES = {
             MIN(decision_date) as first_decision,
             MAX(decision_date) as last_decision
         FROM government_decisions 
-        WHERE status = 'active'
+        WHERE 1=1
         {government_filter}
         GROUP BY unnest(topics)
         HAVING COUNT(*) >= %(min_count)s
@@ -285,27 +295,49 @@ SQL_TEMPLATES = {
             "limit": 20
         },
         intent_match=["search", "count"]
-    )
+    ),
+    
 }
 
 
 def get_template_by_intent(intent: str, entities: Dict[str, Any]) -> Optional[SQLTemplate]:
     """Select the best template based on intent and available entities."""
     
-    # For specific decisions
-    if intent == "specific_decision":
+    # For EVAL intent - always look for specific decision
+    if intent == "EVAL":
+        if entities.get("decision_number"):
+            # For EVAL, we need a specific decision
+            if not entities.get("government_number"):
+                entities["government_number"] = 37
+            return SQL_TEMPLATES["specific_decision"]
+        # If no decision number, can't do evaluation - fall through to search
+    
+    # For specific decisions - check both intent and operation
+    if (intent == "specific_decision" or entities.get("operation") == "specific_decision"):
         if entities.get("government_number") and entities.get("decision_number"):
             return SQL_TEMPLATES["specific_decision"]
+        elif entities.get("decision_number") and not entities.get("government_number"):
+            # Default to current government (37) when only decision number specified
+            entities["government_number"] = 37
+            return SQL_TEMPLATES["specific_decision"]
     
-    # For count queries
-    if intent == "count":
+    # For count queries - check both intent and operation
+    if intent == "count" or entities.get("operation") == "count":
         if entities.get("government_number") and not entities.get("topic"):
             return SQL_TEMPLATES["count_decisions_by_government"]
         elif entities.get("topic"):
             return SQL_TEMPLATES["count_decisions_by_topic"]
     
-    # For search queries
-    if intent == "search":
+    # For search queries (handle both "search" and "QUERY" intents)
+    if intent == "search" or intent == "QUERY":
+        # Decision number search - with or without government number
+        if entities.get("decision_number"):
+            print(f"DEBUG: Found decision_number: {entities.get('decision_number')}, choosing specific_decision template")
+            # Default to current government (37) if not specified
+            if not entities.get("government_number"):
+                entities["government_number"] = 37
+            return SQL_TEMPLATES["specific_decision"]
+            
         # Date range search
         if entities.get("date_range"):
             return SQL_TEMPLATES["search_by_date_range"]
@@ -380,7 +412,7 @@ def sanitize_parameters(params: Dict[str, Any]) -> Dict[str, Any]:
         elif isinstance(value, (int, float)):
             # Ensure reasonable bounds
             if key in ["government_number"]:
-                value = max(1, min(50, int(value)))
+                value = max(1, min(50, int(value)))  # Cap at 50 for actual government numbers
             elif key in ["decision_number"]:
                 value = max(1, min(9999, int(value)))
             elif key in ["limit"]:

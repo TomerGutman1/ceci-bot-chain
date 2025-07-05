@@ -19,7 +19,7 @@ import sys
 
 # Add parent directory to path for shared imports
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from common.logging import setup_logging
+from common.logging import setup_logging, log_gpt_usage
 from common.config import get_config
 
 # Initialize logging and config
@@ -59,6 +59,12 @@ class ClarificationRequest(BaseModel):
     clarification_type: str
     context_history: Optional[List[str]] = []
 
+class TokenUsage(BaseModel):
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    model: str
+
 class ClarificationResponse(BaseModel):
     success: bool
     conv_id: str
@@ -66,6 +72,7 @@ class ClarificationResponse(BaseModel):
     suggested_refinements: List[str]
     explanation: str
     confidence: float
+    token_usage: Optional[TokenUsage] = None
 
 # Clarification question templates
 CLARIFICATION_TEMPLATES = {
@@ -151,7 +158,7 @@ async def generate_clarification_with_gpt(
     entities: Dict, 
     clarification_type: ClarificationType,
     context_history: List[str] = []
-) -> Dict[str, Any]:
+) -> tuple[Dict[str, Any], Optional[TokenUsage]]:
     """Generate clarification questions using GPT-4."""
     
     try:
@@ -161,28 +168,18 @@ async def generate_clarification_with_gpt(
             context_str = f"הקשר השיחה: {' | '.join(context_history[-3:])}\n"  # Last 3 messages
         
         # Create system prompt for Hebrew clarification
-        system_prompt = f"""אתה עוזר בעברית שמתמחה ביצירת שאלות הבהרה למערכת חיפוש החלטות ממשלה.
+        system_prompt = f"""צור שאלות הבהרה בעברית למערכת חיפוש החלטות ממשלה.
 
-המטרה: לעזור למשתמשים לנסח שאילתות מדויקות יותר כשהשאילתא המקורית מעורפלת או חסרה מידע.
-
-טיפוס הבהרה נדרש: {clarification_type.value}
+טיפוס: {clarification_type.value}
 
 הוראות:
-1. צור 2-3 שאלות הבהרה קצרות ומדויקות
-2. הצע 3-4 תשובות אפשריות לכל שאלה
-3. התמקד במידע החסר החשוב ביותר לחיפוש
-4. השתמש בעברית פשוטה וברורה
-5. תן עדיפות לשאלות שיכולות לשפר את דיוק החיפוש
+1. 2-3 שאלות קצרות
+2. 3-4 הצעות לכל שאלה
+3. עברית פשוטה
 
-דוגמאות לסוגי שאלות:
-- זמן: "איזה תקופה אתה מחפש?"
-- נושא: "איזה תחום מעניין אותך?"
-- ממשלה: "איזה ממשלה מתכוון?"
-- משרד: "איזה משרד רלוונטי?"
+דוגמאות: זמן/נושא/ממשלה/משרד
 
-החזר תשובה בפורמט JSON עם המפתחות:
-- questions: רשימה של שאלות עם type, question, suggestions
-- explanation: הסבר קצר למה צריך את ההבהרה
+JSON: {{"questions": [{{"type":"...", "question":"...", "suggestions":["..."]}}], "explanation":"..."}}
 """
 
         user_prompt = f"""{context_str}השאילתא המקורית: "{query}"
@@ -192,7 +189,8 @@ async def generate_clarification_with_gpt(
 
 צור שאלות הבהרה מתאימות."""
 
-        response = await openai.ChatCompletion.acreate(
+        response = await asyncio.to_thread(
+            openai.ChatCompletion.create,
             model="gpt-4",
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -204,10 +202,28 @@ async def generate_clarification_with_gpt(
         
         content = response.choices[0].message.content.strip()
         
+        # Extract token usage
+        usage = response.usage
+        token_usage = TokenUsage(
+            prompt_tokens=usage.prompt_tokens,
+            completion_tokens=usage.completion_tokens,
+            total_tokens=usage.total_tokens,
+            model="gpt-4"
+        )
+        
+        # Log GPT usage
+        log_gpt_usage(
+            logger,
+            model="gpt-4",
+            prompt_tokens=usage.prompt_tokens,
+            completion_tokens=usage.completion_tokens,
+            total_tokens=usage.total_tokens
+        )
+        
         # Try to parse as JSON, fall back to structured format
         try:
             import json
-            return json.loads(content)
+            return json.loads(content), token_usage
         except json.JSONDecodeError:
             # Fallback to manual parsing if GPT didn't return valid JSON
             return {
@@ -219,12 +235,19 @@ async def generate_clarification_with_gpt(
                     }
                 ],
                 "explanation": "נדרשים פרטים נוספים לחיפוש מדויק יותר"
-            }
+            }, token_usage
             
     except Exception as e:
         logger.error(f"GPT clarification generation failed: {e}")
-        # Return fallback clarification
-        return await generate_fallback_clarification(query, intent, entities, clarification_type)
+        # Return fallback clarification with zero token usage
+        fallback_data = await generate_fallback_clarification(query, intent, entities, clarification_type)
+        fallback_token_usage = TokenUsage(
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            model="fallback"
+        )
+        return fallback_data, fallback_token_usage
 
 async def generate_fallback_clarification(
     query: str,
@@ -388,7 +411,7 @@ async def clarify_query(request: ClarificationRequest):
         clarification_type = ClarificationType(request.clarification_type)
         
         # Generate clarification questions using GPT or fallback
-        clarification_data = await generate_clarification_with_gpt(
+        clarification_data, token_usage = await generate_clarification_with_gpt(
             request.original_query,
             request.intent,
             request.entities,
@@ -417,7 +440,8 @@ async def clarify_query(request: ClarificationRequest):
             clarification_questions=clarification_data.get("questions", []),
             suggested_refinements=refinements,
             explanation=clarification_data.get("explanation", "נדרשים פרטים נוספים"),
-            confidence=confidence
+            confidence=confidence,
+            token_usage=token_usage
         )
         
         logger.info(f"Generated {len(response.clarification_questions)} clarification questions")

@@ -4,6 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Send } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import chatService from "@/services/chat.service";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Message {
   role: "user" | "assistant";
@@ -98,8 +100,77 @@ const ChatInterface = ({ externalMessage }: ChatInterfaceProps) => {
     });
   };
 
-  // Convert URLs in text to clickable links
+  // Render markdown content with proper formatting
   const formatMessageContent = (content: string, isUser: boolean = false) => {
+    // For user messages, keep simple text
+    if (isUser) {
+      return <span>{content}</span>;
+    }
+    
+    // For assistant messages, render markdown
+    return (
+      <ReactMarkdown 
+        remarkPlugins={[remarkGfm]}
+        className="prose prose-sm max-w-none"
+        components={{
+          // Custom table styling
+          table: ({node, ...props}) => (
+            <table className="min-w-full divide-y divide-gray-300 my-2" {...props} />
+          ),
+          th: ({node, ...props}) => (
+            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50" {...props} />
+          ),
+          td: ({node, ...props}) => (
+            <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 border-t" {...props} />
+          ),
+          // Custom heading styles
+          h1: ({node, ...props}) => (
+            <h1 className="text-xl font-bold mb-2 text-gray-900" {...props} />
+          ),
+          h2: ({node, ...props}) => (
+            <h2 className="text-lg font-semibold mb-2 text-gray-800" {...props} />
+          ),
+          h3: ({node, ...props}) => (
+            <h3 className="text-base font-semibold mb-1 text-gray-700" {...props} />
+          ),
+          // Links
+          a: ({node, ...props}) => (
+            <a className="text-blue-600 hover:text-blue-800 underline" target="_blank" rel="noopener noreferrer" {...props} />
+          ),
+          // Lists
+          ul: ({node, ...props}) => (
+            <ul className="list-disc list-inside space-y-1 my-2" {...props} />
+          ),
+          ol: ({node, ...props}) => (
+            <ol className="list-decimal list-inside space-y-1 my-2" {...props} />
+          ),
+          // Strong text
+          strong: ({node, ...props}) => (
+            <strong className="font-bold text-gray-900" {...props} />
+          ),
+          // Code blocks
+          code: ({node, inline, ...props}) => (
+            inline ? 
+              <code className="bg-gray-100 rounded px-1 py-0.5 text-sm" {...props} /> :
+              <code className="block bg-gray-100 rounded p-2 text-sm overflow-x-auto my-2" {...props} />
+          ),
+          // Horizontal rule
+          hr: ({node, ...props}) => (
+            <hr className="my-4 border-gray-300" {...props} />
+          ),
+          // Blockquote
+          blockquote: ({node, ...props}) => (
+            <blockquote className="border-r-4 border-gray-300 pr-4 my-2 text-gray-600" {...props} />
+          ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    );
+  };
+
+  // Keep the old URL conversion function as backup
+  const formatSimpleContent = (content: string, isUser: boolean = false) => {
     // Regular expression to match URLs
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     
@@ -161,18 +232,20 @@ const ChatInterface = ({ externalMessage }: ChatInterfaceProps) => {
   };
 
   // Check service status on mount
-  useEffect(() => {
-    chatService.checkHealth().then(health => {
-      console.log('Chat service health:', health);
-      if (health.services.pandasai.available) {
-        console.log('Using PandasAI service');
-      } else {
-        console.log('Using TypeScript fallback service');
-      }
-    }).catch(err => {
-      console.error('Failed to check service health:', err);
-    });
-  }, []);
+  // useEffect(() => {
+  //   chatService.checkHealth().then(health => {
+  //     console.log('Chat service health:', health);
+  //     if (health.services?.botChain?.available) {
+  //       console.log('Using Bot Chain service');
+  //     } else if (health.services?.pandasai?.available) {
+  //       console.log('Using PandasAI service');
+  //     } else {
+  //       console.log('Using TypeScript fallback service');
+  //     }
+  //   }).catch(err => {
+  //     console.error('Failed to check service health:', err);
+  //   });
+  // }, []);
 
   return (
     <div className="flex flex-col h-[400px] bg-white rounded-xl shadow-sm border border-gray-200 w-full">
@@ -196,7 +269,7 @@ const ChatInterface = ({ externalMessage }: ChatInterfaceProps) => {
                   : "bg-gray-100 text-gray-800 rounded-e-2xl rounded-es-2xl"
               } p-3`}
             >
-              <div className="text-sm whitespace-pre-wrap">
+              <div className="text-sm">
                 {formatMessageContent(message.content, message.role === "user")}
               </div>
               <span className="text-xs opacity-70 mt-1 self-end">

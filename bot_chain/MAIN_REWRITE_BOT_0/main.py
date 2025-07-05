@@ -76,26 +76,112 @@ class HealthResponse(BaseModel):
 # Global variables
 start_time = datetime.utcnow()
 
-REWRITE_PROMPT = """You are a Hebrew text improvement assistant. Your task is to:
-1. Fix spelling and grammar errors
-2. Normalize entity names (e.g., "ממשלה 37" instead of "ממשלה שלושים ושבע")
-3. Remove unnecessary words while preserving meaning
-4. Keep the text concise and clear
+# Intent keyword correction dictionary
+INTENT_KEYWORD_CORRECTIONS = {
+    # Analysis keywords
+    "נתק": "נתח",
+    "ניתק": "ניתח", 
+    "נתח": "נתח",  # Keep correct form
+    "ניתח": "ניתח",  # Keep correct form
+    "ניתוח": "ניתוח",  # Keep correct form
+    "נתח לי": "נתח לי",
+    "נתח עבורי": "נתח עבורי",
+    "בצע ניתוח": "בצע ניתוח",
+    "עשה ניתוח": "עשה ניתוח",
+    
+    # Content keywords  
+    "תוכן": "תוכן",
+    "תוכן מלא": "תוכן מלא",
+    "התוכן": "התוכן",
+    "את התוכן": "את התוכן",
+    "תן לי תוכן": "תן לי תוכן",
+    "הבא תוכן": "הבא תוכן",
+    "הצג תוכן": "הצג תוכן",
+    
+    # Search keywords
+    "חפש": "חפש",
+    "חיפוש": "חיפוש", 
+    "מצא": "מצא",
+    "חפש לי": "חפש לי",
+    "מצא לי": "מצא לי",
+    "הבא לי": "הבא לי",
+    "תן לי": "תן לי",
+    
+    # Count keywords
+    "ספור": "ספור",
+    "ספר": "ספר",
+    "כמה": "כמה",
+    "מספר": "מספר",
+    "כמות": "כמות",
+    
+    # Government/decision keywords
+    "החלטה": "החלטה",
+    "החלטת": "החלטת", 
+    "החלטות": "החלטות",
+    "ממשלה": "ממשלה",
+    "ממשלת": "ממשלת",
+    "הממשלה": "הממשלה",
+    "שר": "שר",
+    "שרת": "שרת",
+    "משרד": "משרד",
+    "משרדי": "משרדי",
+}
 
-Original text: {text}
+def apply_intent_keyword_corrections(text: str) -> tuple[str, list[dict]]:
+    """Apply intent keyword corrections before GPT processing."""
+    corrections = []
+    corrected_text = text
+    
+    # Apply word-level corrections
+    words = text.split()
+    corrected_words = []
+    
+    for word in words:
+        # Check exact match first
+        if word in INTENT_KEYWORD_CORRECTIONS:
+            corrected_word = INTENT_KEYWORD_CORRECTIONS[word]
+            if corrected_word != word:
+                corrections.append({
+                    "type": "normalization",
+                    "original": word,
+                    "corrected": corrected_word
+                })
+            corrected_words.append(corrected_word)
+        else:
+            # Check partial matches for phrases
+            corrected_words.append(word)
+    
+    corrected_text = " ".join(corrected_words)
+    
+    # Apply phrase-level corrections
+    for original_phrase, correct_phrase in INTENT_KEYWORD_CORRECTIONS.items():
+        if " " in original_phrase and original_phrase in corrected_text:
+            if corrected_text.replace(original_phrase, correct_phrase) != corrected_text:
+                corrections.append({
+                    "type": "normalization", 
+                    "original": original_phrase,
+                    "corrected": correct_phrase
+                })
+                corrected_text = corrected_text.replace(original_phrase, correct_phrase)
+    
+    return corrected_text, corrections
 
-Return a JSON object with:
-- "clean_text": The improved text
-- "corrections": Array of corrections made, each with:
-  - "type": "spelling", "grammar", or "normalization"
-  - "original": The original text segment
-  - "corrected": The corrected text segment
+REWRITE_PROMPT = """Improve Hebrew text: fix errors, normalize Hebrew number words to digits, keep meaning.
 
-Important:
-- Preserve the original meaning
-- Keep Hebrew text direction (RTL)
-- Don't translate or add information
-- Focus on clarity and correctness
+Rules:
+1. Convert Hebrew number words: אחת→1, שתיים→2, שלוש→3, ארבע→4, חמש→5, שש→6, שבע→7, שמונה→8, תשע→9, עשר→10
+2. Tens: עשרים→20, שלושים→30, ארבעים→40, חמישים→50, etc.
+3. Combined: שלושים ושבע→37, עשרים ואחת→21
+4. Keep existing digits as-is (3→3, not 3→37)
+5. Fix spelling/grammar errors ONLY
+6. Preserve exact meaning
+7. CRITICAL: NEVER EVER change these intent keywords: נתח, ניתח, ניתוח, תוכן, חפש, ספר, כמה, החלטה, ממשלה
+8. These keywords are already pre-corrected and MUST remain exactly as they are
+9. DO NOT conjugate or change verb forms (נתח must stay נתח, not become ניתח)
+
+Text: {text}
+
+JSON: {{"clean_text": "...", "corrections": [{{"type": "spelling|grammar|normalization", "original": "...", "corrected": "..."}}]}}
 """
 
 
@@ -167,12 +253,20 @@ async def rewrite_text(request: RewriteRequest) -> RewriteResponse:
     })
     
     try:
-        # Call GPT
-        gpt_response = await call_gpt(request.text)
+        # Apply intent keyword corrections first
+        pre_corrected_text, intent_corrections = apply_intent_keyword_corrections(request.text)
+        logger.info(f"Applied intent keyword corrections", extra={
+            "original_text": request.text,
+            "pre_corrected_text": pre_corrected_text,
+            "intent_corrections_count": len(intent_corrections)
+        })
+        
+        # Call GPT with pre-corrected text
+        gpt_response = await call_gpt(pre_corrected_text)
         result = gpt_response["result"]
         
-        # Build corrections list
-        corrections = []
+        # Build corrections list - start with intent corrections
+        corrections = intent_corrections.copy()
         if "corrections" in result:
             for corr in result["corrections"]:
                 corrections.append(Correction(

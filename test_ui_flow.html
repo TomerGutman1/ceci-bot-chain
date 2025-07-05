@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CECI UI Flow Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            direction: rtl;
+        }
+        .test-container {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .test-status {
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .pending { color: orange; }
+        textarea {
+            width: 100%;
+            height: 200px;
+            direction: rtl;
+            font-family: monospace;
+            margin: 10px 0;
+        }
+        button {
+            background-color: #007cba;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #005a87;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .response-container {
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            direction: rtl;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 CECI UI Flow Test - בדיקת זרימה מלאה</h1>
+    
+    <div class="test-container">
+        <h2>בדיקה: "נתח את החלטת ממשלה 2767"</h2>
+        <div class="test-status pending" id="test-status">ממתין לבדיקה...</div>
+        
+        <button onclick="runTest()" id="test-btn">הפעל בדיקה</button>
+        <button onclick="clearResults()" id="clear-btn">נקה תוצאות</button>
+        
+        <div id="test-steps" style="margin-top: 20px;"></div>
+        
+        <h3>תגובת השרת:</h3>
+        <div class="response-container" id="server-response">ממתין לתגובה...</div>
+        
+        <h3>פרטי המטאדטה:</h3>
+        <textarea id="metadata-details" readonly>ממתין לנתונים...</textarea>
+    </div>
+
+    <script>
+        let testResults = {
+            steps: [],
+            response: null,
+            metadata: null
+        };
+
+        function addStep(message, status = 'pending') {
+            const timestamp = new Date().toLocaleTimeString('he-IL');
+            testResults.steps.push({
+                message,
+                status,
+                timestamp
+            });
+            updateStepsDisplay();
+        }
+
+        function updateStepsDisplay() {
+            const stepsContainer = document.getElementById('test-steps');
+            stepsContainer.innerHTML = testResults.steps.map(step => 
+                `<div class="${step.status}">[${step.timestamp}] ${step.message}</div>`
+            ).join('');
+        }
+
+        function updateTestStatus(message, status) {
+            const statusEl = document.getElementById('test-status');
+            statusEl.textContent = message;
+            statusEl.className = `test-status ${status}`;
+        }
+
+        async function runTest() {
+            const testBtn = document.getElementById('test-btn');
+            testBtn.disabled = true;
+            testBtn.textContent = 'בודק...';
+            
+            testResults = { steps: [], response: null, metadata: null };
+            
+            try {
+                updateTestStatus('מתחיל בדיקה...', 'pending');
+                addStep('🚀 מתחיל בדיקת זרימה מלאה דרך UI', 'pending');
+                
+                // Step 1: Check frontend connectivity
+                addStep('🌐 בודק חיבור ל-Frontend (localhost:3001)', 'pending');
+                await fetch('http://localhost:3001');
+                addStep('✅ Frontend זמין', 'success');
+                
+                // Step 2: Check backend connectivity  
+                addStep('🔧 בודק חיבור ל-Backend (localhost:5001)', 'pending');
+                await fetch('http://localhost:5001/api/chat/health');
+                addStep('✅ Backend זמין', 'success');
+                
+                // Step 3: Test the specific query
+                addStep('📝 שולח שאילתה: "נתח את החלטת ממשלה 2767"', 'pending');
+                
+                const response = await fetch('http://localhost:5001/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: 'נתח את החלטת ממשלה 2767',
+                        sessionId: 'ui-test-' + Date.now()
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+                }
+                
+                addStep('📡 מקבל תגובה מהשרת...', 'pending');
+                
+                // Parse SSE response
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullResponse = '';
+                let metadata = null;
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                
+                                if (data.type === 'response' && data.content) {
+                                    fullResponse = data.content;
+                                    metadata = data.metadata;
+                                } else if (data.type === 'error') {
+                                    throw new Error(data.error || 'Unknown error');
+                                }
+                            } catch (e) {
+                                // Skip invalid JSON
+                            }
+                        }
+                    }
+                }
+                
+                // Step 4: Validate response content
+                addStep('🔍 בודק תוכן התגובה...', 'pending');
+                
+                if (!fullResponse) {
+                    throw new Error('לא התקבלה תגובה מהשרת');
+                }
+                
+                if (!fullResponse.includes('2767')) {
+                    throw new Error('התגובה לא מכילה את מספר ההחלטה 2767');
+                }
+                
+                if (!fullResponse.includes('ניתוח') && !fullResponse.includes('נתח')) {
+                    throw new Error('התגובה לא מכילה ניתוח כנדרש');
+                }
+                
+                addStep('✅ תוכן התגובה תקין - מכיל מספר החלטה וניתוח', 'success');
+                
+                // Step 5: Validate metadata
+                addStep('📊 בודק מטאדטה...', 'pending');
+                
+                if (!metadata) {
+                    throw new Error('לא התקבלה מטאדטה');
+                }
+                
+                if (metadata.intent !== 'EVAL') {
+                    throw new Error(`Intent שגוי: ${metadata.intent} במקום EVAL`);
+                }
+                
+                if (!metadata.entities || metadata.entities.decision_number !== 2767) {
+                    throw new Error(`Decision number שגוי: ${metadata.entities?.decision_number} במקום 2767`);
+                }
+                
+                if (metadata.entities.government_number !== 37) {
+                    throw new Error(`Government number שגוי: ${metadata.entities?.government_number} במקום 37`);
+                }
+                
+                addStep('✅ מטאדטה תקינה - Intent: EVAL, Decision: 2767, Government: 37', 'success');
+                
+                // Store results
+                testResults.response = fullResponse;
+                testResults.metadata = metadata;
+                
+                // Update display
+                document.getElementById('server-response').textContent = fullResponse;
+                document.getElementById('metadata-details').value = JSON.stringify(metadata, null, 2);
+                
+                updateTestStatus('✅ כל הבדיקות עברו בהצלחה!', 'success');
+                addStep('🎉 בדיקת UI מלאה הושלמה בהצלחה!', 'success');
+                
+            } catch (error) {
+                console.error('Test failed:', error);
+                addStep(`❌ שגיאה: ${error.message}`, 'error');
+                updateTestStatus(`❌ הבדיקה נכשלה: ${error.message}`, 'error');
+                
+                document.getElementById('server-response').textContent = `שגיאה: ${error.message}`;
+                document.getElementById('metadata-details').value = `שגיאה: ${error.message}`;
+            } finally {
+                testBtn.disabled = false;
+                testBtn.textContent = 'הפעל בדיקה שוב';
+            }
+        }
+        
+        function clearResults() {
+            testResults = { steps: [], response: null, metadata: null };
+            updateStepsDisplay();
+            updateTestStatus('ממתין לבדיקה...', 'pending');
+            document.getElementById('server-response').textContent = 'ממתין לתגובה...';
+            document.getElementById('metadata-details').value = 'ממתין לנתונים...';
+        }
+        
+        // Auto-run test on page load
+        window.addEventListener('load', function() {
+            setTimeout(runTest, 1000);
+        });
+    </script>
+</body>
+</html>

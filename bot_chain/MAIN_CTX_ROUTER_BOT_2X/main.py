@@ -19,6 +19,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from common.logging import setup_logging, log_api_call, log_gpt_usage
 from common.config import get_config
+from memory_service import memory_service
+from reference_resolver import ReferenceResolver
 
 # ====================================
 # CONFIGURATION & LOGGING
@@ -41,6 +43,9 @@ def get_redis():
         redis_client = redis.from_url(redis_url, decode_responses=True)
     return redis_client
 
+# Initialize reference resolver
+reference_resolver = ReferenceResolver(memory_service=memory_service)
+
 # ====================================
 # PYDANTIC MODELS
 # ====================================
@@ -62,6 +67,7 @@ class ContextRequest(BaseModel):
     intent: str = Field(..., description="Detected intent from intent bot")
     entities: Dict[str, Any] = Field(..., description="Extracted entities")
     confidence_score: float = Field(..., ge=0.0, le=1.0, description="Intent confidence score")
+    route_flags: Dict[str, Any] = Field(default_factory=dict, description="Context routing flags")
 
 class RoutingDecision(BaseModel):
     """Routing decision output."""
@@ -70,6 +76,7 @@ class RoutingDecision(BaseModel):
     clarification_type: Optional[str] = Field(None, description="Type of clarification needed")
     context_summary: Dict[str, Any] = Field(..., description="Updated context summary")
     reasoning: str = Field(..., description="Explanation of routing decision")
+    conversation_history: List[Dict[str, Any]] = Field(default_factory=list, description="Conversation history for downstream bots")
 
 class HealthResponse(BaseModel):
     """Health check response."""
@@ -77,6 +84,8 @@ class HealthResponse(BaseModel):
     timestamp: str
     redis_connected: bool
     context_cache_size: int
+    memory_service_status: Dict[str, Any] = Field(default_factory=dict)
+    reference_resolver_status: Dict[str, Any] = Field(default_factory=dict)
 
 # ====================================
 # ROUTING RULES ENGINE
@@ -170,6 +179,22 @@ async def update_context_with_query(
     # Merge entities (new ones override existing)
     context.extracted_entities.update(entities)
     
+    # DISABLED: Handle "full content" requests to prevent entity persistence bug
+    # if "תוכן מלא" in query.lower() or "התוכן המלא" in query.lower():
+    #     # Check if we have a previous decision in context
+    #     last_decision = context.extracted_entities.get("last_decision_number")
+    #     last_government = context.extracted_entities.get("last_government_number")
+    #     
+    #     if last_decision and not entities.get("decision_number"):
+    #         entities["decision_number"] = last_decision
+    #         entities["government_number"] = last_government or 37
+    #         context.extracted_entities.update(entities)
+    
+    # DISABLED: Store last decision for continuity to prevent entity persistence
+    # if entities.get("decision_number"):
+    #     context.extracted_entities["last_decision_number"] = entities["decision_number"]
+    #     context.extracted_entities["last_government_number"] = entities.get("government_number", 37)
+    
     # Keep only last 5 queries to prevent context from growing too large
     if len(context.user_queries) > 5:
         context.user_queries = context.user_queries[-5:]
@@ -184,13 +209,19 @@ def needs_clarification(
     entities: Dict[str, Any],
     confidence: float,
     context: ConversationContext,
-    query: str
+    query: str,
+    route_flags: Dict[str, Any] = None
 ) -> tuple[bool, Optional[str], str]:
     """
     Determine if query needs clarification.
     Returns: (needs_clarification, clarification_type, reasoning)
     """
     triggers = ROUTING_RULES["clarification_triggers"]
+    
+    # Skip confidence check for reference queries that need context
+    if route_flags and route_flags.get("needs_context"):
+        # Reference queries should use conversation context instead of clarification
+        return False, None, "Reference query - using conversation context"
     
     # Check confidence threshold
     low_threshold = triggers["confidence_thresholds"]["low_confidence"]
@@ -256,16 +287,62 @@ async def make_routing_decision(request: ContextRequest) -> RoutingDecision:
     if context is None:
         context = ConversationContext(conv_id=request.conv_id)
     
-    # Update context with current query
-    context = await update_context_with_query(
-        context, request.current_query, request.intent,
-        request.entities, request.confidence_score
+    # STEP 1: Reference Resolution
+    # Resolve user references to previous turns before processing
+    reference_result = reference_resolver.resolve_references(
+        conv_id=request.conv_id,
+        user_text=request.current_query,
+        current_entities=request.entities,
+        intent=request.intent
     )
     
-    # Check if clarification is needed
+    # Use resolved entities and potentially enriched query
+    resolved_entities = reference_result['resolved_entities']
+    enriched_query = reference_result['enriched_query']
+    
+    # If reference resolution recommends clarification, handle it
+    if reference_result['needs_clarification']:
+        # Update context with original query first
+        context = await update_context_with_query(
+            context, request.current_query, request.intent,
+            resolved_entities, request.confidence_score
+        )
+        await save_conversation_context(context)
+        
+        return RoutingDecision(
+            route="clarify",
+            needs_clarification=True,
+            clarification_type="missing_entities",
+            context_summary={
+                "conv_id": context.conv_id,
+                "query_count": len(context.user_queries),
+                "entities_count": len(context.extracted_entities),
+                "reference_resolution": reference_result['reasoning']
+            },
+            reasoning=f"Reference resolution needs clarification: {reference_result['clarification_prompt']}"
+        )
+    
+    # Update context with resolved entities and enriched query
+    context = await update_context_with_query(
+        context, enriched_query, request.intent,
+        resolved_entities, request.confidence_score
+    )
+    
+    # Check if we need to access conversation memory
+    should_use_memory = (
+        request.intent in ["RESULT_REF", "ANALYSIS"] or
+        request.route_flags.get('needs_context', False)
+    )
+    
+    conversation_history = []
+    if should_use_memory:
+        conversation_history = memory_service.fetch(request.conv_id)
+        logger.info(f"Loaded {len(conversation_history)} conversation turns from memory")
+    
+    # Check if clarification is needed (using resolved entities)
     needs_clarify, clarify_type, reasoning = needs_clarification(
-        request.intent, request.entities, request.confidence_score,
-        context, request.current_query
+        request.intent, resolved_entities, request.confidence_score,
+        context, enriched_query, request.route_flags
     )
     
     # Calculate overall context score
@@ -292,8 +369,8 @@ async def make_routing_decision(request: ContextRequest) -> RoutingDecision:
     # Check if we can go directly to SQL generation
     high_confidence = ROUTING_RULES["direct_sql_conditions"]["high_confidence_threshold"]
     
-    # More lenient direct SQL routing for good scenarios
-    if (request.confidence_score >= high_confidence and len(request.entities) >= 2) or \
+    # More lenient direct SQL routing for good scenarios (use resolved entities)
+    if (request.confidence_score >= high_confidence and len(resolved_entities) >= 2) or \
        (request.confidence_score >= 0.9 and request.intent == "specific_decision") or \
        (request.confidence_score >= 0.85 and context_score >= 0.6):
         route = "direct_sql"
@@ -303,7 +380,30 @@ async def make_routing_decision(request: ContextRequest) -> RoutingDecision:
     # Save updated context
     await save_conversation_context(context)
     
-    return RoutingDecision(
+    # Store conversation turn in memory (for successful non-CLARIFY interactions)
+    if route != "clarify":
+        # Store user query (use enriched query if reference resolution occurred)
+        query_to_store = enriched_query if enriched_query != request.current_query else request.current_query
+        user_turn_success = memory_service.append(request.conv_id, {
+            'turn_id': str(uuid4()),
+            'speaker': 'user',
+            'clean_text': query_to_store,
+            'timestamp': datetime.utcnow().isoformat()
+        })
+        
+        # Store bot response (routing decision)
+        bot_response = f"Routed to {route} (intent: {request.intent}, confidence: {request.confidence_score:.2f})"
+        bot_turn_success = memory_service.append(request.conv_id, {
+            'turn_id': str(uuid4()),
+            'speaker': 'bot',
+            'clean_text': bot_response,
+            'timestamp': datetime.utcnow().isoformat()
+        })
+        
+        if user_turn_success and bot_turn_success:
+            logger.debug(f"Stored conversation turns in memory for {request.conv_id}")
+    
+    response = RoutingDecision(
         route=route,
         needs_clarification=False,
         clarification_type=None,
@@ -312,10 +412,18 @@ async def make_routing_decision(request: ContextRequest) -> RoutingDecision:
             "query_count": len(context.user_queries),
             "entities_count": len(context.extracted_entities),
             "context_score": context_score,
-            "last_intent": context.last_intent
+            "last_intent": context.last_intent,
+            "conversation_history_count": len(conversation_history),
+            "reference_resolution": reference_result['reasoning'],
+            "enriched_query": enriched_query != request.current_query
         },
-        reasoning=f"Route to {route} (confidence: {request.confidence_score:.2f}, context_score: {context_score:.2f})"
+        reasoning=f"Route to {route} (confidence: {request.confidence_score:.2f}, context_score: {context_score:.2f}, ref_resolved: {reference_result['route']})"
     )
+    
+    # Store conversation history in the response for downstream bots
+    response.conversation_history = conversation_history
+    
+    return response
 
 # ====================================
 # API ENDPOINTS
@@ -335,11 +443,19 @@ async def health_check():
         redis_connected = False
         cache_size = -1
     
+    # Get memory service health
+    memory_health = memory_service.health_check()
+    
+    # Get reference resolver health
+    reference_health = reference_resolver.health_check()
+    
     return HealthResponse(
         status="ok",
         timestamp=datetime.utcnow().isoformat(),
         redis_connected=redis_connected,
-        context_cache_size=cache_size
+        context_cache_size=cache_size,
+        memory_service_status=memory_health,
+        reference_resolver_status=reference_health
     )
 
 @app.post("/route", response_model=RoutingDecision)
@@ -393,13 +509,32 @@ async def get_context(conv_id: str):
         )
     return context
 
+@app.get("/memory/{conv_id}")
+async def get_memory(conv_id: str):
+    """Get conversation memory for debugging."""
+    history = memory_service.fetch(conv_id)
+    if not history:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No conversation history found for {conv_id}"
+        )
+    return {"conv_id": conv_id, "history": history, "total_turns": len(history)}
+
 @app.delete("/context/{conv_id}")
 async def clear_context(conv_id: str):
     """Clear conversation context."""
     try:
         redis_conn = get_redis()
-        result = redis_conn.delete(f"context:{conv_id}")
-        return {"deleted": bool(result), "conv_id": conv_id}
+        context_result = redis_conn.delete(f"context:{conv_id}")
+        
+        # Also clear conversation memory
+        memory_result = memory_service.clear(conv_id)
+        
+        return {
+            "context_deleted": bool(context_result),
+            "memory_deleted": memory_result,
+            "conv_id": conv_id
+        }
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -417,16 +552,59 @@ async def get_cache_stats():
         context_keys = redis_conn.keys("context:*")
         total_contexts = len(context_keys)
         
+        # Get memory service metrics
+        memory_metrics = memory_service.get_metrics()
+        
+        # Get reference resolver metrics
+        reference_metrics = reference_resolver.get_metrics()
+        
         return {
             "total_contexts": total_contexts,
             "redis_memory_used": info.get("used_memory_human", "unknown"),
             "connected_clients": info.get("connected_clients", 0),
-            "uptime_seconds": info.get("uptime_in_seconds", 0)
+            "uptime_seconds": info.get("uptime_in_seconds", 0),
+            "memory_metrics": memory_metrics,
+            "reference_metrics": reference_metrics
         }
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get stats: {str(e)}"
+        )
+
+@app.post("/test-reference")
+async def test_reference_resolution(
+    conv_id: str,
+    user_text: str,
+    current_entities: Dict[str, Any] = None,
+    intent: str = None
+):
+    """Test reference resolution functionality."""
+    if current_entities is None:
+        current_entities = {}
+    
+    try:
+        result = reference_resolver.resolve_references(
+            conv_id=conv_id,
+            user_text=user_text,
+            current_entities=current_entities,
+            intent=intent
+        )
+        
+        return {
+            "test_input": {
+                "conv_id": conv_id,
+                "user_text": user_text,
+                "current_entities": current_entities,
+                "intent": intent
+            },
+            "resolution_result": result,
+            "metrics": reference_resolver.get_metrics()
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Reference resolution test failed: {str(e)}"
         )
 
 # ====================================

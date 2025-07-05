@@ -68,6 +68,12 @@ class RankingRequest(BaseModel):
     max_results: Optional[int] = 10
     context_history: Optional[List[str]] = []
 
+class TokenUsage(BaseModel):
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    model: str
+
 class RankingResponse(BaseModel):
     success: bool
     conv_id: str
@@ -76,6 +82,7 @@ class RankingResponse(BaseModel):
     total_results: int
     strategy_used: str
     confidence: float
+    token_usage: Optional[TokenUsage] = None
 
 # BM25 parameters
 BM25_K1 = 1.2
@@ -238,27 +245,19 @@ async def calculate_semantic_score_with_gpt(
     query: str, 
     result: Dict[str, Any],
     intent: str
-) -> Tuple[float, str]:
+) -> Tuple[float, str, Optional[TokenUsage]]:
     """Calculate semantic relevance using GPT-4."""
     
     try:
         result_text = f"{result.get('title', '')} {result.get('content', '')}"[:500]
         
-        system_prompt = f"""אתה מומחה בניתוח רלוונטיות של החלטות ממשלה לשאילתות משתמשים.
+        system_prompt = f"""הערך רלוונטיות החלטה לשאילתא (0-1).
 
-חזר מספר בין 0.0 ל-1.0 שמייצג עד כמה התוצאה רלוונטית לשאילתא.
-כלל גם הסבר קצר בעברית.
+כוונה: {intent}
 
-כוונת השאילתא: {intent}
+סולם: 0.0-0.3 לא רלוונטי, 0.4-0.6 חלקי, 0.7-0.8 מאוד, 0.9-1.0 מושלם
 
-הערכה:
-- 0.0-0.3: לא רלוונטי או רלוונטי מעט
-- 0.4-0.6: רלוונטי באופן חלקי
-- 0.7-0.8: רלוונטי מאוד
-- 0.9-1.0: רלוונטי לחלוטין
-
-החזר בפורמט JSON:
-{{"score": 0.x, "explanation": "הסבר בעברית"}}"""
+JSON: {{"score": 0.x, "explanation": "הסבר"}}"""
 
         user_prompt = f"""שאילתא: "{query}"
 
@@ -279,25 +278,34 @@ async def calculate_semantic_score_with_gpt(
         
         content = response.choices[0].message.content.strip()
         
+        # Extract token usage
+        usage = response.usage
+        token_usage = TokenUsage(
+            prompt_tokens=usage.prompt_tokens,
+            completion_tokens=usage.completion_tokens,
+            total_tokens=usage.total_tokens,
+            model="gpt-4"
+        )
+        
         # Try to parse JSON response
         try:
             import json
             result_data = json.loads(content)
             score = float(result_data.get("score", 0.5))
             explanation = result_data.get("explanation", "ניתוח סמנטי")
-            return max(0.0, min(1.0, score)), explanation
+            return max(0.0, min(1.0, score)), explanation, token_usage
         except (json.JSONDecodeError, ValueError):
             # Fallback: try to extract score from text
             score_match = re.search(r'0\.\d+|1\.0', content)
             if score_match:
                 score = float(score_match.group())
-                return max(0.0, min(1.0, score)), "ניתוח GPT"
+                return max(0.0, min(1.0, score)), "ניתוח GPT", token_usage
             else:
-                return 0.5, "ניתוח בסיסי"
+                return 0.5, "ניתוח בסיסי", token_usage
                 
     except Exception as e:
         logger.error(f"GPT semantic scoring failed: {e}")
-        return 0.5, "ניתוח fallback"
+        return 0.5, "ניתוח fallback", None
 
 def prepare_corpus_statistics(results: List[Dict[str, Any]]) -> Dict[str, float]:
     """Prepare corpus statistics for BM25 calculation."""
@@ -336,17 +344,20 @@ async def rank_results_by_strategy(
     entities: Dict[str, Any],
     results: List[Dict[str, Any]],
     strategy: RankingStrategy
-) -> List[Tuple[Dict[str, Any], RankingScore]]:
+) -> Tuple[List[Tuple[Dict[str, Any], RankingScore]], Optional[TokenUsage]]:
     """Rank results according to the specified strategy."""
     
     if not results:
-        return []
+        return [], None
     
     # Prepare for scoring
     query_tokens = tokenize_hebrew_text(query)
     corpus_stats = prepare_corpus_statistics(results)
     
     ranked_results = []
+    total_tokens = 0
+    total_prompt_tokens = 0
+    total_completion_tokens = 0
     
     for result in results:
         # Calculate individual scores
@@ -359,9 +370,15 @@ async def rank_results_by_strategy(
         popularity_score = calculate_popularity_score(result)
         
         # GPT semantic scoring (async)
-        semantic_score, semantic_explanation = await calculate_semantic_score_with_gpt(
+        semantic_score, semantic_explanation, token_usage = await calculate_semantic_score_with_gpt(
             query, result, intent
         )
+        
+        # Accumulate token usage
+        if token_usage:
+            total_tokens += token_usage.total_tokens
+            total_prompt_tokens += token_usage.prompt_tokens
+            total_completion_tokens += token_usage.completion_tokens
         
         # Calculate total score based on strategy
         if strategy == RankingStrategy.RELEVANCE:
@@ -404,7 +421,17 @@ async def rank_results_by_strategy(
     # Sort by total score (descending)
     ranked_results.sort(key=lambda x: x[1].total_score, reverse=True)
     
-    return ranked_results
+    # Create aggregated token usage
+    aggregated_usage = None
+    if total_tokens > 0:
+        aggregated_usage = TokenUsage(
+            prompt_tokens=total_prompt_tokens,
+            completion_tokens=total_completion_tokens,
+            total_tokens=total_tokens,
+            model="gpt-4"
+        )
+    
+    return ranked_results, aggregated_usage
 
 @app.get("/health")
 async def health_check():
@@ -425,7 +452,7 @@ async def rank_results(request: RankingRequest):
             strategy = RankingStrategy.HYBRID
         
         # Rank results
-        ranked_pairs = await rank_results_by_strategy(
+        ranked_pairs, token_usage = await rank_results_by_strategy(
             request.original_query,
             request.intent,
             request.entities,
@@ -478,7 +505,8 @@ async def rank_results(request: RankingRequest):
             ranking_explanation=explanation,
             total_results=len(request.results),
             strategy_used=strategy.value,
-            confidence=confidence
+            confidence=confidence,
+            token_usage=token_usage
         )
         
         logger.info(f"Ranked {len(ranked_results)} results with strategy {strategy.value}")

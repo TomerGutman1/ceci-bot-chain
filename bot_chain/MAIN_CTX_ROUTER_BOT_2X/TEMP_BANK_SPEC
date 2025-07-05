@@ -1,0 +1,79 @@
+להלן הגרסה המעודכנת של ההנחיות ל־CLAUDE CODE, שמטמיעה זיכרון שיחה זמני עם ההגדרות שציינת:
+
+````markdown
+### 🚧 Temporary Conversation Memory — הנחיות ל־CLAUDE CODE
+
+#### 1. ייעוד  
+- לאפשר שמירת ההיסטוריה של כל שיחה (user+bot) בזיכרון זמני, כדי לתמוך ב־RESULT_REF ו־ANALYSIS על פניות קודמות.  
+- **אין לגשת** לזיכרון אלא אם `route_flags.needs_context === true` או `intent_type ∈ {"RESULT_REF","ANALYSIS"}`.
+
+#### 2. תזמון כתיבה (write)  
+- בסוף כל אינטראקציה מוצלחת (לא CLARIFY), בתוך ה־2X_MAIN_CTX_ROUTER_BOT:  
+  ```js
+  memory.append(conv_id, {
+    turn_id,
+    speaker,        // "user"|"bot"
+    clean_text,
+    timestamp
+  });
+````
+
+* אחסון ב-Redis תחת מפתח `chat:{conv_id}:history`.
+
+#### 3. תזמון קריאה (read)
+
+* בתוך ה־2X\_MAIN\_CTX\_ROUTER\_BOT בלבד, כאשר:
+
+  1. `route_flags.needs_context === true`, **או**
+  2. `intent_type === "RESULT_REF"`, **או**
+  3. `intent_type === "ANALYSIS"`.
+* דוגמה:
+
+  ```js
+  if (needs_context) {
+    const history = await memory.fetch(conv_id);
+    // הכנס ל־prompt את 20 הפניות האחרונות
+  }
+  ```
+
+#### 4. הגדרות גבולות
+
+* **מספר פניות מקסימלי**: **20** (FIFO, חיתוך ישן־יותר).
+* **גודל מירבי**: חסכוני – נשמרים רק `clean_text`.
+* **TTL**: 2 שעות (מתאפס בכל קריאה/כתיבה).
+
+#### 5. תשתית ואחסון
+
+* Redis כמאגר זמני, עם TTL 2h.
+* פקודות:
+
+  * `memory.append` → `RPUSH` + `EXPIRE 7200`
+  * `memory.fetch`  → `LRANGE -20 +inf`
+
+#### 6. ביצועים ו־fallback
+
+* קריאה/כתיבה ב-p95 ≤ 100ms.
+* אם Redis לא זמין → להמשיך ב־no-op (לא לבלוק את הזרימה הראשית).
+
+#### 7. ניטור ומדידה
+
+* חשיפת metrics ב-Prometheus:
+
+  * `memory_reads_total`
+  * `memory_writes_total`
+  * `memory_cache_misses`
+
+#### 8. איסורים (Don’t)
+
+* **אין** לטעון או לגשת לזיכרון בשכבות שאינן 2X\_MAIN\_CTX\_ROUTER\_BOT בלי בדיקת flags.
+* **אין** לשנות את סדר השכבות או לגעת בלוגיקה הקיימת.
+
+#### 9. קונפיג ייעודי
+
+* כל הפרמטרים (maxTurns=20, ttlHours=2, redisKeyPrefix, וכו׳) מוגדרים בקובץ config נפרד (`memory.config.js` או `.env` ייעודי).
+
+```
+
+אם זה מתאים — ניתן לשלב במדויק בתוך `CLAUDE.md` או בקובץ השכבה `2X_CTX_ROUTER_BOT`.  
+אם יש צורך בהרחבה נוספת או דוגמאות קוד, תגיד לי!
+```

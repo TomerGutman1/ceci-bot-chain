@@ -1,0 +1,13 @@
+{
+  "name": "token-tracking-tests",
+  "version": "1.0.0",
+  "description": "Tests for token usage tracking in bot chain",
+  "main": "test_token_reporting.js",
+  "scripts": {
+    "test": "node test_token_reporting.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "colors": "^1.4.0"
+  }
+}

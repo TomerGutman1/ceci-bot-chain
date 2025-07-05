@@ -120,43 +120,45 @@ def extract_key_phrases(text: str, max_phrases: int = 3) -> List[str]:
     return phrases
 
 def format_government_info(result: Dict[str, Any]) -> str:
-    """Format government and decision information."""
+    """Format government and decision information with icons."""
     parts = []
     
     if result.get("government_number"):
-        parts.append(f"ממשלה {result['government_number']}")
+        parts.append(f"🏛️ ממשלה {result['government_number']}")
     
     if result.get("decision_number"):
-        parts.append(f"החלטה {result['decision_number']}")
+        parts.append(f"📋 החלטה {result['decision_number']}")
     
     if result.get("decision_date"):
         date_str = format_hebrew_date(result["decision_date"])
-        parts.append(date_str)
+        parts.append(f"📅 {date_str}")
     
     return " | ".join(parts) if parts else "מידע לא זמין"
 
+# Removed generate_decision_link function - URLs come ONLY from database
+
 def format_topics_and_ministries(result: Dict[str, Any]) -> str:
-    """Format topics and ministries information."""
+    """Format topics and ministries information with icons."""
     parts = []
     
     topics = result.get("topics", [])
     if topics:
         if len(topics) == 1:
-            parts.append(f"נושא: {topics[0]}")
+            parts.append(f"🏷️ נושא: {topics[0]}")
         else:
-            parts.append(f"נושאים: {', '.join(topics[:3])}")
+            parts.append(f"🏷️ נושאים: {', '.join(topics[:3])}")
     
     ministries = result.get("ministries", [])
     if ministries:
         if len(ministries) == 1:
-            parts.append(f"משרד: {ministries[0]}")
+            parts.append(f"🏢 משרד: {ministries[0]}")
         else:
-            parts.append(f"משרדים: {', '.join(ministries[:2])}")
+            parts.append(f"🏢 משרדים: {', '.join(ministries[:2])}")
     
     return " | ".join(parts) if parts else ""
 
 def format_ranking_info(result: Dict[str, Any]) -> str:
-    """Format ranking score information."""
+    """Format ranking score information with visual indicators."""
     ranking = result.get("_ranking", {})
     if not ranking:
         return ""
@@ -164,7 +166,55 @@ def format_ranking_info(result: Dict[str, Any]) -> str:
     total_score = ranking.get("total_score", 0)
     explanation = ranking.get("explanation", "")
     
-    return f"ציון: {total_score:.2f} ({explanation})"
+    # Visual score indicator
+    if total_score >= 0.8:
+        score_icon = "⭐⭐⭐⭐⭐"
+    elif total_score >= 0.6:
+        score_icon = "⭐⭐⭐⭐"
+    elif total_score >= 0.4:
+        score_icon = "⭐⭐⭐"
+    elif total_score >= 0.2:
+        score_icon = "⭐⭐"
+    else:
+        score_icon = "⭐"
+    
+    return f"{score_icon} ציון: {total_score:.2f} ({explanation})"
+
+# Add table format support
+def format_table_response(
+    results: List[Dict[str, Any]], 
+    query: str, 
+    intent: str
+) -> str:
+    """Format results as a markdown table."""
+    lines = []
+    lines.append(f"# 📊 תוצאות חיפוש: {query}")
+    lines.append(f"\n**נמצאו {len(results)} תוצאות**\n")
+    
+    # Table header
+    lines.append("| # | כותרת | ממשלה | החלטה | תאריך | נושאים | סטטוס |")
+    lines.append("|---|-------|--------|--------|--------|---------|--------|")
+    
+    # Table rows
+    for i, result in enumerate(results[:10], 1):  # Limit to 10 for table format
+        title = truncate_hebrew_text(result.get('title', 'ללא כותרת'), 40)
+        gov = result.get('government_number', '-')
+        dec = result.get('decision_number', '-')
+        date = format_hebrew_date(result.get('decision_date', ''))
+        topics = ', '.join(result.get('topics', [])[:2]) or '-'
+        status = result.get('status', '-')
+        
+        # Status icon
+        if status == 'בתוקף':
+            status_display = "✅ בתוקף"
+        elif status == 'בוטל':
+            status_display = "❌ בוטל"
+        else:
+            status_display = status
+        
+        lines.append(f"| {i} | {title} | {gov} | {dec} | {date} | {topics} | {status_display} |")
+    
+    return "\n".join(lines)
 
 def format_markdown_response(
     results: List[Dict[str, Any]], 
@@ -180,17 +230,42 @@ def format_markdown_response(
     
     lines = []
     
-    # Header
+    # Header and special handling for different intents
     if intent == "count":
-        lines.append(f"# תוצאות ספירה: {query}")
+        lines.append(f"# 📊 תוצאות ספירה: {query}")
         if results and isinstance(results[0], dict) and "count" in results[0]:
             count = results[0]["count"]
-            lines.append(f"\n**מספר ההחלטות:** {count}")
+            lines.append(f"\n**✅ מספר ההחלטות:** {count}")
+            return "\n".join(lines)
+    elif intent == "EVAL" and evaluation_summary:
+        # For EVAL intent, return the evaluator's formatted response directly
+        print(f"DEBUG: EVAL intent detected! evaluation_summary keys: {evaluation_summary.keys() if evaluation_summary else 'None'}")
+        
+        # Check if decision was not suitable for analysis
+        content_analysis = evaluation_summary.get("content_analysis", {})
+        if content_analysis.get("analysis_status") == "not_suitable":
+            # Return the informative message about why analysis couldn't be performed
+            informative_message = content_analysis.get("informative_message", "")
+            if informative_message:
+                return informative_message
+        
+        explanation = evaluation_summary.get("explanation", "")
+        print(f"DEBUG: explanation content: {explanation[:100] if explanation else 'Empty'}")
+        if explanation:
+            return explanation
+        else:
+            # Fallback if no explanation available
+            lines.append(f"# 🔬 ניתוח החלטה: {query}")
+            if "error" in content_analysis:
+                lines.append(f"\n❌ **שגיאה בניתוח:** {content_analysis['error']}")
+                recommendations = evaluation_summary.get("recommendations", [])
+                if recommendations:
+                    lines.append(f"\n**המלצות:** {', '.join(recommendations)}")
             return "\n".join(lines)
     else:
-        lines.append(f"# תוצאות חיפוש: {query}")
+        lines.append(f"# 🔍 תוצאות חיפוש: {query}")
     
-    lines.append(f"\n**נמצאו {len(results)} תוצאות**")
+    lines.append(f"\n**נמצאו {len(results)} תוצאות** 📑")
     
     # Ranking explanation
     if ranking_explanation:
@@ -200,37 +275,86 @@ def format_markdown_response(
     if evaluation_summary and include_metadata:
         overall_score = evaluation_summary.get("overall_score", 0)
         relevance_level = evaluation_summary.get("relevance_level", "")
-        lines.append(f"\n**איכות התוצאות:** {overall_score:.2f} ({relevance_level})")
+        
+        # Map relevance levels to icons
+        relevance_icons = {
+            "high": "🎯 גבוהה",
+            "medium": "🎪 בינונית",
+            "low": "⚠️ נמוכה"
+        }
+        relevance_display = relevance_icons.get(relevance_level.lower(), relevance_level)
+        
+        lines.append(f"\n**📈 איכות התוצאות:** {overall_score:.2f} ({relevance_display})")
     
     lines.append("\n---\n")
     
     # Results formatting based on style
     for i, result in enumerate(results, 1):
         if style == PresentationStyle.DETAILED:
-            lines.append(f"## {i}. {result.get('title', 'ללא כותרת')}")
-            lines.append(f"\n**מידע כללי:** {format_government_info(result)}")
+            # Title with status icon
+            title = result.get('title', 'ללא כותרת')
+            status = result.get('status', '')
+            if status == 'בתוקף':
+                status_icon = "✅"
+            elif status == 'בוטל':
+                status_icon = "❌"
+            else:
+                status_icon = "📄"
+            
+            lines.append(f"## {status_icon} {i}. {title}")
+            lines.append("")
+            lines.append(f"**{format_government_info(result)}**")
+            
+            # Add clickable link to government decision - ONLY from DB
+            decision_url = result.get('decision_url')
+            if decision_url and decision_url.strip():
+                lines.append(f"🔗 [לינק להחלטה באתר הממשלה]({decision_url})")
+            # No fallback - only use URLs from database
+            
+            lines.append("")
             
             topic_info = format_topics_and_ministries(result)
             if topic_info:
                 lines.append(f"**תחומים:** {topic_info}")
+                lines.append("")
             
-            content = result.get('content', '')
-            if content:
-                if len(content) > 300:
-                    content = truncate_hebrew_text(content, 300)
-                lines.append(f"\n**תוכן:**\n{content}")
+            # Determine if full content was explicitly requested
+            full_content_requested = any(phrase in query.lower() for phrase in [
+                "תוכן מלא", "התוכן המלא", "את התוכן המלא", 
+                "תן לי תוכן מלא", "הבא תוכן מלא", "תוכן מפורט"
+            ])
+            
+            if full_content_requested:
+                # Show full content when explicitly requested
+                content = result.get('decision_content') or result.get('content', '')
+                if content:
+                    lines.append(f"📝 **תוכן מלא:**")
+                    lines.append("")
+                    lines.append(content)
+                    lines.append("")
+            else:
+                # Show only summary for regular requests
+                content = result.get('content', '')  # Use summary field only
+                if content:
+                    summary = truncate_hebrew_text(content, 200)  # Limit to 200 chars
+                    lines.append(f"📝 **תקציר:**")
+                    lines.append("")
+                    lines.append(summary)
+                    lines.append("")
             
             if include_scores:
                 score_info = format_ranking_info(result)
                 if score_info:
-                    lines.append(f"\n*{score_info}*")
+                    lines.append(f"*{score_info}*")
+                    lines.append("")
             
-            lines.append("\n---\n")
+            lines.append("---")
+            lines.append("")
             
         elif style == PresentationStyle.COMPACT:
             title = result.get('title', 'ללא כותרת')
             gov_info = format_government_info(result)
-            lines.append(f"**{i}. {title}**")
+            lines.append(f"**📌 {i}. {title}**")
             lines.append(f"   {gov_info}")
             
             content = result.get('content', '')
@@ -483,6 +607,9 @@ async def format_response(request: FormattingRequest):
     
     try:
         logger.info(f"Processing formatting request: {request.conv_id}")
+        logger.info(f"Intent: {request.intent}, Has evaluation_summary: {request.evaluation_summary is not None}")
+        if request.evaluation_summary:
+            logger.info(f"Evaluation summary keys: {list(request.evaluation_summary.keys())}")
         
         # Validate format and style
         try:

@@ -34,12 +34,21 @@ app = FastAPI(title="QUERY_SQL_GEN_BOT_2Q", version="1.0.0")
 openai.api_key = config.openai_api_key
 
 
+class ConversationTurn(BaseModel):
+    """Model for conversation turn."""
+    turn_id: str
+    speaker: str  # "user" or "bot"
+    clean_text: str
+    timestamp: str
+
 class SQLGenRequest(BaseModel):
     """Request model for SQL generation."""
     intent: str = Field(..., description="Intent from intent bot")
     entities: Dict[str, Any] = Field(..., description="Extracted entities")
     conv_id: str = Field(..., description="Conversation ID for tracking")
     trace_id: Optional[str] = Field(None, description="Request trace ID")
+    conversation_history: List[ConversationTurn] = Field(default_factory=list, description="Conversation history for context")
+    context_summary: Dict[str, Any] = Field(default_factory=dict, description="Context summary")
 
 
 class SQLParameter(BaseModel):
@@ -67,6 +76,8 @@ class SQLGenResponse(BaseModel):
     timestamp: datetime
     layer: str = "2Q_QUERY_SQL_GEN_BOT"
     token_usage: Optional[TokenUsage] = None
+    context_used: bool = False
+    enhanced_entities: Dict[str, Any] = Field(default_factory=dict)
 
 
 class HealthResponse(BaseModel):
@@ -81,37 +92,23 @@ class HealthResponse(BaseModel):
 # Global variables
 start_time = datetime.utcnow()
 
-SQL_GENERATION_PROMPT = """You are an expert SQL query generator for Israeli government decisions database.
+SQL_GENERATION_PROMPT = """Generate PostgreSQL query for Israeli government decisions.
 
-Database schema:
-- government_decisions: Main table with columns: id, government_number, decision_number, decision_date, title, content, summary, topics (text[]), ministries (text[]), status
-- governments: Metadata table with government information
-- Topics and ministries are stored as PostgreSQL arrays
-
-Your task: Generate a PostgreSQL query based on the intent and entities.
+Schema: israeli_government_decisions(id, government_number, decision_number, decision_date, title, content, summary, topics[], ministries[], status)
 
 Intent: {intent}
 Entities: {entities}
 
-Requirements:
-1. Use parameterized queries with %(param_name)s format
-2. Always include: AND status = 'active'
-3. Use appropriate ORDER BY clauses
-4. Include LIMIT for search queries (default 20)
-5. Use array operators for topics/ministries: 'value' = ANY(array_column)
-6. For full-text search: to_tsvector('hebrew', content) @@ to_tsquery('hebrew', 'search_term')
+Rules:
+1. Use %(param)s format
+2. Always AND status = 'active'
+3. Array: 'value' = ANY(topics)
+4. ORDER BY decision_date DESC
+5. Default LIMIT 20
 
-Return JSON with:
-- "sql": The complete SQL query
-- "parameters": Object with parameter names and values
-- "explanation": Brief explanation of the query logic
+Return JSON: {{"sql": "...", "parameters": {{}}, "explanation": "..."}}
 
-Example for "החלטות ממשלה 37 בנושא חינוך":
-{
-  "sql": "SELECT id, government_number, decision_number, decision_date, title, summary FROM government_decisions WHERE government_number = %(government_number)s AND %(topic)s = ANY(topics) AND status = 'active' ORDER BY decision_date DESC LIMIT %(limit)s;",
-  "parameters": {"government_number": 37, "topic": "חינוך", "limit": 20},
-  "explanation": "Search for education decisions from government 37, ordered by date"
-}
+Example: {{"sql": "SELECT * FROM government_decisions WHERE government_number = %(gov)s AND %(topic)s = ANY(topics) AND status = 'active' ORDER BY decision_date DESC LIMIT 20", "parameters": {{"gov": 37, "topic": "חינוך"}}, "explanation": "Gov 37 education decisions"}}
 """
 
 
@@ -176,11 +173,48 @@ async def call_gpt_for_sql(intent: str, entities: Dict[str, Any]) -> Dict[str, A
         raise HTTPException(status_code=500, detail=f"GPT call failed: {str(e)}")
 
 
+def enhance_entities_with_context(
+    entities: Dict[str, Any],
+    conversation_history: List[ConversationTurn]
+) -> Dict[str, Any]:
+    """Extract missing entities from conversation history (LINK 3 implementation)."""
+    
+    enhanced_entities = entities.copy()
+    
+    # Look for missing decision numbers in previous queries
+    if not enhanced_entities.get("decision_number"):
+        for turn in reversed(conversation_history):
+            if turn.speaker == "user":
+                import re
+                decision_match = re.search(r'החלטה\s*(\d+)', turn.clean_text)
+                if decision_match:
+                    enhanced_entities["decision_number"] = decision_match.group(1)
+                    break
+    
+    # Look for missing government numbers
+    if not enhanced_entities.get("government_number"):
+        for turn in reversed(conversation_history):
+            if turn.speaker == "user":
+                import re
+                gov_match = re.search(r'ממשלה\s*(\d+)', turn.clean_text)
+                if gov_match:
+                    enhanced_entities["government_number"] = gov_match.group(1)
+                    break
+    
+    # If we found a decision number from context, update the operation to specific_decision
+    if enhanced_entities.get("decision_number") and not entities.get("decision_number"):
+        enhanced_entities["operation"] = "specific_decision"
+    
+    return enhanced_entities
+
 def generate_sql_from_template(intent: str, entities: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Generate SQL using predefined templates."""
+    logger.info(f"Selecting template for intent: {intent}, entities: {entities}")
     template = get_template_by_intent(intent, entities)
     if not template:
+        logger.warning(f"No template found for intent: {intent}, entities: {entities}")
         return None
+    logger.info(f"Selected template: {template.name}")
     
     # Build parameters
     params = {}
@@ -274,8 +308,14 @@ async def generate_sql(request: SQLGenRequest) -> SQLGenResponse:
     })
     
     try:
-        # Try template-based generation first
-        template_result = generate_sql_from_template(request.intent, request.entities)
+        # Enhance entities with conversation context
+        enhanced_entities = enhance_entities_with_context(
+            request.entities,
+            request.conversation_history
+        )
+        
+        # Try template-based generation first with enhanced entities
+        template_result = generate_sql_from_template(request.intent, enhanced_entities)
         
         sql_query = None
         parameters = []
@@ -296,6 +336,14 @@ async def generate_sql(request: SQLGenRequest) -> SQLGenResponse:
                     type=type(value).__name__
                 ))
             
+            # Create token usage for template (0 tokens)
+            token_usage = TokenUsage(
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+                model="template"
+            )
+            
             logger.info(f"SQL generated using template: {template_used}", extra={
                 "conv_id": request.conv_id,
                 "template": template_used
@@ -307,7 +355,7 @@ async def generate_sql(request: SQLGenRequest) -> SQLGenResponse:
                 "conv_id": request.conv_id
             })
             
-            gpt_response = await call_gpt_for_sql(request.intent, request.entities)
+            gpt_response = await call_gpt_for_sql(request.intent, enhanced_entities)
             result = gpt_response["result"]
             
             sql_query = result["sql"]
@@ -341,7 +389,9 @@ async def generate_sql(request: SQLGenRequest) -> SQLGenResponse:
             template_used=template_used,
             validation_passed=validation_passed,
             timestamp=datetime.utcnow(),
-            token_usage=token_usage
+            token_usage=token_usage,
+            context_used=len(request.conversation_history) > 0,
+            enhanced_entities=enhanced_entities
         )
         
         # Log success

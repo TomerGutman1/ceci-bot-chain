@@ -1,0 +1,166 @@
+[
+  {
+    "query": "נתח לעומק את החלטה 1 ממשלה 37",
+    "conv_id": "test_1751534306_956",
+    "timestamp": "2025-07-03T12:18:26.247749",
+    "steps": {
+      "health_checks": {
+        "success": true
+      },
+      "intent_detection": {
+        "success": true,
+        "result": {
+          "conv_id": "test_1751534306_956",
+          "intent_type": "EVAL",
+          "entities": {
+            "government_number": 37,
+            "decision_number": 1,
+            "topic": null,
+            "date_range": null,
+            "ministries": null,
+            "count_target": null,
+            "comparison_target": null,
+            "limit": null
+          },
+          "confidence": 1,
+          "route_flags": {
+            "needs_clarification": false,
+            "has_context": false,
+            "is_follow_up": false,
+            "needs_context": false,
+            "is_statistical": false,
+            "is_comparison": false
+          },
+          "timestamp": "2025-07-03T09:18:26.259Z",
+          "layer": "1_MAIN_INTENT_BOT",
+          "token_usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "model": "deterministic"
+          },
+          "explanation": "Deep analysis request"
+        }
+      },
+      "sql_generation": {
+        "success": true,
+        "result": {
+          "conv_id": "test_1751534306_956",
+          "sql_query": "\n        SELECT \n            id, government_number, decision_number, decision_date,\n            title, summary, topics, ministries\n        FROM government_decisions \n        WHERE status = 'active'\n        AND government_number = %(government_number)s\n        \n        ORDER BY decision_date DESC, government_number DESC, decision_number DESC\n        LIMIT %(limit)s;\n        ",
+          "parameters": [
+            {
+              "name": "government_number",
+              "value": 37,
+              "type": "int"
+            },
+            {
+              "name": "limit",
+              "value": 20,
+              "type": "int"
+            }
+          ],
+          "template_used": "recent_decisions",
+          "validation_passed": true,
+          "timestamp": "2025-07-03T09:18:26.264792",
+          "layer": "2Q_QUERY_SQL_GEN_BOT",
+          "token_usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "model": "template"
+          }
+        }
+      },
+      "eval_bot_direct": {
+        "success": false,
+        "result": null
+      },
+      "backend_pipeline": {
+        "success": false,
+        "result": null
+      }
+    }
+  },
+  {
+    "query": "אני רוצה ניתוח מעמיק של החלטה 2 ממשלה 37",
+    "conv_id": "test_1751534309_369",
+    "timestamp": "2025-07-03T12:18:29.580439",
+    "steps": {
+      "health_checks": {
+        "success": true
+      },
+      "intent_detection": {
+        "success": true,
+        "result": {
+          "conv_id": "test_1751534309_369",
+          "intent_type": "EVAL",
+          "entities": {
+            "government_number": 37,
+            "decision_number": 2,
+            "topic": null,
+            "date_range": null,
+            "ministries": null,
+            "count_target": null,
+            "comparison_target": null,
+            "limit": null
+          },
+          "confidence": 1,
+          "route_flags": {
+            "needs_clarification": false,
+            "has_context": false,
+            "is_follow_up": false,
+            "needs_context": false,
+            "is_statistical": false,
+            "is_comparison": false
+          },
+          "timestamp": "2025-07-03T09:18:29.600Z",
+          "layer": "1_MAIN_INTENT_BOT",
+          "token_usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "model": "deterministic"
+          },
+          "explanation": "Deep analysis request"
+        }
+      },
+      "sql_generation": {
+        "success": true,
+        "result": {
+          "conv_id": "test_1751534309_369",
+          "sql_query": "\n        SELECT \n            id, government_number, decision_number, decision_date,\n            title, summary, topics, ministries\n        FROM government_decisions \n        WHERE status = 'active'\n        AND government_number = %(government_number)s\n        \n        ORDER BY decision_date DESC, government_number DESC, decision_number DESC\n        LIMIT %(limit)s;\n        ",
+          "parameters": [
+            {
+              "name": "government_number",
+              "value": 37,
+              "type": "int"
+            },
+            {
+              "name": "limit",
+              "value": 20,
+              "type": "int"
+            }
+          ],
+          "template_used": "recent_decisions",
+          "validation_passed": true,
+          "timestamp": "2025-07-03T09:18:29.608344",
+          "layer": "2Q_QUERY_SQL_GEN_BOT",
+          "token_usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "model": "template"
+          }
+        }
+      },
+      "eval_bot_direct": {
+        "success": false,
+        "result": null
+      },
+      "backend_pipeline": {
+        "success": false,
+        "result": null
+      }
+    }
+  }
+]

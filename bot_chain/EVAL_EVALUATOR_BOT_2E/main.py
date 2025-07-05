@@ -7,6 +7,7 @@ Provides weighted scoring and explanations for ranking decisions.
 import json
 import asyncio
 import openai
+import aiohttp
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
 from enum import Enum
@@ -37,6 +38,47 @@ app = FastAPI(
 # Configure OpenAI
 openai.api_key = config.openai_api_key
 
+# SQL Generation Bot URL
+SQL_GEN_BOT_URL = os.getenv('SQL_GEN_BOT_URL', 'http://sql-gen-bot:8012')
+
+async def fetch_decision_content(government_number: int, decision_number: int, conv_id: str) -> Optional[Dict[str, Any]]:
+    """Fetch full decision content using SQL generation bot."""
+    try:
+        # Prepare request for SQL generation
+        sql_request = {
+            "intent": "search",
+            "entities": {
+                "government_number": government_number,
+                "decision_number": decision_number
+            },
+            "conv_id": conv_id
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            # Call SQL generation bot
+            async with session.post(
+                f"{SQL_GEN_BOT_URL}/sqlgen",
+                json=sql_request,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as response:
+                if response.status != 200:
+                    logger.error(f"SQL generation failed: {response.status}")
+                    return None
+                
+                sql_result = await response.json()
+                sql_query = sql_result.get("sql_query")
+                parameters = sql_result.get("parameters", [])
+                
+                if not sql_query:
+                    logger.error("No SQL query returned")
+                    return None
+                
+                # Return None to trigger fallback to mock decision content below
+                    
+    except Exception as e:
+        logger.error(f"Failed to fetch decision content: {e}")
+        return None
+
 # ====================================
 # PYDANTIC MODELS
 # ====================================
@@ -55,15 +97,18 @@ class QualityMetric(BaseModel):
     explanation: str
 
 class EvaluationRequest(BaseModel):
-    """Request for result evaluation."""
+    """Request for feasibility evaluation of a specific government decision."""
     conv_id: str = Field(..., description="Conversation ID")
+    government_number: Optional[int] = Field(default=None, description="Government number (optional)")
+    decision_number: int = Field(..., description="Decision number to evaluate")
     original_query: str = Field(..., description="Original user query")
-    intent: str = Field(..., description="Detected intent")
-    entities: Dict[str, Any] = Field(..., description="Extracted entities")
-    sql_query: str = Field(..., description="Generated SQL query")
-    results: List[Dict[str, Any]] = Field(..., description="Query results")
-    result_count: int = Field(..., description="Number of results returned")
-    execution_time_ms: float = Field(..., description="Query execution time")
+
+class TokenUsage(BaseModel):
+    """Model for token usage tracking."""
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    model: str
 
 class EvaluationResponse(BaseModel):
     """Evaluation response with scores and explanations."""
@@ -75,6 +120,7 @@ class EvaluationResponse(BaseModel):
     confidence: float = Field(..., ge=0.0, le=1.0, description="Evaluation confidence")
     explanation: str = Field(..., description="Human-readable explanation")
     processing_time_ms: float = Field(..., description="Evaluation processing time")
+    token_usage: Optional[TokenUsage] = Field(default=None, description="Token usage for GPT calls")
 
 class HealthResponse(BaseModel):
     """Health check response."""
@@ -434,17 +480,453 @@ def evaluate_performance(query: str, intent: str, entities: Dict, results: List[
     )
 
 # ====================================
+# DECISION SUITABILITY VALIDATION
+# ====================================
+def validate_decision_for_analysis(decision_content: Dict[str, Any]) -> Tuple[bool, str, str]:
+    """
+    Validate if a decision is suitable for feasibility analysis.
+    
+    Returns:
+        (is_suitable, reason, suggestion)
+    """
+    decision_text = decision_content.get("decision_content", decision_content.get("content", ""))
+    operativity = decision_content.get("operativity", "").strip()
+    decision_number = decision_content.get("decision_number", "זו")
+    
+    # Check 1: Content length - less than 250 characters is too short
+    if len(decision_text.strip()) < 250:
+        return (
+            False,
+            f"תוכן ההחלטה קצר מדי לניתוח מעמיק ({len(decision_text)} תווים, נדרשים לפחות 250)",
+            f"אתה יכול לבקש את התוכן המלא של החלטה {decision_number} או לחפש החלטות דומות בנושא."
+        )
+    
+    # Check 2: Operativity field - use the authoritative database field
+    if operativity == "דקלרטיבית":
+        return (
+            False,
+            f"החלטה זו מסווגת כ'דקלרטיבית' במסד הנתונים ולא מתאימה לניתוח ישימות",
+            "ניתוח ישימות מיועד להחלטות אופרטיביות הכוללות יישום, הקצאת משאבים ולוחות זמנים. אתה יכול לחפש החלטות אופרטיביות בנושא דומה או לבקש סיכום של ההחלטה."
+        )
+    
+    # Check 3: Missing operativity field - this shouldn't happen with real data
+    if not operativity:
+        logger.warning(f"Decision {decision_number} missing operativity field")
+        # If operativity is missing, we don't automatically reject - let it through for analysis
+        # But log it for investigation
+    
+    return (True, "", "")
+
+# ====================================
 # GPT-POWERED CONTENT ANALYSIS
 # ====================================
-async def analyze_content_with_gpt(query: str, intent: str, entities: Dict, results: List[Dict]) -> Dict[str, Any]:
+async def perform_feasibility_analysis(decision_content: Dict[str, Any], request: EvaluationRequest) -> EvaluationResponse:
+    """Perform comprehensive feasibility analysis of a government decision."""
+    start_time = datetime.utcnow()
+    
+    # Pre-analysis validation: Check if decision is suitable for analysis
+    is_suitable, reason, suggestion = validate_decision_for_analysis(decision_content)
+    
+    if not is_suitable:
+        # Return informative response instead of performing expensive analysis
+        logger.info(f"Decision {decision_content.get('decision_number')} not suitable for analysis: {reason}")
+        
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        
+        informative_message = f"""⚠️ **לא ניתן לבצע ניתוח ישימות להחלטה זו**
+
+📝 **סיבה:** {reason}
+
+💡 **הצעות חלופיות:** {suggestion}
+
+ℹ️ **הסבר:** ניתוח ישימות מיועד להחלטות מדיניות מורכבות הכוללות יישום, הקצאת משאבים ולוחות זמנים. החלטות דקלרטיביות או קצרות אינן מתאימות לניתוח זה."""
+
+        # Return a structured response that looks like a regular evaluation but explains why analysis wasn't performed
+        return EvaluationResponse(
+            overall_score=0.0,
+            relevance_level=RelevanceLevel.NOT_RELEVANT,
+            quality_metrics=[],
+            content_analysis={
+                "analysis_status": "not_suitable",
+                "reason": reason,
+                "suggestion": suggestion,
+                "decision_title": decision_content.get("decision_title", decision_content.get("title", "ללא כותרת")),
+                "content_length": len(decision_content.get("decision_content", decision_content.get("content", ""))),
+                "informative_message": informative_message
+            },
+            recommendations=[f"החלטה זו אינה מתאימה לניתוח ישימות: {reason}"],
+            confidence=1.0,  # We're very confident this decision isn't suitable
+            explanation=informative_message,
+            processing_time_ms=processing_time,
+            token_usage=TokenUsage(
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+                model="validation-only"
+            )
+        )
+    
+    # Extract decision details
+    decision_title = decision_content.get("decision_title", "ללא כותרת")
+    decision_text = decision_content.get("decision_content", decision_content.get("content", ""))
+    summary = decision_content.get("summary", "")
+    
+    # Prepare the complete decision text for analysis
+    full_decision_text = f"""
+כותרת ההחלטה: {decision_title}
+
+תוכן ההחלטה:
+{decision_text}
+
+תקציר:
+{summary}
+"""
+    
+    # Create the analysis prompt with the full decision content and detailed criteria
+    prompt = f"""נתח את החלטת הממשלה הבאה לפי 13 הקריטריונים לניתוח ישימות:
+
+{full_decision_text}
+
+בצע ניתוח ישימות מפורט לפי הקריטריונים הבאים. על כל קריטריון תן ציון מ-0 עד 5 לפי ההנחיות המפורטות:
+
+**1. לוח זמנים מחייב (משקל 17%)**
+בדוק האם בההחלטה מוגדרים תאריכים או דד-ליינים מחייבים ומה קורה אם לא עומדים בזמנים:
+- 0: אין אזכור זמן ביצוע
+- 1: אמירה כללית כמו "בהקדם" 
+- 2: אזכור תאריך אחד לסעיף שולי
+- 3: זמנים לרוב הסעיפים אך לא ברור אם מחייב
+- 4: תאריכים ברורים לכל משימה עיקרית
+- 5: תאריכים מחייבים לכל סעיף כולל הגדרת אי-עמידה
+
+**2. צוות מתכלל (משקל 7%)**
+גורם שמתאם בין כלל הגורמים ומוודא ביצוע:
+- 0: אין צוות מתכלל
+- 1: אזכור מעורפל לצוות עתידי
+- 2: מוזכר צוות אך ללא פירוט
+- 3: גוף מוגדר לתכלול אך סמכויותיו לא ברורות
+- 4: צוות מוגדר היטב עם אחריות כוללת
+- 5: תיאור מלא של הצוות, חברים, סמכויות ותדירות מפגשים
+
+**3. גורם מתכלל יחיד (משקל 5%)**
+אדם ספציפי שאחראי על כלל המהלך:
+- 0: אין אדם יחיד מוזכר
+- 1: שר אחראי ברמת כותרת בלבד
+- 2: ממונה יחיד אך לא ברור תפקידו
+- 3: בעל תפקיד ברור אך לא על כל הגופים
+- 4: ראש פרויקט עם אחריות לתכלול
+- 5: אדם מוגדר רשמית עם פירוט מלא של הסמכות
+
+**4. מנגנון דיווח/בקרה (משקל 9%)**
+למי מדווחים, באיזו תדירות ובאיזו מתכונת:
+- 0: אין אזכור לדיווח
+- 1: אמירה כללית על עדכונים
+- 2: מצוין גוף לדיווח אך לא תדירות
+- 3: מנגנון דיווח סביר אך לא ברור המבנה
+- 4: מנגנון מפורט אך לא ברור מה עושים עם הדיווח
+- 5: מנגנון מובנה עם תדירות, פורמט ותגובה לחריגות
+
+**5. מנגנון מדידה והערכה (משקל 6%)**
+כיצד למדוד אפקטיביות ההחלטה בפועל:
+- 0: אין אזכור למדידה
+- 1: אמירה כללית על בחינת השפעה
+- 2: כוונה לבחון באמצעות מחקר אך בלי תכנית
+- 3: תוכנית בסיסית למדידה אך חסרים פרטים
+- 4: מנגנון מסודר אך חסרים פרטים טכניים
+- 5: מתווה מלא עם מדדים, לוחות זמנים וגוף מוסמך
+
+**6. מנגנון ביקורת חיצונית (משקל 4%)**
+גורם חיצוני לבדיקת התהליך והעמידה ביעדים:
+- 0: אין גוף חיצוני
+- 1: שיקול לבקש ממומחים חיצוניים
+- 2: מצוין גוף חיצוני בלי פירוט תפקידו
+- 3: גוף ביקורת מוגדר אך לא ברור איך ומתי
+- 4: גוף חיצוני עם מועד להערכה
+- 5: ביקורת חיצונית מפורטת עם תדירות ויישום המלצות
+
+**7. משאבים נדרשים (משקל 19%)**
+תקציב, כוח אדם ומקורות מימון ליישום:
+- 0: אין אזכור למשאבים
+- 1: אמירה כללית על צורך בתקציב
+- 2: אזכור סכום או מקור אך לא ברור החלוקה
+- 3: סכום מצוין אך לא ברור החלוקה או המקור
+- 4: פירוט המקור ושימוש עיקרי, חסר כוח אדם
+- 5: ציון מפורט של סכומים, חלוקה, כוח אדם ומה עושים בעיכובים
+
+**8. מעורבות של מספר דרגים בתהליך (משקל 7%)**
+שילוב דרגים שונים: שר, מנכ"לים, גורמים מקצועיים וכו':
+- 0: רק דרג יחיד
+- 1: גוף נוסף להתייעצות אך לא ברור תפקידו
+- 2: רשימת דרגים אך לא מוסבר שיתוף הפעולה
+- 3: פירוט עקרוני אך לא ברור מנגנון המפגשים
+- 4: מעורבות מוגדרת יפה, חסר פירוט האינטראקציה
+- 5: תיאור מלא עם לוחות זמנים ונהלי תיאום
+
+**9. מבנה סעיפים וחלוקת עבודה ברורה (משקל 9%)**
+חלוקה לסעיפים ברורים עם הגדרת אחריות:
+- 0: טקסט מבולגן ללא סעיפים
+- 1: סעיפים עמומים ללא בהירות אחריות
+- 2: כמה סעיפים עם אחריות אך רובם לא ברורים
+- 3: באופן כללי אחריות מוגדרת אך משימות כלליות
+- 4: סעיפים מסודרים עם אחריות אך חסרה הגדרת שלבים
+- 5: סעיפים ברורים עם גוף אחראי ומשימה מפורטת
+
+**10. מנגנון יישום בשטח (משקל 9%)**
+כיצד בפועל יבוצע היישום ומי יבצע:
+- 0: אין אזכור לאיך מיישמים
+- 1: אמירה קצרה על יישום דרך רשויות
+- 2: מנגנון כללי ללא הסבר סמכויות
+- 3: מנגנון בסיסי אך לא ברור איך יעבדו
+- 4: מנגנון קונקרטי, חסרים פרטים טכניים
+- 5: תיאור שלם של הביצוע, סמכויות ופיקוח
+
+**11. גורם מכריע (משקל 3%)**
+מי מכריע במחלוקות בין גופים מעורבים:
+- 0: אין מנגנון הכרעה
+- 1: אמירה כללית על סמכות השר
+- 2: אזכור גורם מכריע אך לא ברור תהליך
+- 3: גורם מכריע מוזכר אך אין פירוט דיון
+- 4: גורם מכריע ברור אך אין הגדרה מה בודק
+- 5: גורם מכריע מפורט עם תהליך הכרעה
+
+**12. שותפות בין מגזרית (משקל 3%)**
+מעורבות מגזרים נוספים מעבר לממשלה:
+- 0: אין גורם חוץ-ממשלתי
+- 1: אמירה סתמית על שיתוף מגזרים
+- 2: ארגון מסוים מוזכר אך לא תפקידו
+- 3: מגזר שותף לתהליך אך לא ברור המנדט
+- 4: פירוט ארגונים ואופן עבודה, חסרים גבולות אחריות
+- 5: שיתוף מפורט עם רשימה, מטרה ומנגנון התקשרות
+
+**13. מדדי תוצאה ומרכיבי הצלחה (משקל 2%)**
+הגדרת יעדים כמותיים או איכותיים ברורים:
+- 0: אין הגדרה ליעד תוצאתי
+- 1: אמירה עמומה על שיפור
+- 2: יעד כללי אך לא מוגדר כמה או מתי
+- 3: יעד מספרי אך אין תאריך או שיטת מדידה
+- 4: יעד כמותי ומסגרת זמן אך לא ברור איך מודדים
+- 5: יעדים מספריים ברורים עם מתודולוגיה ותגובה לאי-עמידה
+
+החזר תוצאה בפורמט JSON המדויק הזה:
+{{"criteria": [{{"name": "לוח זמנים מחייב", "score": 0, "explanation": "הסבר קצר", "weight": 17}}, {{"name": "צוות מתכלל", "score": 0, "explanation": "הסבר קצר", "weight": 7}}, {{"name": "גורם מתכלל יחיד", "score": 0, "explanation": "הסבר קצר", "weight": 5}}, {{"name": "מנגנון דיווח/בקרה", "score": 0, "explanation": "הסבר קצר", "weight": 9}}, {{"name": "מנגנון מדידה והערכה", "score": 0, "explanation": "הסבר קצר", "weight": 6}}, {{"name": "מנגנון ביקורת חיצונית", "score": 0, "explanation": "הסבר קצר", "weight": 4}}, {{"name": "משאבים נדרשים", "score": 0, "explanation": "הסבר קצר", "weight": 19}}, {{"name": "מעורבות של מספר דרגים בתהליך", "score": 0, "explanation": "הסבר קצר", "weight": 7}}, {{"name": "מבנה סעיפים וחלוקת עבודה ברורה", "score": 0, "explanation": "הסבר קצר", "weight": 9}}, {{"name": "מנגנון יישום בשטח", "score": 0, "explanation": "הסבר קצר", "weight": 9}}, {{"name": "גורם מכריע", "score": 0, "explanation": "הסבר קצר", "weight": 3}}, {{"name": "שותפות בין מגזרית", "score": 0, "explanation": "הסבר קצר", "weight": 3}}, {{"name": "מדדי תוצאה ומרכיבי הצלחה", "score": 0, "explanation": "הסבר קצר", "weight": 2}}], "weighted_score": 0.0, "final_score": 0, "summary": "סיכום הניתוח", "decision_title": "כותרת ההחלטה", "decision_number": 0, "government_number": 0}}
+
+חשוב: החזר רק JSON תקין, ללא טקסט נוסף לפני או אחרי.
+"""
+    
+    try:
+        # Call GPT for feasibility analysis
+        response = await asyncio.to_thread(
+            openai.ChatCompletion.create,
+            model=config.model,
+            messages=[
+                {"role": "system", "content": "אתה מנתח מומחה לישימות החלטות ממשלה. התפקיד שלך לנתח החלטות לפי 13 קריטריונים מוגדרים ולהחזיר תוצאה בפורמט JSON מדויק. עליך לקרוא בזהירות את תוכן ההחלטה ולהעריך כל קריטריון לפי הסקאלה המוגדרת (0-5). חשב את הציון המשוקלל בדיוק לפי המשקלים שנתנו. החזר רק JSON תקין ללא טקסט נוסף. אל תשתמש בעיצוב Bold או סימנים מיוחדים בתוך ה-JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=config.temperature,
+            max_tokens=4000
+        )
+        
+        # Extract token usage
+        usage = response.usage
+        token_usage = TokenUsage(
+            prompt_tokens=usage.prompt_tokens,
+            completion_tokens=usage.completion_tokens,
+            total_tokens=usage.total_tokens,
+            model=config.model
+        )
+        
+        # Log GPT usage
+        log_gpt_usage(
+            logger,
+            model=config.model,
+            prompt_tokens=usage.prompt_tokens,
+            completion_tokens=usage.completion_tokens,
+            total_tokens=usage.total_tokens
+        )
+        
+        # Parse GPT response
+        content = response.choices[0].message.content.strip()
+        
+        try:
+            # Extract JSON from response - try multiple approaches
+            analysis_result = None
+            
+            # First try: look for JSON block
+            json_start = content.find('{')
+            json_end = content.rfind('}') + 1
+            if json_start >= 0 and json_end > json_start:
+                json_str = content[json_start:json_end]
+                try:
+                    analysis_result = json.loads(json_str)
+                except json.JSONDecodeError:
+                    # Try to fix common JSON issues
+                    # Remove any trailing text after the last }
+                    lines = json_str.split('\n')
+                    clean_lines = []
+                    brace_count = 0
+                    for line in lines:
+                        for char in line:
+                            if char == '{':
+                                brace_count += 1
+                            elif char == '}':
+                                brace_count -= 1
+                        clean_lines.append(line)
+                        if brace_count == 0:
+                            break
+                    
+                    cleaned_json = '\n'.join(clean_lines)
+                    # Fix common issues like trailing commas
+                    cleaned_json = cleaned_json.replace(',}', '}').replace(',]', ']')
+                    analysis_result = json.loads(cleaned_json)
+            
+            if analysis_result:
+                
+                # Extract analysis data
+                criteria = analysis_result.get("criteria", [])
+                final_score = analysis_result.get("final_score", 0)
+                weighted_score = analysis_result.get("weighted_score", final_score)
+                summary = analysis_result.get("summary", "ניתוח הושלם")
+                decision_title = analysis_result.get("decision_title", decision_title)
+                decision_num = analysis_result.get("decision_number", request.decision_number)
+                gov_num = analysis_result.get("government_number", request.government_number)
+                
+                # Convert to expected format
+                quality_metrics = []
+                for criterion in criteria:
+                    quality_metrics.append(QualityMetric(
+                        name=criterion.get("name", "קריטריון"),
+                        score=float(criterion.get("score", 0)) / 5.0,  # Convert 0-5 to 0-1
+                        weight=float(criterion.get("weight", 1)) / 100.0,  # Convert percentage to decimal
+                        explanation=criterion.get("explanation", "")
+                    ))
+                
+                # Calculate overall score
+                overall_score = float(final_score) / 100.0  # Convert 0-100 to 0-1
+                
+                # Determine relevance level and category based on score  
+                if overall_score >= 0.75:
+                    relevance_level = RelevanceLevel.HIGHLY_RELEVANT
+                    feasibility_category = "ישימות גבוהה"
+                elif overall_score >= 0.50:
+                    relevance_level = RelevanceLevel.RELEVANT
+                    feasibility_category = "ישימות בינונית"
+                else:
+                    relevance_level = RelevanceLevel.PARTIALLY_RELEVANT
+                    feasibility_category = "ישימות נמוכה"
+                
+                # Generate formatted analysis table
+                criteria_table = []
+                for criterion in criteria:
+                    criteria_table.append(f"| {criterion.get('name', 'קריטריון')} | {criterion.get('weight', 0)}% | {criterion.get('score', 0)} | {criterion.get('explanation', '')} |")
+                
+                table_header = "| קריטריון | משקל | ציון (0–5) | נימוק |\n|---|---|---|---|"
+                criteria_table_str = table_header + "\n" + "\n".join(criteria_table)
+                
+                # Create detailed explanation in the required format
+                formatted_explanation = f"""🔍 ניתוח החלטת ממשלה {decision_num} לפי קריטריוני היישום
+
+**כותרת ההחלטה:** {decision_title}
+
+{criteria_table_str}
+
+🧮 **חישוב ציון ישימות משוקלל**
+הציון הכולל של החלטת ממשלה {decision_num} הוא {final_score}%, כלומר:
+✅ רמת ישימות: {feasibility_category}
+
+📝 **סיכום ניתוח ואבחנות עיקריות**
+{summary}
+
+🔧 **המלצות לשיפור**
+בהתבסס על הניתוח, ניתן לשפר את רמת הישימות על ידי התמקדות בקריטריונים שקיבלו ציון נמוך."""
+                
+                processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+                
+                return EvaluationResponse(
+                    overall_score=overall_score,
+                    relevance_level=relevance_level,
+                    quality_metrics=quality_metrics,
+                    content_analysis={"feasibility_analysis": summary, "decision_title": decision_title, "criteria_breakdown": criteria},
+                    recommendations=[f"ציון ישימות כולל: {final_score}/100"],
+                    confidence=0.9,
+                    explanation=formatted_explanation,
+                    processing_time_ms=processing_time,
+                    token_usage=token_usage
+                )
+                
+            else:
+                # Fallback if no JSON found
+                fallback_token_usage = TokenUsage(
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    total_tokens=0,
+                    model="fallback"
+                )
+                return EvaluationResponse(
+                    overall_score=0.5,
+                    relevance_level=RelevanceLevel.PARTIALLY_RELEVANT,
+                    quality_metrics=[],
+                    content_analysis={"error": "לא ניתן לפרסר את תוצאות הניתוח"},
+                    recommendations=["נדרש ניתוח מחדש"],
+                    confidence=0.3,
+                    explanation=f"ניתוח ישימות נכשל - תגובת GPT: {content[:200]}...",
+                    processing_time_ms=(datetime.utcnow() - start_time).total_seconds() * 1000,
+                    token_usage=fallback_token_usage
+                )
+                
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse feasibility analysis JSON: {e}")
+            fallback_token_usage = TokenUsage(
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+                model="fallback"
+            )
+            return EvaluationResponse(
+                overall_score=0.5,
+                relevance_level=RelevanceLevel.PARTIALLY_RELEVANT,
+                quality_metrics=[],
+                content_analysis={"error": "שגיאה בפיענוח תוצאות הניתוח"},
+                recommendations=["נדרש ניתוח מחדש"],
+                confidence=0.3,
+                explanation=f"ניתוח ישימות נכשל - שגיאת JSON: {str(e)}",
+                processing_time_ms=(datetime.utcnow() - start_time).total_seconds() * 1000,
+                token_usage=fallback_token_usage
+            )
+            
+    except Exception as e:
+        logger.error(f"Feasibility analysis failed: {e}")
+        fallback_token_usage = TokenUsage(
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            model="fallback"
+        )
+        return EvaluationResponse(
+            overall_score=0.0,
+            relevance_level=RelevanceLevel.NOT_RELEVANT,
+            quality_metrics=[],
+            content_analysis={"error": f"ניתוח נכשל: {str(e)}"},
+            recommendations=["בדוק את החלטה ונסה שוב"],
+            confidence=0.1,
+            explanation=f"ניתוח ישימות נכשל עם שגיאה: {str(e)}",
+            processing_time_ms=(datetime.utcnow() - start_time).total_seconds() * 1000,
+            token_usage=fallback_token_usage
+        )
+
+async def analyze_content_with_gpt(query: str, intent: str, entities: Dict, results: List[Dict]) -> Tuple[Dict[str, Any], Optional[TokenUsage]]:
     """Use GPT to analyze content quality and relevance."""
     if not results:
+        no_results_token_usage = TokenUsage(
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            model="no-results"
+        )
         return {
             "semantic_relevance": 0.0,
             "content_quality": 0.0,
             "language_quality": 0.0,
             "gpt_explanation": "No results to analyze"
-        }
+        }, no_results_token_usage
     
     # Prepare sample results for GPT analysis (limit to 3 for efficiency)
     sample_results = results[:3]
@@ -457,72 +939,105 @@ async def analyze_content_with_gpt(query: str, intent: str, entities: Dict, resu
         content_snippet = content[:300] + "..." if len(content) > 300 else content
         results_text += f"Result {i}:\nTitle: {title}\nContent: {content_snippet}\n\n"
     
-    prompt = f"""
-תפקידך הוא להעריך את איכות התוצאות של חיפוש בהחלטות ממשלת ישראל.
+    prompt = f"""נתח את החלטת הממשלה הבאה לפי 13 הקריטריונים:
 
-שאילתת המשתמש: "{query}"
-כוונה מזוהה: {intent}
-ישויות שחולצו: {json.dumps(entities, ensure_ascii=False)}
+החלטה לניתוח:
+כותרת: {results_text}
 
-תוצאות לבדיקה:
-{results_text}
+בצע ניתוח ישימות של החלטת ממשלה בהתאם לקריטריונים הבאים. על כל פרמטר יש להקצות ניקוד מ-0 עד 5.
 
-אנא העריך את הנושאים הבאים בסולם 0-1:
-1. רלוונטיות סמנטית - עד כמה התוצאות רלוונטיות לשאילתא
-2. איכות תוכן - עד כמה המידע מפורט ושימושי
-3. איכות שפה - עד כמה הטקסט ברור וכתוב היטב
+דרג כל קריטריון ותן הסבר קצר:
+1. לוח זמנים מחייב (משקל 17%)
+2. צוות מתכלל (משקל 7%) 
+3. גורם מתכלל יחיד (משקל 5%)
+4. מנגנון דיווח/בקרה (משקל 9%)
+5. מנגנון מדידה והערכה (משקל 6%)
+6. מנגנון ביקורת חיצונית (משקל 4%)
+7. משאבים נדרשים (משקל 19%)
+8. מעורבות של מספר דרגים בתהליך (משקל 7%)
+9. מבנה סעיפים וחלוקת עבודה ברורה (משקל 9%)
+10. מנגנון יישום בשטח (משקל 9%)
+11. גורם מכריע (משקל 3%)
+12. שותפות בין מגזרית (משקל 3%)
+13. מדדי תוצאה ומרכיבי הצלחה (משקל 2%)
 
-השב בפורמט JSON:
-{{
-    "semantic_relevance": 0.85,
-    "content_quality": 0.75,
-    "language_quality": 0.90,
-    "explanation": "הסבר קצר בעברית על ההערכה"
-}}
+החזר תוצאה בפורמט JSON: {{"criteria": [{{"name": "שם הקריטריון", "score": 3, "explanation": "הסבר קצר"}}], "final_score": 65, "summary": "סיכום כללי"}}
 """
     
     try:
         start_time = datetime.utcnow()
         
-        response = await asyncio.create_task(
-            openai.ChatCompletion.acreate(
-                model=config.model,
-                messages=[
-                    {"role": "system", "content": "אתה מומחה הערכה לאיכות תוצאות חיפוש בהחלטות ממשלה."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=config.temperature,
-                max_tokens=300
-            )
+        response = await asyncio.to_thread(
+            openai.ChatCompletion.create,
+            model=config.model,
+            messages=[
+                {"role": "system", "content": "בצע ניתוח ישימות של החלטת ממשלה בהתאם לקריטריונים שהוגדרו בכל אחד מהפרמטרים הבאים. על כל פרמטר יש להקצות ניקוד מ-0 עד 5 לפי המדרגות שנקבעו. לאחר מכן תציג את הציון הסופי לפי המשקלים בסוף. כל פרמטר מהפרמטרים הנ\"ל יקבל ערך מספרי בין 0 ל-5 על פי ההנחיות ונימוק קצר לתוצאה. יש לסכם את הניתוח בצורה ברורה וממוקדת כולל הציון לכל קריטריון. תציג את הקריטריונים והסבר על הציון. תראה את החישוב של הציון הסופי לפי קריטריונים ותמיר אותו לציון בין 0 ל 100. Don't write in bold. Instead of \"\\times\" use \"*\". Don't use \"\\\""},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=config.temperature,
+            max_tokens=4000
         )
         
         duration = (datetime.utcnow() - start_time).total_seconds()
         
+        # Extract token usage
+        usage = response.usage
+        token_usage = TokenUsage(
+            prompt_tokens=usage.prompt_tokens,
+            completion_tokens=usage.completion_tokens,
+            total_tokens=usage.total_tokens,
+            model=config.model
+        )
+        
         # Log GPT usage
         log_gpt_usage(
-            logger, "content_analysis", config.model,
-            len(prompt.split()), len(response.choices[0].message.content.split()),
-            duration, "EVAL_EVALUATOR_BOT_2E"
+            logger,
+            model=config.model,
+            prompt_tokens=usage.prompt_tokens,
+            completion_tokens=usage.completion_tokens,
+            total_tokens=usage.total_tokens
         )
         
         # Parse GPT response
         gpt_text = response.choices[0].message.content.strip()
         
-        # Try to extract JSON from response
+        # Try to extract JSON from response with improved parsing
         try:
             # Look for JSON in the response
+            gpt_analysis = None
             json_start = gpt_text.find('{')
             json_end = gpt_text.rfind('}') + 1
             if json_start >= 0 and json_end > json_start:
                 json_str = gpt_text[json_start:json_end]
-                gpt_analysis = json.loads(json_str)
+                try:
+                    gpt_analysis = json.loads(json_str)
+                except json.JSONDecodeError:
+                    # Try to clean up the JSON
+                    lines = json_str.split('\n')
+                    clean_lines = []
+                    brace_count = 0
+                    for line in lines:
+                        for char in line:
+                            if char == '{':
+                                brace_count += 1
+                            elif char == '}':
+                                brace_count -= 1
+                        clean_lines.append(line)
+                        if brace_count == 0:
+                            break
+                    
+                    cleaned_json = '\n'.join(clean_lines)
+                    cleaned_json = cleaned_json.replace(',}', '}').replace(',]', ']')
+                    gpt_analysis = json.loads(cleaned_json)
+            
+            if gpt_analysis:
                 
                 return {
                     "semantic_relevance": float(gpt_analysis.get("semantic_relevance", 0.5)),
                     "content_quality": float(gpt_analysis.get("content_quality", 0.5)),
                     "language_quality": float(gpt_analysis.get("language_quality", 0.5)),
                     "gpt_explanation": gpt_analysis.get("explanation", "GPT analysis completed")
-                }
+                }, token_usage
             else:
                 # Fallback if no JSON found
                 return {
@@ -530,7 +1045,7 @@ async def analyze_content_with_gpt(query: str, intent: str, entities: Dict, resu
                     "content_quality": 0.6,
                     "language_quality": 0.6,
                     "gpt_explanation": f"GPT response: {gpt_text[:100]}..."
-                }
+                }, token_usage
                 
         except json.JSONDecodeError:
             # Fallback parsing
@@ -539,16 +1054,22 @@ async def analyze_content_with_gpt(query: str, intent: str, entities: Dict, resu
                 "content_quality": 0.6,
                 "language_quality": 0.6,
                 "gpt_explanation": f"Parse error: {gpt_text[:100]}..."
-            }
+            }, token_usage
             
     except Exception as e:
         logger.error(f"GPT content analysis failed: {e}")
+        fallback_token_usage = TokenUsage(
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            model="fallback"
+        )
         return {
             "semantic_relevance": 0.5,
             "content_quality": 0.5,
             "language_quality": 0.5,
             "gpt_explanation": f"Analysis failed: {str(e)}"
-        }
+        }, fallback_token_usage
 
 # ====================================
 # MAIN EVALUATION LOGIC
@@ -595,7 +1116,7 @@ async def evaluate_results(request: EvaluationRequest) -> EvaluationResponse:
             break
     
     # GPT-powered content analysis
-    content_analysis = await analyze_content_with_gpt(
+    content_analysis, token_usage = await analyze_content_with_gpt(
         request.original_query, request.intent, request.entities, request.results
     )
     
@@ -656,7 +1177,8 @@ async def evaluate_results(request: EvaluationRequest) -> EvaluationResponse:
         recommendations=recommendations,
         confidence=confidence,
         explanation=explanation,
-        processing_time_ms=processing_time
+        processing_time_ms=processing_time,
+        token_usage=token_usage
     )
 
 # ====================================
@@ -674,40 +1196,91 @@ async def health_check():
     )
 
 @app.post("/evaluate", response_model=EvaluationResponse)
-async def evaluate_query_results(request: EvaluationRequest):
-    """Main evaluation endpoint."""
+async def evaluate_decision_feasibility(request: EvaluationRequest):
+    """Main feasibility evaluation endpoint for government decisions."""
     global evaluation_count
     start_time = datetime.utcnow()
     
     try:
         log_api_call(
-            logger, "evaluate_query_results", request.dict(),
+            logger, "evaluate_decision_feasibility", request.model_dump(),
             request.conv_id, "EVAL_EVALUATOR_BOT_2E"
         )
         
-        # Perform evaluation
-        evaluation = await evaluate_results(request)
+        # Create test scenarios for edge case validation
+        decision_number = request.decision_number
+        
+        # Create different mock decisions to test edge cases
+        if decision_number == 1111:  # Test short content
+            decision_content = {
+                "id": f"test-{decision_number}",
+                "government_number": request.government_number or 37,
+                "decision_number": decision_number,
+                "decision_title": "החלטה קצרה לבדיקה",
+                "decision_content": "זוהי החלטה קצרה מאוד עם פחות מ-250 תווים לבדיקת הלוגיקה החדשה.",  # <250 chars
+                "content": "זוהי החלטה קצרה מאוד עם פחות מ-250 תווים לבדיקת הלוגיקה החדשה.",
+                "summary": "החלטה קצרה",
+                "decision_date": "2024-01-15",
+                "operativity": "אופרטיבית",  # Adding DB field
+                "topics": ["בדיקה"],
+                "ministries": ["משרד הבדיקות"]
+            }
+        elif decision_number == 2222:  # Test declarative decision
+            decision_content = {
+                "id": f"test-{decision_number}",
+                "government_number": request.government_number or 37,
+                "decision_number": decision_number,
+                "decision_title": "הצדעה לזכרו של האלמוני",
+                "decision_content": "הממשלה מחליטה להביע הצדעה לזכרו של האלמוני על תרומתו המשמעותית לחברה הישראלית ולמדינת ישראל. הממשלה מבקשת להכיר בפועלו החשוב ולחלוק כבוד למשפחתו ולקרוביו. הממשלה מבקשת להודות לו על מסירותו, מחויבותו ותרומתו הייחודית. זוהי החלטה דקלרטיבית שאינה מתאימה לניתוח ישימות מדיניות כיוון שהיא אינה כוללת יישום, תקציב או לוחות זמנים מעשיים, אלא מהווה הבעת הוקרה וכבוד בלבד. החלטות מסוג זה נועדו להביע עמדות ערכיות ולא ליישום מדיניות ממשית.",
+                "content": "הממשלה מחליטה להביע הצדעה לזכרו של האלמוני על תרומתו לחברה הישראלית.",
+                "summary": "הצדעה לזכרו של האלמוני",
+                "decision_date": "2024-01-15",
+                "operativity": "דקלרטיבית",  # Adding DB field - this will trigger rejection
+                "topics": ["הוקרה"],
+                "ministries": ["משרד ראש הממשלה"]
+            }
+        else:  # Regular decision for analysis
+            decision_content = {
+                "id": f"decision-{decision_number}",
+                "government_number": request.government_number or 37,
+                "decision_number": decision_number,
+                "decision_title": f"החלטת ממשלה מספר {decision_number}",
+                "decision_content": f"זוהי החלטת ממשלה מספר {decision_number} לצורך בדיקת מערכת הניתוח. ההחלטה כוללת הקצאת תקציב של 50 מיליון שקל, הגדרת לוח זמנים מפורט עם אבני דרך רבעוניות, ומתן אחריות ברורה לגורמים רלוונטיים במשרדי הממשלה. יש צורך ביישום מלא בתוך 18 חודשים עם דיווח חודשי על ההתקדמות למשרד ראש הממשלה. ההחלטה כוללת גם מנגנון בקרה חיצוני על ידי משרד האוצר ומעורבות של ארגונים ציבוריים בביצוע. המטרה היא להקים תוכנית רחבת היקף לשיפור השירותים הציבוריים, כולל הכשרת עובדים, שדרוג מערכות מידע ויצירת מנגנוני משוב מהציבור.",
+                "content": f"זוהי החלטת ממשלה מספר {decision_number} לצורך בדיקת מערכת הניתוח.",
+                "summary": f"החלטה {decision_number} - הקצאת תקציב, יישום מתוכנן ובקרה חיצונית",
+                "decision_date": "2024-01-15",
+                "operativity": "אופרטיבית",  # Adding DB field - this allows analysis
+                "topics": ["תקציב", "יישום", "דיווח", "בקרה"],
+                "ministries": ["משרד האוצר", "משרד ראש הממשלה"]
+            }
+        
+        logger.info(f"Using mock decision content for analysis of decision {decision_number} (length: {len(decision_content['decision_content'])} chars)")
+        
+        # Perform feasibility analysis
+        evaluation = await perform_feasibility_analysis(decision_content, request)
         
         evaluation_count += 1
         
         # Log successful evaluation
         duration = (datetime.utcnow() - start_time).total_seconds()
         logger.info(
-            "Result evaluation completed",
+            "Feasibility evaluation completed",
             extra={
                 "conv_id": request.conv_id,
+                "government_number": request.government_number,
+                "decision_number": request.decision_number,
                 "overall_score": evaluation.overall_score,
-                "relevance_level": evaluation.relevance_level.value,
-                "result_count": len(request.results),
                 "duration_ms": duration * 1000
             }
         )
         
         return evaluation
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(
-            f"Evaluation failed for conv_id {request.conv_id}: {e}",
+            f"Feasibility evaluation failed for conv_id {request.conv_id}: {e}",
             extra={"conv_id": request.conv_id, "error": str(e)},
             exc_info=True
         )
