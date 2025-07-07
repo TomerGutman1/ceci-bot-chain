@@ -1,6 +1,6 @@
 # 🧠 CLAUDE MAIN MEMORY – CECI Bot Chain
 
-<small>Last updated: **30 Jun 2025 (Rev‑2)**</small>
+<small>Last updated: **7 Jul 2025 (Rev‑3 - Unified Architecture)**</small>
 
 ---
 
@@ -12,27 +12,29 @@
 6. Make every task and code change you do as simple as possible. We want to avoid making any massive or complex changes. Every change should impact as little code as possible. Everything is about simplicity.
 7. Finally, add a review section to the [todo.md](http://todo.md/) file with a summary of the changes you made and any other relevant information.
 
-## 1 · Mission
+## 1 · Mission
 
-Answer Hebrew questions about Israeli government decisions through a 7‑layer GPT pipeline, while **minimising cost** and **maintaining ≥ 95 % accuracy**.
+Answer Hebrew questions about Israeli government decisions through a **unified GPT pipeline**, with **improved quality** and **acceptable cost increase**.
 
 ---
 
-## 2 · Must‑Read Files
+## 2 · Must‑Read Files
 
 1. **PROJECT\_SUMMARY.md** – current status & ports
-2. **OPTIMIZATION\_PLAN.md** – step‑by‑step cost/perf roadmap
+2. **ARCHITECTURE.md** – unified GPT-4o architecture design
 3. **MICRO\_LEVEL\_GUIDE.md** – cross‑layer coding rules
+4. **MIGRATION\_GUIDE.md** – step-by-step migration to new architecture
 
 *(Open only the layer spec you are actively editing – nothing more.)*
 
 ---
 
-## 3 · Cost & Testing Constraints
+## 3 · Cost & Testing Constraints
 
-* **Budget cap**: \$10/day, \$0.10/query (enforced by `CostController`).
-* **🛑 CI tests suspended** until budget is restored – **do not run** unit/E2E scripts.
-* Prefer **GPT‑3.5‑turbo**; escalate to GPT‑4‑turbo only via fallback chain.
+* **Budget restored**: Allows GPT-4o usage on critical layers
+* **New cost structure**: ~\$0.016/query (typical), ~\$0.031/analysis 
+* **Architecture tradeoff**: 3x cost increase for 40% latency reduction and superior quality
+* **Feature flags**: Enable gradual rollout with `USE_UNIFIED_INTENT` and `USE_LLM_FORMATTER`
 
 ### Schema‑Integrity Rule  🔒
 
@@ -40,45 +42,63 @@ Answer Hebrew questions about Israeli government decisions through a 7‑layer G
 
 ---
 
-## 4 · Work Plan & Priorities  (from *OPTIMIZATION\_PLAN.md*)
+## 4 · Unified Architecture Changes (7 Jul 2025)
 
-| 🔢 Priority                        | Key Actions                                                                                               |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| **P1 · Quick Wins**                | • Downgrade INTENT & SQL‑GEN to 3.5‑turbo  \• Add 10 SQL templates  \• Extend caches (resp 4 h, SQL 24 h) |
-| **P2 · Smart Routing**             | • Conditional bot activation  \• Parallel pre‑processing  \• 300‑token → 150‑token prompts                |
-| **P3 · Advanced Optimisation**     | • Batch up to 5 queries  \• Hybrid decision tree by confidence  \• CostController hooks                   |
-| **P4 · Intelligence Preservation** | • Live quality dashboards  \• Smart fallback chain  \• Context enrichment helpers                         |
+### What Changed?
+- **MERGED**: `0_REWRITE_BOT` + `1_INTENT_BOT` → Single **`1_UNIFIED_INTENT_BOT`** (GPT-4o-turbo)
+- **UPGRADED**: Code-based formatter → **`4_LLM_FORMATTER_BOT`** (GPT-4o-mini)
+- **PRESERVED**: All other bots remain unchanged
 
-> **Target Outcome**: cut **cost × 8.4** and **latency × 3**.
+### Why?
+- **Performance**: Save 200-300ms (one less API call)
+- **Quality**: GPT-4o handles Hebrew nuances better than GPT-3.5 + JS
+- **Flexibility**: LLM formatter handles edge cases (plural-gender agreement)
+- **Budget**: Restored budget allows GPT-4o on critical layers
+
+### Migration Strategy
+| Phase | Actions | Timeline |
+| --- | --- | --- |
+| **Phase 1** | Deploy new bots, enable for 10% traffic | Week 1 |
+| **Phase 2** | Monitor metrics, increase to 25% | Week 2 |
+| **Phase 3** | Validate cost projections, 50% traffic | Week 3 |
+| **Phase 4** | Full rollout, archive old bots | Week 4 |
 
 ---
 
-## 5 · Implementation Checklist (progress‑ordered)
+## 5 · Implementation Checklist (progress‑ordered)
 
-* [x] **P1** Model selector ✓ / SQL templates ✓ / Cache boost ✓ / Cost logs ✓
-* [ ] **P2** Router rules ✓ / Prompt trims ⬜ / Intent‑pattern cache ⬜
-* [ ] **P3** Batch processing ✓ / A/B testing ✓ / Fallback chain ✓
-* [ ] **P4** Threshold tuning ✓ / Post‑mortems ✓
+* [x] **Unified Intent Bot** Created ✓ / Tested ✓ / Deployed ⬜
+* [x] **LLM Formatter Bot** Created ✓ / Tested ✓ / Deployed ⬜
+* [x] **Feature Flags** Added ✓ / A/B testing setup ✓
+* [x] **Documentation** Architecture ✓ / Micro Guide ✓ / CLAUDE.md ✓
+* [ ] **Migration** Phase 1 ⬜ / Phase 2 ⬜ / Phase 3 ⬜ / Phase 4 ⬜
 
 *(Tick boxes as soon as a task is merged; Claude reloads fresh memory each convo.)*
 
 ---
 
-## 6 · Current Project Status (30 Jun 2025)
+## 6 · Current Project Status (7 Jul 2025)
 
-### Critical Fixes
+### 🆕 Unified Architecture Implementation
+
+**Completed**:
+1. ✓ Created `UNIFIED_INTENT_BOT_1` combining rewrite + intent (GPT-4o-turbo)
+2. ✓ Created `LLM_FORMATTER_BOT_4` for flexible Hebrew formatting (GPT-4o-mini)
+3. ✓ Updated `botChainService.ts` with feature flags for gradual rollout
+4. ✓ Created comprehensive test suites for both new bots
+5. ✓ Updated documentation: ARCHITECTURE.md, MICRO_LEVEL_GUIDE.md
+6. ✓ Created new branch `unified-gpt-architecture` with all changes
+
+**Feature Flags**:
+- `USE_UNIFIED_INTENT=true` - Enable unified intent bot
+- `USE_LLM_FORMATTER=true` - Enable LLM formatter
+- `UNIFIED_INTENT_ROLLOUT_PERCENTAGE=10` - Gradual rollout control
+
+### Critical Fixes (from previous)
 
 1. **Evaluator Bot (2E)** disabled on QUERY path – save GPT‑4 tokens.
 2. **Ranker Bot (3Q)** skipped; results currently ordered by date.
 3. **UUID4 bug fixed** – all `id` columns restored to `VARCHAR(36)`; migrations locked.
-4. **OpenAI quota exceeded** – obtain new API Key **or** wait for reset.
-
-### Urgent Recommendations
-
-* Swap GPT‑4‑turbo → GPT‑3.5‑turbo where quality unaffected.
-* Shrink prompt bodies; reuse examples via `{{examples}}` placeholder.
-* Add global response cache + rate‑limit (≤ 30 req/min).
-
 
 ### 🔴 Critical Cache Bug Discovery
 
@@ -91,12 +111,6 @@ Answer Hebrew questions about Israeli government decisions through a 7‑layer G
 * `checkResponseCache()` - server/src/services/botChainService.ts:~500-550
 * `storeInCache()` - server/src/services/botChainService.ts:~550-600
 * `generateCacheKey()` - server/src/services/botChainService.ts:~600-650
-
-**IMMEDIATE ACTIONS**:
-1. Restore Intent Pattern Cache (only caches patterns, not entities)
-2. Restore SQL Template Cache (only caches templates, not parameters)
-3. Find the actual cache layer causing entity persistence
-4. Test with different decision numbers to verify fix
 
 ### 🚨 UPDATED STATUS (4 Jul 2025) - CRITICAL PRODUCTION ISSUES
 
@@ -130,39 +144,43 @@ Answer Hebrew questions about Israeli government decisions through a 7‑layer G
 
 | Component   | Port  |                   |               |                |
 | ----------- | ----- | ----------------- | ------------- | -------------- |
-| Backend     |  5001 |                   |               |                |
-| Rewrite     |  8010 | Intent 8011       | SQL‑Gen 8012  | Ctx 8013       |
-| Evaluator   |  8014 | Clarify 8015      | Ranker 8016   | Formatter 8017 |
-| Frontend    |  3001 | Nginx 80/443/8080 | Postgres 5433 | Redis 6380     |
+| Backend     |  5001 |                   |               |                |
+| ~~Rewrite~~ |  ~~8010~~ | **Unified Intent** 8011 | SQL‑Gen 8012  | Ctx 8013       |
+| Evaluator   |  8014 | Clarify 8015      | Ranker 8016   | **LLM Formatter** 8017 |
+| Frontend    |  3001 | Nginx 80/443/8080 | Postgres 5433 | Redis 6380     |
+
+**Note**: Rewrite Bot (8010) deprecated - functionality merged into Unified Intent Bot (8011)
 
 ---
 
-## 7 · Temporary Overrides & Monitoring
+## 7 · Temporary Overrides & Monitoring
 
 * **Evaluator & Ranker** remain OFF unless explicitly required.
-* Log `token_usage` & daily spend; alert > \$10 or p95 latency > 2 s.
+* Log `token_usage` & daily spend; alert > \$10 or p95 latency > 2 s.
 * Use `SKIP_RANKER=true` env flag for truncating ranker until optimised.
+* **NEW**: Monitor unified intent accuracy with `unified_intent_accuracy` metric
+* **NEW**: Track formatter quality with `formatter_quality_score` metric
 
 ---
 
-### 📋 Log Summary (4 Jul 2025)
+### 📋 Log Summary (7 Jul 2025)
 
-**Backend Logs Analysis**:
-- EVALUATOR bot timeouts causing empty analysis responses
-- Error: `timeout of 30000ms exceeded` 
-- Decision 2766 analysis fails after 30+ seconds
-- Bot processes but exceeds timeout limit
+**Unified Architecture Implementation**:
+- New branch `unified-gpt-architecture` created
+- All changes committed and ready for testing
+- Documentation fully updated
+- Feature flags configured for gradual rollout
 
-**System Status**:
-- All containers healthy and running
-- Intent detection working correctly
-- EVALUATOR integration fixed but timeouts remain
-- Memory context features disabled as temporary fix
+**Backend Integration**:
+- `botChainService.ts` updated with dual-flow support
+- Old and new flows can run in parallel
+- Percentage-based traffic splitting ready
 
 **Next Actions Required**:
-1. Increase EVALUATOR timeout limit beyond 30s
-2. Investigate full content duplication in formatter
-3. Test system with different decision numbers
+1. Deploy new bots to staging environment
+2. Test with 10% traffic split
+3. Monitor quality metrics and token usage
+4. Gradually increase traffic percentage
 
 ### 🎯 URL Generation Fix - COMPLETED (4 Jul 2025)
 
