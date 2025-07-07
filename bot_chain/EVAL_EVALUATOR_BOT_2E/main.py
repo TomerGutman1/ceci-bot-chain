@@ -737,7 +737,7 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
         # Log GPT usage
         log_gpt_usage(
             logger,
-            model="gpt-4-turbo"  # Always use GPT-4 for evaluator,
+            model="gpt-4-turbo",  # Always use GPT-4 for evaluator
             prompt_tokens=usage.prompt_tokens,
             completion_tokens=usage.completion_tokens,
             total_tokens=usage.total_tokens
@@ -992,7 +992,7 @@ async def analyze_content_with_gpt(query: str, intent: str, entities: Dict, resu
         # Log GPT usage
         log_gpt_usage(
             logger,
-            model="gpt-4-turbo"  # Always use GPT-4 for evaluator,
+            model="gpt-4-turbo",  # Always use GPT-4 for evaluator
             prompt_tokens=usage.prompt_tokens,
             completion_tokens=usage.completion_tokens,
             total_tokens=usage.total_tokens
