@@ -709,6 +709,12 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
 החזר תוצאה בפורמט JSON המדויק הזה:
 {{"criteria": [{{"name": "לוח זמנים מחייב", "score": 0, "explanation": "הסבר קצר", "weight": 17}}, {{"name": "צוות מתכלל", "score": 0, "explanation": "הסבר קצר", "weight": 7}}, {{"name": "גורם מתכלל יחיד", "score": 0, "explanation": "הסבר קצר", "weight": 5}}, {{"name": "מנגנון דיווח/בקרה", "score": 0, "explanation": "הסבר קצר", "weight": 9}}, {{"name": "מנגנון מדידה והערכה", "score": 0, "explanation": "הסבר קצר", "weight": 6}}, {{"name": "מנגנון ביקורת חיצונית", "score": 0, "explanation": "הסבר קצר", "weight": 4}}, {{"name": "משאבים נדרשים", "score": 0, "explanation": "הסבר קצר", "weight": 19}}, {{"name": "מעורבות של מספר דרגים בתהליך", "score": 0, "explanation": "הסבר קצר", "weight": 7}}, {{"name": "מבנה סעיפים וחלוקת עבודה ברורה", "score": 0, "explanation": "הסבר קצר", "weight": 9}}, {{"name": "מנגנון יישום בשטח", "score": 0, "explanation": "הסבר קצר", "weight": 9}}, {{"name": "גורם מכריע", "score": 0, "explanation": "הסבר קצר", "weight": 3}}, {{"name": "שותפות בין מגזרית", "score": 0, "explanation": "הסבר קצר", "weight": 3}}, {{"name": "מדדי תוצאה ומרכיבי הצלחה", "score": 0, "explanation": "הסבר קצר", "weight": 2}}], "weighted_score": 0.0, "final_score": 0, "summary": "סיכום הניתוח", "decision_title": "כותרת ההחלטה", "decision_number": 0, "government_number": 0}}
 
+חשוב מאוד לחישוב final_score:
+1. כל קריטריון מקבל ציון 0-5
+2. הציון המשוקלל לכל קריטריון = (ציון הקריטריון / 5) * משקל הקריטריון
+3. final_score = סכום כל הציונים המשוקללים (יהיה בין 0-100)
+4. דוגמה: אם קריטריון עם משקל 17% קיבל ציון 5, תרומתו היא (5/5)*17 = 17
+
 חשוב: החזר רק JSON תקין, ללא טקסט נוסף לפני או אחרי.
 """
     
@@ -718,7 +724,7 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
             openai.ChatCompletion.create,
             model="gpt-4-turbo",  # Always use GPT-4 for evaluator
             messages=[
-                {"role": "system", "content": "אתה מנתח מומחה לישימות החלטות ממשלה. התפקיד שלך לנתח החלטות לפי 13 קריטריונים מוגדרים ולהחזיר תוצאה בפורמט JSON מדויק. עליך לקרוא בזהירות את תוכן ההחלטה ולהעריך כל קריטריון לפי הסקאלה המוגדרת (0-5). חשב את הציון המשוקלל בדיוק לפי המשקלים שנתנו. החזר רק JSON תקין ללא טקסט נוסף. אל תשתמש בעיצוב Bold או סימנים מיוחדים בתוך ה-JSON."},
+                {"role": "system", "content": "אתה מנתח מומחה לישימות החלטות ממשלה. התפקיד שלך לנתח החלטות לפי 13 קריטריונים מוגדרים ולהחזיר תוצאה בפורמט JSON מדויק. עליך לקרוא בזהירות את תוכן ההחלטה ולהעריך כל קריטריון לפי הסקאלה המוגדרת (0-5). חשב את final_score כך: סכום של [(ציון כל קריטריון / 5) * משקל הקריטריון] עבור כל 13 הקריטריונים. התוצאה צריכה להיות בין 0-100. החזר רק JSON תקין ללא טקסט נוסף. אל תשתמש בעיצוב Bold או סימנים מיוחדים בתוך ה-JSON."},
                 {"role": "user", "content": prompt}
             ],
             temperature=config.temperature,
