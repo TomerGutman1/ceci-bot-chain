@@ -54,5 +54,8 @@ EXPOSE 5173
 
 # Remove health check from Dockerfile - will be handled by docker-compose
 
-# Run the application
-CMD ["node", "dist/main.js"]
+# Ensure Node.js doesn't buffer output
+ENV NODE_OPTIONS="--max-old-space-size=1024"
+
+# Run the application with unbuffered output
+CMD ["node", "--trace-warnings", "dist/main.js"]

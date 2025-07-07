@@ -39,7 +39,8 @@ const logger = winston.createLogger({
       format: consoleFormat,
       stderrLevels: ['error'],
       handleExceptions: true,
-      handleRejections: true
+      handleRejections: true,
+      debugStdout: true  // Force all logs to stdout
     }),
     // File transport for all logs
     new winston.transports.File({

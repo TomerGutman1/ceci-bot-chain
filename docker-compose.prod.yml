@@ -36,6 +36,9 @@ services:
       REDIS_URL: redis://redis:6379
       # Production API URLs
       FRONTEND_URL: https://ceci-ai.ceci.org.il
+      # Force unbuffered output
+      FORCE_COLOR: 1
+      DEBUG: '*'
     deploy:
       resources:
         limits:
