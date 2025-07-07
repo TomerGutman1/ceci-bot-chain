@@ -720,7 +720,7 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
     
     try:
         # Dynamic model selection based on content length
-        content_length = len(decision_content_str)
+        content_length = len(decision_text)
         selected_model = "gpt-4-turbo" if content_length > 4000 else "gpt-3.5-turbo"
         
         # Log model selection and potential cost savings
