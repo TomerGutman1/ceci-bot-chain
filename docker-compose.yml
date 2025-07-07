@@ -232,6 +232,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - SQL_GEN_BOT_URL=http://sql-gen-bot:8012
+      - BACKEND_URL=http://backend:5173
     depends_on:
       redis:
         condition: service_healthy

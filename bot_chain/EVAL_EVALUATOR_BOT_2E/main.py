@@ -42,42 +42,36 @@ openai.api_key = config.openai_api_key
 SQL_GEN_BOT_URL = os.getenv('SQL_GEN_BOT_URL', 'http://sql-gen-bot:8012')
 
 async def fetch_decision_content(government_number: int, decision_number: int, conv_id: str) -> Optional[Dict[str, Any]]:
-    """Fetch full decision content using SQL generation bot."""
+    """Fetch full decision content using the backend decisions API."""
     try:
-        # Prepare request for SQL generation
-        sql_request = {
-            "intent": "search",
-            "entities": {
-                "government_number": government_number,
-                "decision_number": decision_number
-            },
-            "conv_id": conv_id
-        }
+        # Use default government 37 if not specified
+        if not government_number:
+            government_number = 37
+            
+        backend_url = os.getenv('BACKEND_URL', 'http://backend:5173')
         
         async with aiohttp.ClientSession() as session:
-            # Call SQL generation bot
-            async with session.post(
-                f"{SQL_GEN_BOT_URL}/sqlgen",
-                json=sql_request,
-                timeout=aiohttp.ClientTimeout(total=60)
+            # Call the new decisions endpoint
+            url = f"{backend_url}/api/decisions/decision/{government_number}/{decision_number}"
+            logger.info(f"Fetching decision from: {url}")
+            
+            async with session.get(
+                url,
+                timeout=aiohttp.ClientTimeout(total=30)
             ) as response:
-                if response.status != 200:
-                    logger.error(f"SQL generation failed: {response.status}")
+                if response.status == 404:
+                    logger.warning(f"Decision {decision_number} not found in government {government_number}")
+                    return None
+                elif response.status != 200:
+                    logger.error(f"Backend decision fetch failed: {response.status}")
                     return None
                 
-                sql_result = await response.json()
-                sql_query = sql_result.get("sql_query")
-                parameters = sql_result.get("parameters", [])
+                decision = await response.json()
+                logger.info(f"Successfully fetched decision {decision_number} (content length: {len(decision.get('content', ''))} chars)")
                 
-                if not sql_query:
-                    logger.error("No SQL query returned")
-                    return None
+                # The response is already in the expected format
+                return decision
                 
-                # TODO: Execute SQL query to get actual results
-                # For now, return None to use mock content
-                logger.info(f"SQL query generated but execution not implemented yet")
-                return None
-                    
     except Exception as e:
         logger.error(f"Failed to fetch decision content: {e}")
         return None

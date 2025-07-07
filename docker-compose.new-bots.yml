@@ -1,0 +1,59 @@
+# New unified architecture bot services
+# To be merged with main docker-compose.yml
+
+services:
+  # Unified Intent Bot (replaces rewrite-bot and intent-bot)
+  unified-intent-bot:
+    build:
+      context: ./bot_chain
+      dockerfile: ./UNIFIED_INTENT_BOT_1/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8011:8011"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - MODEL=gpt-4o
+      - TEMPERATURE=0.3
+      - MAX_TOKENS=500
+      - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PORT=8011
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - ceci-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8011/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # LLM Formatter Bot (replaces code-based formatter)
+  llm-formatter-bot:
+    build:
+      context: ./bot_chain
+      dockerfile: ./LLM_FORMATTER_BOT_4/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8017:8017"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - MODEL=gpt-4o-mini
+      - TEMPERATURE=0.4
+      - MAX_TOKENS=2000
+      - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PORT=8017
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - ceci-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8017/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

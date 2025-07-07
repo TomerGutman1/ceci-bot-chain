@@ -830,65 +830,107 @@ class BotChainService {
         return cachedResponse.response;
       }
 
-      // Step 1: Text Rewrite
-      const rewriteResponse = await this.callBot(this.config.urls.rewrite, '/rewrite', {
-        text: request.message,
-        conv_id: conversationId
-      }, currentRequestTokens);
-
-      logger.info('Rewrite response received', { 
-        response: rewriteResponse,
-        hasCleanText: !!rewriteResponse.clean_text 
-      });
-
-      // Check if we got a valid response with clean_text
-      if (!rewriteResponse.clean_text) {
-        throw new Error('Rewrite step failed - no clean text returned');
-      }
-
-      const cleanText = rewriteResponse.clean_text;
-      logger.debug('Text rewrite completed', { original: request.message, clean: cleanText });
-
-      // Step 2: Intent Detection with safe pattern caching
-      let intent: string, entities: any, confidence: number;
+      // NEW UNIFIED FLOW: Check if we should use the unified intent bot
+      const useUnifiedIntent = process.env.USE_UNIFIED_INTENT === 'true';
       
-      // Check intent pattern cache first (safe for non-specific entity queries)
-      const cachedIntent = this.checkIntentPatternCache(cleanText);
-      if (cachedIntent) {
-        intent = cachedIntent.intent;
-        confidence = cachedIntent.confidence;
-        entities = {}; // Safe: Use empty entities for cached patterns
-        logger.info('Using cached intent pattern', { intent, confidence });
+      let cleanText: string;
+      let intent: string, entities: any, confidence: number;
+      let routeFlags: any = {};
+      
+      if (useUnifiedIntent) {
+        // NEW FLOW: Single call to unified intent bot
+        logger.info('Using unified intent bot (GPT-4o-turbo)', { 
+          conversationId,
+          messageLength: request.message.length 
+        });
+        
+        const unifiedResponse = await this.callBot(this.config.urls.intent, '/intent', {
+          raw_user_text: request.message,
+          chat_history: [], // TODO: Add conversation history
+          conv_id: conversationId
+        }, currentRequestTokens);
+        
+        logger.info('Unified intent response received', { 
+          response: unifiedResponse,
+          hasCleanQuery: !!unifiedResponse.clean_query,
+          intent: unifiedResponse.intent
+        });
+        
+        // Extract fields from unified response
+        cleanText = unifiedResponse.clean_query;
+        intent = unifiedResponse.intent || unifiedResponse.intent_type;
+        entities = unifiedResponse.params || unifiedResponse.entities || {};
+        confidence = unifiedResponse.confidence;
+        routeFlags = unifiedResponse.route_flags || {};
+        
+        // Log clean query for telemetry
+        logger.info('Query normalized by unified bot', { 
+          original: request.message, 
+          clean: cleanText,
+          corrections: unifiedResponse.corrections?.length || 0
+        });
+        
       } else {
-        // Call intent bot for fresh detection
-        const intentResponse = await this.callBot(this.config.urls.intent, '/intent', {
-          text: cleanText,
+        // OLD FLOW: Separate rewrite and intent detection
+        // Step 1: Text Rewrite
+        const rewriteResponse = await this.callBot(this.config.urls.rewrite, '/rewrite', {
+          text: request.message,
           conv_id: conversationId
         }, currentRequestTokens);
 
-        // Check if we got a valid intent response
-        if ((!intentResponse.intent_type && !intentResponse.intent) || !intentResponse.entities) {
-          throw new Error('Intent detection failed - invalid response');
+        logger.info('Rewrite response received', { 
+          response: rewriteResponse,
+          hasCleanText: !!rewriteResponse.clean_text 
+        });
+
+        // Check if we got a valid response with clean_text
+        if (!rewriteResponse.clean_text) {
+          throw new Error('Rewrite step failed - no clean text returned');
         }
 
-        intent = intentResponse.intent_type || intentResponse.intent;
-        entities = intentResponse.entities;
-        confidence = intentResponse.confidence;
-        
-        // TEMPORARY WORKAROUND: Extract date range if intent detector missed it
-        if (!entities.date_range && cleanText.includes('בין') && cleanText.includes('ל־')) {
-          const dateRangeMatch = cleanText.match(/בין\s+(\d{4})\s+ל[־\-–]?\s*(\d{4})/);
-          if (dateRangeMatch) {
-            entities.date_range = {
-              start: `${dateRangeMatch[1]}-01-01`,
-              end: `${dateRangeMatch[2]}-12-31`
-            };
-            logger.info('Date range extracted via workaround', { date_range: entities.date_range });
+        cleanText = rewriteResponse.clean_text;
+        logger.debug('Text rewrite completed', { original: request.message, clean: cleanText });
+
+        // Step 2: Intent Detection with safe pattern caching
+      
+        // Check intent pattern cache first (safe for non-specific entity queries)
+        const cachedIntent = this.checkIntentPatternCache(cleanText);
+        if (cachedIntent) {
+          intent = cachedIntent.intent;
+          confidence = cachedIntent.confidence;
+          entities = {}; // Safe: Use empty entities for cached patterns
+          logger.info('Using cached intent pattern', { intent, confidence });
+        } else {
+          // Call intent bot for fresh detection
+          const intentResponse = await this.callBot(this.config.urls.intent, '/intent', {
+            text: cleanText,
+            conv_id: conversationId
+          }, currentRequestTokens);
+
+          // Check if we got a valid intent response
+          if ((!intentResponse.intent_type && !intentResponse.intent) || !intentResponse.entities) {
+            throw new Error('Intent detection failed - invalid response');
           }
+
+          intent = intentResponse.intent_type || intentResponse.intent;
+          entities = intentResponse.entities;
+          confidence = intentResponse.confidence;
+          
+          // TEMPORARY WORKAROUND: Extract date range if intent detector missed it
+          if (!entities.date_range && cleanText.includes('בין') && cleanText.includes('ל־')) {
+            const dateRangeMatch = cleanText.match(/בין\s+(\d{4})\s+ל[־\-–]?\s*(\d{4})/);
+            if (dateRangeMatch) {
+              entities.date_range = {
+                start: `${dateRangeMatch[1]}-01-01`,
+                end: `${dateRangeMatch[2]}-12-31`
+              };
+              logger.info('Date range extracted via workaround', { date_range: entities.date_range });
+            }
+          }
+          
+          // Store in intent pattern cache (with safety checks)
+          this.storeIntentPattern(cleanText, intent, confidence);
         }
-        
-        // Store in intent pattern cache (with safety checks)
-        this.storeIntentPattern(cleanText, intent, confidence);
       }
       
       // NOTE: Government 37 defaulting for decision-number-only queries is handled in SQL templates
@@ -1602,19 +1644,65 @@ class BotChainService {
         ministries: result.tags_government_body ? result.tags_government_body.split(';').map((m: string) => m.trim()) : []
       }));
       
-      const formatResponse = await this.callBot(this.config.urls.formatter, '/format', {
-        conv_id: conversationId,
-        original_query: request.message,
-        intent,
-        entities,
-        ranked_results: mappedResults,
-        evaluation_summary: evaluation,
-        ranking_explanation: rankingExplanation,
-        output_format: request.outputFormat || 'markdown',
-        presentation_style: request.presentationStyle || 'detailed',
-        include_metadata: request.includeMetadata !== false,
-        include_scores: request.includeScores !== false
-      }, currentRequestTokens);
+      // NEW LLM FORMATTER: Check if we should use the LLM formatter
+      const useLLMFormatter = process.env.USE_LLM_FORMATTER === 'true';
+      
+      let formatResponse: any;
+      
+      if (useLLMFormatter) {
+        // NEW FLOW: Use LLM-based formatter
+        logger.info('Using LLM formatter (GPT-4o-mini)', { 
+          conversationId,
+          resultCount: mappedResults.length 
+        });
+        
+        // Determine data type for formatter
+        let dataType = 'ranked_rows';
+        let content: any = { results: mappedResults };
+        
+        if (isCountQuery) {
+          dataType = 'count';
+          content = mappedResults[0] || { count: 0 };
+        } else if (intent === 'EVAL' || intent === 'ANALYSIS') {
+          dataType = 'analysis';
+          content = {
+            evaluation: evaluation,
+            decision: mappedResults[0],
+            explanation: evaluation?.explanation || ''
+          };
+        } else if (entities.comparison_target) {
+          dataType = 'comparison';
+          content = { results: mappedResults, comparison_type: entities.comparison_target };
+        }
+        
+        formatResponse = await this.callBot(this.config.urls.formatter, '/format', {
+          data_type: dataType,
+          content: content,
+          original_query: request.message,
+          presentation_style: request.presentationStyle || 'card',
+          locale: 'he',
+          conv_id: conversationId,
+          include_metadata: request.includeMetadata !== false,
+          include_scores: request.includeScores !== false,
+          max_results: 10
+        }, currentRequestTokens);
+        
+      } else {
+        // OLD FLOW: Use code-based formatter
+        formatResponse = await this.callBot(this.config.urls.formatter, '/format', {
+          conv_id: conversationId,
+          original_query: request.message,
+          intent,
+          entities,
+          ranked_results: mappedResults,
+          evaluation_summary: evaluation,
+          ranking_explanation: rankingExplanation,
+          output_format: request.outputFormat || 'markdown',
+          presentation_style: request.presentationStyle || 'detailed',
+          include_metadata: request.includeMetadata !== false,
+          include_scores: request.includeScores !== false
+        }, currentRequestTokens);
+      }
 
       // Check if format response is valid
       if (!formatResponse || !formatResponse.formatted_response) {
