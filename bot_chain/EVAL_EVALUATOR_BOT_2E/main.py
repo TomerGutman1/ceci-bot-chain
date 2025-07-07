@@ -73,7 +73,10 @@ async def fetch_decision_content(government_number: int, decision_number: int, c
                     logger.error("No SQL query returned")
                     return None
                 
-                # Return None to trigger fallback to mock decision content below
+                # TODO: Execute SQL query to get actual results
+                # For now, return None to use mock content
+                logger.info(f"SQL query generated but execution not implemented yet")
+                return None
                     
     except Exception as e:
         logger.error(f"Failed to fetch decision content: {e}")

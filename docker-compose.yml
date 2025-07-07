@@ -231,6 +231,7 @@ services:
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - REDIS_URL=redis://redis:6379
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - SQL_GEN_BOT_URL=http://sql-gen-bot:8012
     depends_on:
       redis:
         condition: service_healthy
