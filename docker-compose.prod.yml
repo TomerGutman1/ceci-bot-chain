@@ -1,15 +1,254 @@
+version: '3.8'
 
 services:
-  # Override for production with HTTPS
+  # Redis - no external ports in production
+  redis:
+    ports: []
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # PostgreSQL - no external ports in production
+  postgres:
+    ports: []
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_PROD:-postgres}
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Backend - only accessible via nginx
+  backend:
+    ports: []
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 5173
+      # Use production Redis URL
+      REDIS_URL: redis://redis:6379
+      # Production API URLs
+      FRONTEND_URL: https://ceci-ai.ceci.org.il
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  # Frontend
+  frontend:
+    restart: always
+    environment:
+      NODE_ENV: production
+      # API URL should be relative for production
+      VITE_API_URL: /api
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Nginx - production configuration
   nginx:
+    restart: always
     volumes:
       - ./deploy/nginx/nginx.prod.conf:/etc/nginx/templates/default.conf.template:ro
       - ./certbot/conf:/etc/letsencrypt:ro
       - ./certbot/www:/var/www/certbot:ro
     environment:
-      - DOMAIN_NAME=${DOMAIN_NAME}
-    command: "/bin/sh -c 'envsubst '\$DOMAIN_NAME' < /etc/nginx/templates/default.conf.template > /etc/nginx/nginx.conf && while :; do sleep 6h & wait \${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+      - DOMAIN_NAME=ceci-ai.ceci.org.il
+    command: "/bin/sh -c 'envsubst \"\\$$DOMAIN_NAME\" < /etc/nginx/templates/default.conf.template > /etc/nginx/nginx.conf && while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
 
+  # Bot services - no external ports in production
+  rewrite-bot:
+    ports: []
+    restart: always
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  intent-bot:
+    ports: []
+    restart: always
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  sql-gen-bot:
+    ports: []
+    restart: always
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  context-router-bot:
+    ports: []
+    restart: always
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  evaluator-bot:
+    ports: []
+    restart: always
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  clarify-bot:
+    ports: []
+    restart: always
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  ranker-bot:
+    ports: []
+    restart: always
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  formatter-bot:
+    ports: []
+    restart: always
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Certbot service remains the same
   certbot:
     image: certbot/certbot:latest
     restart: unless-stopped
@@ -17,7 +256,19 @@ services:
       - ./certbot/conf:/etc/letsencrypt
       - ./certbot/www:/var/www/certbot
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
 
-  # Close development ports in production
-  redis:
-    ports: []
+# Production volumes
+volumes:
+  postgres_data_prod:
+    driver: local
+
+# Use the same network from base compose
+networks:
+  ceci-network:
+    external: true
+    name: ceci-ai-prod-network

@@ -1,0 +1,201 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip smoke tests'
+        required: false
+        default: 'false'
+      rollback:
+        description: 'Rollback to previous version'
+        required: false
+        default: 'false'
+
+env:
+  DEPLOYMENT_HOST: 178.62.39.248
+  DEPLOYMENT_USER: root
+  DEPLOYMENT_PATH: /opt/ceci-bot-chain
+
+jobs:
+  deploy:
+    name: Deploy to DigitalOcean Droplet
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ env.DEPLOYMENT_HOST }} >> ~/.ssh/known_hosts
+      
+      - name: Check server connectivity
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ env.DEPLOYMENT_USER }}@${{ env.DEPLOYMENT_HOST }} \
+            "echo '✅ SSH connection successful'"
+      
+      - name: Deploy to production
+        if: github.event.inputs.rollback != 'true'
+        run: |
+          echo "🚀 Starting deployment..."
+          
+          # Copy necessary files
+          scp -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            docker-compose.yml \
+            docker-compose.prod.yml \
+            ${{ env.DEPLOYMENT_USER }}@${{ env.DEPLOYMENT_HOST }}:${{ env.DEPLOYMENT_PATH }}/
+          
+          # Deploy on server
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ env.DEPLOYMENT_USER }}@${{ env.DEPLOYMENT_HOST }} << 'ENDSSH'
+            set -e
+            cd ${{ env.DEPLOYMENT_PATH }}
+            
+            # Pull latest code
+            echo "📥 Pulling latest code..."
+            git fetch origin main
+            git reset --hard origin/main
+            
+            # Check if .env.prod exists
+            if [ ! -f .env.prod ]; then
+              echo "❌ Error: .env.prod file not found!"
+              echo "Please create .env.prod on the server with production credentials"
+              exit 1
+            fi
+            
+            # Load environment variables
+            export $(grep -v '^#' .env.prod | xargs)
+            
+            # Run deployment script
+            echo "🔧 Running deployment script..."
+            ./scripts/deploy.sh
+          ENDSSH
+      
+      - name: Rollback deployment
+        if: github.event.inputs.rollback == 'true'
+        run: |
+          echo "⏪ Starting rollback..."
+          
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ env.DEPLOYMENT_USER }}@${{ env.DEPLOYMENT_HOST }} << 'ENDSSH'
+            set -e
+            cd ${{ env.DEPLOYMENT_PATH }}
+            
+            # Run rollback
+            ./scripts/deploy.sh --rollback
+          ENDSSH
+      
+      - name: Run smoke tests
+        if: github.event.inputs.skip_tests != 'true' && github.event.inputs.rollback != 'true'
+        run: |
+          echo "🧪 Running smoke tests..."
+          
+          # Wait for services to be fully ready
+          sleep 30
+          
+          # Run smoke tests from local machine
+          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/smoke-test.sh | bash -s -- --production
+      
+      - name: Update deployment status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Deployment successful!"
+            
+            # Create deployment record
+            curl -X POST \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              https://api.github.com/repos/${{ github.repository }}/deployments \
+              -d '{
+                "ref": "${{ github.sha }}",
+                "environment": "production",
+                "description": "Deployed to DigitalOcean",
+                "auto_merge": false,
+                "required_contexts": []
+              }'
+          else
+            echo "❌ Deployment failed!"
+          fi
+      
+      - name: Notify deployment status
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: |
+            Deployment ${{ job.status }}!
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
+            Author: ${{ github.actor }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+        continue-on-error: true
+
+  post-deployment:
+    name: Post-deployment tasks
+    needs: deploy
+    if: success() && github.event.inputs.rollback != 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ env.DEPLOYMENT_HOST }} >> ~/.ssh/known_hosts
+      
+      - name: Clean up old images
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ env.DEPLOYMENT_USER }}@${{ env.DEPLOYMENT_HOST }} << 'ENDSSH'
+            echo "🧹 Cleaning up old Docker images..."
+            docker image prune -af --filter "until=24h"
+            docker volume prune -f
+            docker network prune -f
+          ENDSSH
+      
+      - name: Verify deployment
+        run: |
+          echo "🔍 Verifying deployment..."
+          
+          # Check if site is accessible
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://ceci-ai.ceci.org.il/health)
+          
+          if [ "$response" = "200" ]; then
+            echo "✅ Site is accessible and healthy!"
+          else
+            echo "⚠️ Site returned status code: $response"
+            exit 1
+          fi
+      
+      - name: Create GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            docker-compose.yml
+            docker-compose.prod.yml
+            scripts/deploy.sh
+            scripts/smoke-test.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
