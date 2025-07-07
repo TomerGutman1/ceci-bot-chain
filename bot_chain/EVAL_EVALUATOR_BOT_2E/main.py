@@ -716,7 +716,7 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
         # Call GPT for feasibility analysis
         response = await asyncio.to_thread(
             openai.ChatCompletion.create,
-            model=config.model,
+            model="gpt-4-turbo",  # Always use GPT-4 for evaluator
             messages=[
                 {"role": "system", "content": "אתה מנתח מומחה לישימות החלטות ממשלה. התפקיד שלך לנתח החלטות לפי 13 קריטריונים מוגדרים ולהחזיר תוצאה בפורמט JSON מדויק. עליך לקרוא בזהירות את תוכן ההחלטה ולהעריך כל קריטריון לפי הסקאלה המוגדרת (0-5). חשב את הציון המשוקלל בדיוק לפי המשקלים שנתנו. החזר רק JSON תקין ללא טקסט נוסף. אל תשתמש בעיצוב Bold או סימנים מיוחדים בתוך ה-JSON."},
                 {"role": "user", "content": prompt}
@@ -731,13 +731,13 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
             prompt_tokens=usage.prompt_tokens,
             completion_tokens=usage.completion_tokens,
             total_tokens=usage.total_tokens,
-            model=config.model
+            model="gpt-4-turbo"  # Always use GPT-4 for evaluator
         )
         
         # Log GPT usage
         log_gpt_usage(
             logger,
-            model=config.model,
+            model="gpt-4-turbo"  # Always use GPT-4 for evaluator,
             prompt_tokens=usage.prompt_tokens,
             completion_tokens=usage.completion_tokens,
             total_tokens=usage.total_tokens
@@ -969,7 +969,7 @@ async def analyze_content_with_gpt(query: str, intent: str, entities: Dict, resu
         
         response = await asyncio.to_thread(
             openai.ChatCompletion.create,
-            model=config.model,
+            model="gpt-4-turbo",  # Always use GPT-4 for evaluator
             messages=[
                 {"role": "system", "content": "בצע ניתוח ישימות של החלטת ממשלה בהתאם לקריטריונים שהוגדרו בכל אחד מהפרמטרים הבאים. על כל פרמטר יש להקצות ניקוד מ-0 עד 5 לפי המדרגות שנקבעו. לאחר מכן תציג את הציון הסופי לפי המשקלים בסוף. כל פרמטר מהפרמטרים הנ\"ל יקבל ערך מספרי בין 0 ל-5 על פי ההנחיות ונימוק קצר לתוצאה. יש לסכם את הניתוח בצורה ברורה וממוקדת כולל הציון לכל קריטריון. תציג את הקריטריונים והסבר על הציון. תראה את החישוב של הציון הסופי לפי קריטריונים ותמיר אותו לציון בין 0 ל 100. Don't write in bold. Instead of \"\\times\" use \"*\". Don't use \"\\\""},
                 {"role": "user", "content": prompt}
@@ -986,13 +986,13 @@ async def analyze_content_with_gpt(query: str, intent: str, entities: Dict, resu
             prompt_tokens=usage.prompt_tokens,
             completion_tokens=usage.completion_tokens,
             total_tokens=usage.total_tokens,
-            model=config.model
+            model="gpt-4-turbo"  # Always use GPT-4 for evaluator
         )
         
         # Log GPT usage
         log_gpt_usage(
             logger,
-            model=config.model,
+            model="gpt-4-turbo"  # Always use GPT-4 for evaluator,
             prompt_tokens=usage.prompt_tokens,
             completion_tokens=usage.completion_tokens,
             total_tokens=usage.total_tokens
