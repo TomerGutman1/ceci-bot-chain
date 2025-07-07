@@ -1226,8 +1226,19 @@ async def evaluate_decision_feasibility(request: EvaluationRequest):
         # Create test scenarios for edge case validation
         decision_number = request.decision_number
         
+        # First try to fetch real decision content
+        real_decision_content = await fetch_decision_content(
+            request.government_number or 37,
+            decision_number,
+            request.conv_id
+        )
+        
+        if real_decision_content:
+            # Use real content
+            decision_content = real_decision_content
+            logger.info(f"Using real decision content for decision {decision_number} (length: {len(decision_content.get('decision_content', ''))} chars)")
         # Create different mock decisions to test edge cases
-        if decision_number == 1111:  # Test short content
+        elif decision_number == 1111:  # Test short content
             decision_content = {
                 "id": f"test-{decision_number}",
                 "government_number": request.government_number or 37,
@@ -1269,8 +1280,8 @@ async def evaluate_decision_feasibility(request: EvaluationRequest):
                 "topics": ["תקציב", "יישום", "דיווח", "בקרה"],
                 "ministries": ["משרד האוצר", "משרד ראש הממשלה"]
             }
-        
-        logger.info(f"Using mock decision content for analysis of decision {decision_number} (length: {len(decision_content['decision_content'])} chars)")
+            
+            logger.info(f"Using mock decision content for analysis of decision {decision_number} (length: {len(decision_content['decision_content'])} chars)")
         
         # Perform feasibility analysis
         evaluation = await perform_feasibility_analysis(decision_content, request)
