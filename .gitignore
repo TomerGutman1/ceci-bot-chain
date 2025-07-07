@@ -70,6 +70,26 @@ ERROR
 # Deployment scripts (local only)
 start-*.ps1
 start-*.bat
-setup-*.sh
 deploy-edge-functions.sh
 docker-compose.override.yml
+
+# Test scripts and temporary files
+test-*.sh
+watch-*.sh
+token-*.sh
+analyze-*.py
+bot_chain/test-*.js
+bot_chain/test_*.cjs
+bot_chain/test_*.py
+
+# Temporary work files
+bot_chain/CONTINUE_WORK.md
+bot_chain/BOT_ANS_IMPROVE.md
+bot_chain/REWRITE_BOT_ENHANCEMENT_REPORT.md
+test-results.md
+
+# Images and media
+images*/
+*.jpg
+*.png
+*.pdf
