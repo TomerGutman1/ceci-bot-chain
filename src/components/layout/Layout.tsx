@@ -26,7 +26,7 @@ const Layout = ({ children }: LayoutProps) => {
   const sidebarItems = [
     { title: "צ'אט עם CECI", icon: MessageSquare, url: "/" },
     { title: "אודות", icon: Menu, url: "https://www.ceci.org.il/%d7%90%d7%95%d7%93%d7%95%d7%aa-%d7%94%d7%9e%d7%a8%d7%9b%d7%96/", external: true },
-    { title: "מבט מאקרו", icon: FileText, url: "/decisions" },
+    { title: "מבט מאקרו", icon: FileText, url: "/dashboard/statistics" },
   ];
 
   const handleMenuClick = (item: any) => {

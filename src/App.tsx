@@ -8,6 +8,7 @@ import Layout from "./components/layout/Layout";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Dashboard from "./pages/Dashboard";
+import MacroFilterView from "./pages/MacroFilterView";
 import About from "./pages/About";
 import Methodology from "./pages/Methodology";
 import Rankings from "./pages/Rankings";
@@ -24,6 +25,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Layout><Index /></Layout>} />
           <Route path="/dashboard" element={<Layout><Dashboard /></Layout>} />
+          <Route path="/dashboard/statistics" element={<Layout><MacroFilterView /></Layout>} />
           <Route path="/about" element={<Layout><About /></Layout>} />
           <Route path="/rankings" element={<Layout><Rankings /></Layout>} />
           <Route path="/methodology" element={<Layout><Methodology /></Layout>} />

@@ -454,6 +454,11 @@ class BotChainService {
       return true;
     }
     
+    // Check for count queries (e.g., "כמה החלטות")
+    if (/כמה/.test(query)) {
+      return true;
+    }
+    
     // Check for direct numeric entity patterns
     if (/\d{3,}/.test(query)) { // Any number with 3+ digits
       return true;
@@ -462,17 +467,134 @@ class BotChainService {
     return false;
   }
 
-  // Content validation for EVALUATOR - Step 1.3 implementation
-  private validateContentForEvaluation(result: any): { suitable: boolean; reason: string; details: string } {
+  // Step 2.2: Smart Context Router activation logic
+  private shouldCallContextRouter(query: string, intent: string, entities: any, contextDetection: ContextDetectionResult): boolean {
+    // Always call for clarification intents
+    if (intent === 'CLARIFICATION') {
+      return true;
+    }
+    
+    // Always call if context is detected
+    if (contextDetection.needs_context) {
+      return true;
+    }
+    
+    // Skip for direct queries with complete entity sets
+    // Example: "החלטה 2766" - has decision number, no context needed
+    if (entities.decision_number && entities.government_number) {
+      return false;
+    }
+    
+    // Skip for simple direct searches with clear intent
+    // Example: "החלטות ממשלה 37" - clear government search
+    if (intent === 'QUERY' && entities.government_number && !entities.decision_number) {
+      return false;
+    }
+    
+    // Skip for topic-only searches
+    // Example: "החלטות על חינוך" - clear topic search
+    if (intent === 'QUERY' && entities.topic && !this.hasReferenceWords(query)) {
+      return false;
+    }
+    
+    // Skip for ministry-only searches
+    // Example: "החלטות משרד הבריאות"
+    if (intent === 'QUERY' && entities.ministries && entities.ministries.length > 0 && !this.hasReferenceWords(query)) {
+      return false;
+    }
+    
+    // Default: call Context Router for ambiguous cases
+    return true;
+  }
+  
+  // Helper function to detect reference words
+  private hasReferenceWords(query: string): boolean {
+    const referencePatterns = ['זה', 'זו', 'זאת', 'האחרון', 'הקודם', 'הנ"ל', 'שאמרת', 'ההחלטה', 'אותה'];
+    return referencePatterns.some(pattern => query.includes(pattern));
+  }
+
+  // Step 2.1: Smart EVALUATOR activation logic
+  private shouldRunEvaluator(intent: string, entities: any, results: any[]): boolean {
+    // Must be EVAL intent
+    if (intent !== 'EVAL') {
+      return false;
+    }
+    
+    // Must have results to analyze
+    if (!results || results.length === 0) {
+      return false;
+    }
+    
+    // Case 1: User specified exact decision number - always run
+    if (entities.decision_number) {
+      return true;
+    }
+    
+    // Case 2: Single result from search - can analyze
+    if (results.length === 1) {
+      return true;
+    }
+    
+    // Case 3: Multiple results without specific decision - DON'T analyze
+    // Examples: "נתח החלטות חינוך", "נתח החלטות ממשלה 37"
+    if (results.length > 1) {
+      logger.info('Multiple results without specific decision - skipping EVALUATOR', {
+        result_count: results.length,
+        entities
+      });
+      return false;
+    }
+    
+    return false;
+  }
+
+  // Step 3.1: Multi-tier model selection for EVALUATOR
+  private selectEvaluatorModel(contentLength: number): { model: string; maxTokens: number; tier: string } {
+    if (contentLength < 800) {
+      return {
+        model: 'skip', // Too short for analysis
+        maxTokens: 0,
+        tier: 'too_short'
+      };
+    } else if (contentLength < 1400) {
+      return {
+        model: 'gpt-3.5-turbo',
+        maxTokens: 2000,
+        tier: 'short_content'
+      };
+    } else if (contentLength < 4000) {
+      return {
+        model: 'gpt-3.5-turbo',
+        maxTokens: 4000,
+        tier: 'medium_content'
+      };
+    } else if (contentLength < 6000) {
+      return {
+        model: 'gpt-3.5-turbo',
+        maxTokens: 4000,
+        tier: 'long_content'
+      };
+    } else {
+      return {
+        model: 'gpt-4-turbo',
+        maxTokens: 8000,
+        tier: 'complex_content'
+      };
+    }
+  }
+
+  // Content validation for EVALUATOR - Step 1.3 implementation  
+  private validateContentForEvaluation(result: any): { suitable: boolean; reason: string; details: string; contentLength: number } {
     const content = result.decision_content || result.summary || '';
     const title = result.decision_title || '';
     
-    // Check 1: Minimum content length (500 characters)
-    if (content.length < 500) {
+    // Check 1: Minimum content length (800 characters for multi-tier analysis)
+    if (content.length < 800) {
       return {
         suitable: false,
         reason: 'תוכן קצר מדי',
-        details: `תוכן בן ${content.length} תווים, נדרש מינימום 500 תווים לניתוח מעמיק`
+        details: `תוכן בן ${content.length} תווים, נדרש מינימום 800 תווים לניתוח מעמיק`,
+        contentLength: content.length
       };
     }
     
@@ -482,7 +604,8 @@ class BotChainService {
       return {
         suitable: false,
         reason: 'אין תוכן בעברית',
-        details: 'הניתוח מותאם לתוכן בעברית בלבד'
+        details: 'הניתוח מותאם לתוכן בעברית בלבד',
+        contentLength: content.length
       };
     }
     
@@ -503,7 +626,8 @@ class BotChainService {
       return {
         suitable: false,
         reason: 'תוכן ריק או זמין',
-        details: 'התוכן אינו מכיל מידע מספק לניתוח'
+        details: 'התוכן אינו מכיל מידע מספק לניתוח',
+        contentLength: content.length
       };
     }
     
@@ -511,7 +635,8 @@ class BotChainService {
     return {
       suitable: true,
       reason: 'מתאים לניתוח',
-      details: `תוכן בן ${content.length} תווים עובר את כל בדיקות האיכות`
+      details: `תוכן בן ${content.length} תווים עובר את כל בדיקות האיכות`,
+      contentLength: content.length
     };
   }
 
@@ -750,6 +875,18 @@ class BotChainService {
         entities = intentResponse.entities;
         confidence = intentResponse.confidence;
         
+        // TEMPORARY WORKAROUND: Extract date range if intent detector missed it
+        if (!entities.date_range && cleanText.includes('בין') && cleanText.includes('ל־')) {
+          const dateRangeMatch = cleanText.match(/בין\s+(\d{4})\s+ל[־\-–]?\s*(\d{4})/);
+          if (dateRangeMatch) {
+            entities.date_range = {
+              start: `${dateRangeMatch[1]}-01-01`,
+              end: `${dateRangeMatch[2]}-12-31`
+            };
+            logger.info('Date range extracted via workaround', { date_range: entities.date_range });
+          }
+        }
+        
         // Store in intent pattern cache (with safety checks)
         this.storeIntentPattern(cleanText, intent, confidence);
       }
@@ -776,36 +913,51 @@ class BotChainService {
       let clarification_type = null;
       let routingResponse: any = null;
 
-      // ALWAYS call Context Router to build conversation history and handle memory
-      logger.info('Calling context router for conversation management', { 
-        context_type: contextDetection.context_type,
-        confidence: contextDetection.confidence,
-        needs_context: contextDetection.needs_context
-      });
+      // Step 2.2: Smart Context Router usage - only call when needed
+      const shouldCallContextRouter = this.shouldCallContextRouter(cleanText, intent, entities, contextDetection);
       
-      const routingRequest: ContextRequest = {
-        conv_id: conversationId,
-        current_query: cleanText,
-        intent,
-        entities,
-        confidence_score: confidence,
-        route_flags: {
-          needs_context: contextDetection.needs_context,
+      if (shouldCallContextRouter) {
+        logger.info('Context Router needed - calling for conversation management', { 
           context_type: contextDetection.context_type,
-          context_confidence: contextDetection.confidence
+          confidence: contextDetection.confidence,
+          needs_context: contextDetection.needs_context
+        });
+        
+        const routingRequest: ContextRequest = {
+          conv_id: conversationId,
+          current_query: cleanText,
+          intent,
+          entities,
+          confidence_score: confidence,
+          route_flags: {
+            needs_context: contextDetection.needs_context,
+            context_type: contextDetection.context_type,
+            context_confidence: contextDetection.confidence
+          }
+        };
+
+        routingResponse = await this.callBot(this.config.urls.contextRouter, '/route', routingRequest, currentRequestTokens);
+
+        // Check if routing response is valid
+        if (!routingResponse || !routingResponse.route) {
+          throw new Error('Context routing failed - invalid response');
         }
-      };
 
-      routingResponse = await this.callBot(this.config.urls.contextRouter, '/route', routingRequest, currentRequestTokens);
-
-      // Check if routing response is valid
-      if (!routingResponse || !routingResponse.route) {
-        throw new Error('Context routing failed - invalid response');
+        route = routingResponse.route;
+        needs_clarification = routingResponse.needs_clarification;
+        clarification_type = routingResponse.clarification_type;
+      } else {
+        logger.info('Skipping Context Router - direct query with complete entities', {
+          intent,
+          has_all_entities: true,
+          is_contextual: false
+        });
+        
+        // Default routing for non-contextual queries
+        route = 'direct';
+        needs_clarification = false;
+        clarification_type = null;
       }
-
-      route = routingResponse.route;
-      needs_clarification = routingResponse.needs_clarification;
-      clarification_type = routingResponse.clarification_type;
 
       logger.debug('Context routing completed', { route, needs_clarification });
 
@@ -919,6 +1071,8 @@ class BotChainService {
       
       // Execute the SQL query
       let results: any[] = [];
+      // Check for requested limit in entities
+      const requestedLimit = entities.limit || 10;
       try {
         console.log('🚨 ENTERING SQL EXECUTION BLOCK - THIS SHOULD ALWAYS SHOW!');
         // Convert parameters from array to object for easier access
@@ -935,7 +1089,9 @@ class BotChainService {
           convertedSqlParams: sqlParams,
           governmentNumberValue: sqlParams.government_number,
           governmentNumberType: typeof sqlParams.government_number,
-          hasGovernmentNumber: !!sqlParams.government_number
+          hasGovernmentNumber: !!sqlParams.government_number,
+          template_used: template_used,
+          intent: intent
         });
         
         // EXPLICIT DEBUG FOR GOVERNMENT PARAMETER
@@ -945,19 +1101,212 @@ class BotChainService {
         console.log('  - typeof sqlParams.government_number =', typeof sqlParams.government_number);
         console.log('  - Boolean(sqlParams.government_number) =', Boolean(sqlParams.government_number));
         console.log('  - Original parameters array =', JSON.stringify(parameters, null, 2));
+        console.log('  - Template used =', template_used);
+        console.log('  - Intent =', intent);
         
-        // For now, let's try a simpler approach - direct query to the table
-        // This is a temporary solution until we figure out the proper way
-        logger.debug('Trying direct Supabase query');
-        logger.info('SQL Params for filtering', { sqlParams });
+        // SPECIAL HANDLING FOR COUNT QUERIES
+        const isCountQuery = template_used && (
+          template_used.includes('count_') ||
+          template_used === 'compare_governments'
+        ) || (entities.operation === 'count' || intent === 'count');
         
-        // Check for requested limit in entities
-        const requestedLimit = entities.limit || 10;
-        
-        // Build Supabase query based on SQL parameters (not entities)
-        let query = supabase
-          .from('israeli_government_decisions')
-          .select('*');
+        if (isCountQuery) {
+          logger.info('Processing COUNT query with special handling', { template_used, intent });
+          
+          // For count queries, we need to execute actual counting logic
+          if (template_used === 'count_decisions_by_topic') {
+            // Execute count by topic
+            let countQuery = supabase
+              .from('israeli_government_decisions')
+              .select('*', { count: 'exact', head: true });
+            
+            // Add topic filter if available
+            if (sqlParams.topic) {
+              countQuery = countQuery.ilike('tags_policy_area', `%${sqlParams.topic}%`);
+            }
+            
+            // Add government filter if available
+            if (sqlParams.government_number) {
+              countQuery = countQuery.eq('government_number', sqlParams.government_number.toString());
+            }
+            
+            const { count, error } = await countQuery;
+            
+            if (error) {
+              logger.error('Count query error', { error, sqlParams });
+              results = [];
+            } else {
+              // Return count result in the format expected by formatter
+              results = [{
+                government_number: sqlParams.government_number,
+                topic: sqlParams.topic,
+                decision_count: count || 0,
+                count: count || 0  // Formatter expects 'count' field
+              }];
+              logger.info('Count query completed', { count, sqlParams });
+            }
+          } else if (template_used === 'count_decisions_by_government') {
+            // Execute count by government
+            let countQuery = supabase
+              .from('israeli_government_decisions')
+              .select('*', { count: 'exact', head: true });
+            
+            if (sqlParams.government_number) {
+              countQuery = countQuery.eq('government_number', sqlParams.government_number.toString());
+            }
+            
+            const { count, error } = await countQuery;
+            
+            if (error) {
+              logger.error('Count query error', { error, sqlParams });
+              results = [];
+            } else {
+              results = [{
+                government_number: sqlParams.government_number,
+                decision_count: count || 0,
+                count: count || 0  // Formatter expects 'count' field
+              }];
+              logger.info('Count query completed', { count, sqlParams });
+            }
+          } else if (template_used === 'count_by_topic_and_year') {
+            // Count by topic and year
+            let countQuery = supabase
+              .from('israeli_government_decisions')
+              .select('*', { count: 'exact', head: true });
+            
+            if (sqlParams.topic) {
+              countQuery = countQuery.ilike('tags_policy_area', `%${sqlParams.topic}%`);
+            }
+            if (sqlParams.year) {
+              const yearStart = `${sqlParams.year}-01-01`;
+              const yearEnd = `${sqlParams.year}-12-31`;
+              countQuery = countQuery.gte('decision_date', yearStart).lte('decision_date', yearEnd);
+            }
+            
+            const { count, error } = await countQuery;
+            
+            if (error) {
+              logger.error('Count by topic and year error', { error, sqlParams });
+              results = [];
+            } else {
+              results = [{
+                count: count || 0,
+                topic: sqlParams.topic,
+                year: sqlParams.year
+              }];
+              logger.info('Count by topic and year completed', { count, sqlParams });
+            }
+          } else if (template_used === 'count_by_topic_date_range') {
+            // Count by topic and date range
+            let countQuery = supabase
+              .from('israeli_government_decisions')
+              .select('*', { count: 'exact', head: true });
+            
+            if (sqlParams.topic) {
+              countQuery = countQuery.ilike('tags_policy_area', `%${sqlParams.topic}%`);
+            }
+            if (sqlParams.start_date && sqlParams.end_date) {
+              countQuery = countQuery.gte('decision_date', sqlParams.start_date).lte('decision_date', sqlParams.end_date);
+            }
+            
+            const { count, error } = await countQuery;
+            
+            if (error) {
+              logger.error('Count by topic date range error', { error, sqlParams });
+              results = [];
+            } else {
+              results = [{
+                count: count || 0,
+                topic: sqlParams.topic,
+                start_date: sqlParams.start_date,
+                end_date: sqlParams.end_date
+              }];
+              logger.info('Count by topic date range completed', { count, sqlParams });
+            }
+          } else if (template_used === 'count_by_year') {
+            // Count all decisions in a year
+            let countQuery = supabase
+              .from('israeli_government_decisions')
+              .select('*', { count: 'exact', head: true });
+            
+            if (sqlParams.year) {
+              const yearStart = `${sqlParams.year}-01-01`;
+              const yearEnd = `${sqlParams.year}-12-31`;
+              countQuery = countQuery.gte('decision_date', yearStart).lte('decision_date', yearEnd);
+            }
+            
+            const { count, error } = await countQuery;
+            
+            if (error) {
+              logger.error('Count by year error', { error, sqlParams });
+              results = [];
+            } else {
+              results = [{
+                count: count || 0,
+                year: sqlParams.year
+              }];
+              logger.info('Count by year completed', { count, sqlParams });
+            }
+          } else if (template_used === 'count_operational_by_topic') {
+            // Count operational decisions by topic
+            let countQuery = supabase
+              .from('israeli_government_decisions')
+              .select('*', { count: 'exact', head: true });
+            
+            if (sqlParams.topic) {
+              countQuery = countQuery.ilike('tags_policy_area', `%${sqlParams.topic}%`);
+            }
+            // Add operational filter
+            countQuery = countQuery.eq('operativity', 'אופרטיבית');
+            
+            const { count, error } = await countQuery;
+            
+            if (error) {
+              logger.error('Count operational by topic error', { error, sqlParams });
+              results = [];
+            } else {
+              results = [{
+                count: count || 0,
+                topic: sqlParams.topic,
+                decision_type: 'אופרטיבית'
+              }];
+              logger.info('Count operational by topic completed', { count, sqlParams });
+            }
+          } else {
+            // Generic count handling
+            let countQuery = supabase
+              .from('israeli_government_decisions')
+              .select('*', { count: 'exact', head: true });
+            
+            // Apply filters from parameters
+            if (sqlParams.government_number) {
+              countQuery = countQuery.eq('government_number', sqlParams.government_number.toString());
+            }
+            if (sqlParams.topic) {
+              countQuery = countQuery.ilike('tags_policy_area', `%${sqlParams.topic}%`);
+            }
+            
+            const { count, error } = await countQuery;
+            
+            if (error) {
+              logger.error('Count query error', { error, sqlParams });
+              results = [];
+            } else {
+              results = [{
+                count: count || 0,
+                decision_count: count || 0
+              }];
+              logger.info('Generic count query completed', { count, sqlParams });
+            }
+          }
+        } else {
+          // REGULAR SEARCH QUERIES - existing logic
+          logger.info('Processing regular search query');
+          
+          // Build Supabase query based on SQL parameters (not entities)
+          let query = supabase
+            .from('israeli_government_decisions')
+            .select('*');
         
         // Government number filter: ALWAYS use SQL params when available (SQL bot handles government 37 default)
         if (sqlParams.government_number) {
@@ -1005,23 +1354,24 @@ class BotChainService {
           .order('decision_number', { ascending: false })
           .limit(requestedLimit);
         
-        // Execute query
-        const { data, error } = await query;
-        
-        if (error) {
-          logger.error('Supabase query error', { error, entities });
-          results = [];
-        } else {
-          results = data || [];
+          // Execute query
+          const { data, error } = await query;
           
-          // NO POST-QUERY FILTERING NEEDED - SQL params handle government filtering correctly
-          
-          logger.info(`${entities.topic || entities.ministries ? 'Filtered' : 'General'} search completed`, { 
-            resultCount: results.length,
-            entities,
-            requestedLimit
-          });
-        }
+          if (error) {
+            logger.error('Supabase query error', { error, entities });
+            results = [];
+          } else {
+            results = data || [];
+            
+            // NO POST-QUERY FILTERING NEEDED - SQL params handle government filtering correctly
+            
+            logger.info(`${entities.topic || entities.ministries ? 'Filtered' : 'General'} search completed`, { 
+              resultCount: results.length,
+              entities,
+              requestedLimit
+            });
+          }
+        } // End of else block for regular search queries
         
         // Special handling for decision number not found
         if (results.length === 0 && entities.decision_number) {
@@ -1075,8 +1425,16 @@ class BotChainService {
         token_usage?: any;
       } | undefined = undefined;
       
-      // Only call evaluator for EVAL intent type with content validation
-      if (intent === 'EVAL' && results && results.length > 0) {
+      // Step 2.1: Smart conditional EVALUATOR activation
+      // Only run evaluator for specific analysis requests, not generic searches
+      const shouldRunEvaluator = this.shouldRunEvaluator(intent, entities, results);
+      
+      if (shouldRunEvaluator) {
+        logger.info('EVALUATOR conditions met - proceeding with analysis', {
+          intent,
+          has_decision_number: !!entities.decision_number,
+          result_count: results?.length || 0
+        });
         // Step 1.3: Content validation for EVALUATOR
         const contentSuitabilityCheck = this.validateContentForEvaluation(results[0]);
         if (!contentSuitabilityCheck.suitable) {
@@ -1099,7 +1457,15 @@ class BotChainService {
             confidence: 1.0
           };
         } else {
-          logger.info('EVAL intent detected - calling evaluator for deep analysis');
+          // Step 3.1: Multi-tier model selection based on content length
+          const modelSelection = this.selectEvaluatorModel(contentSuitabilityCheck.contentLength);
+          
+          logger.info('EVAL intent detected - using multi-tier model selection', {
+            content_length: contentSuitabilityCheck.contentLength,
+            selected_model: modelSelection.model,
+            max_tokens: modelSelection.maxTokens,
+            tier: modelSelection.tier
+          });
           
           // Extract decision_number from entities (what user requested) for EVALUATOR bot
           const decision_number = entities.decision_number || (results[0] && results[0].decision_number);
@@ -1111,7 +1477,13 @@ class BotChainService {
             government_number: entities.government_number || (results[0] && results[0].government_number), // Pass government number from entities
             results: results.slice(0, 1), // For EVAL, typically analyze just one decision
             intent,
-            entities
+            entities,
+            // Step 3.1: Pass model selection to EVALUATOR bot
+            model_config: {
+              model: modelSelection.model,
+              max_tokens: modelSelection.maxTokens,
+              tier: modelSelection.tier
+            }
           }, currentRequestTokens, this.config.evaluatorTimeout); // Use extended timeout for EVALUATOR
           
           if (evalResponse) {
@@ -1143,16 +1515,24 @@ class BotChainService {
             };
           }
         }
-      } else if (intent === 'EVAL' && (!results || results.length === 0)) {
-        logger.warn('EVAL intent but no results found to analyze');
+      } else if (intent === 'EVAL') {
+        // EVAL intent but conditions not met for running evaluator
+        logger.info('EVAL intent but skipping EVALUATOR', {
+          reason: !results || results.length === 0 ? 'no_results' : 
+                  results.length > 1 && !entities.decision_number ? 'multiple_results_no_specific_decision' :
+                  'incomplete_entity_set',
+          result_count: results?.length || 0,
+          has_decision_number: !!entities.decision_number
+        });
       }
 
       // Step 6: Result Ranking (if results exist)
       let rankedResults = results;
       let rankingExplanation = '';
       
-      // Smart ranker skipping - skip for simple queries or if explicitly disabled
-      const SKIP_RANKER = process.env.SKIP_RANKER === 'true' || shouldSkipExpensiveBots;
+      // RANKER DISABLED - inherently expensive due to processing all results
+      // Even with optimizations, it needs to analyze full result sets making it costly
+      const SKIP_RANKER = true; // Always skip ranker until a more efficient solution is found
       
       if (results && results.length > 0 && !SKIP_RANKER) {
         // Filter out heavy fields before sending to ranker
@@ -1204,11 +1584,20 @@ class BotChainService {
       }
 
       // Step 7: Response Formatting
-      // Map database fields to formatter expected fields
-      const mappedResults = rankedResults.map((result: any) => ({
+      // Check if this is a count query (based on template or operation)
+      const isCountQuery = template_used && (
+        template_used.includes('count_') ||
+        template_used === 'compare_governments'
+      ) || (entities.operation === 'count');
+      
+      // For count queries, pass the results as-is (they contain count information)
+      // For regular queries, map database fields to formatter expected fields
+      const mappedResults = isCountQuery ? rankedResults : rankedResults.map((result: any) => ({
         ...result,
         title: result.decision_title || 'ללא כותרת',
         content: result.summary || result.decision_content?.substring(0, 500) || '',
+        decision_content: result.decision_content || result.content || '', // Ensure full content is available
+        summary: result.summary || '', // Ensure summary is available separately
         topics: result.tags_policy_area ? result.tags_policy_area.split(';').map((t: string) => t.trim()) : [],
         ministries: result.tags_government_body ? result.tags_government_body.split(';').map((m: string) => m.trim()) : []
       }));

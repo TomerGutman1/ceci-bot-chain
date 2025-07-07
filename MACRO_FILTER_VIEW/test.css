@@ -1,0 +1,194 @@
+/**
+ * Test Styles for Macro Filter View Dashboard
+ * Includes Tailwind base and custom RTL adjustments
+ */
+
+@import url('/src/index.css');
+
+/* RTL specific test adjustments */
+[dir="rtl"] {
+  text-align: right;
+}
+
+[dir="rtl"] .space-x-reverse > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-x-reverse: 1;
+  margin-right: calc(var(--tw-space-x) * var(--tw-space-x-reverse));
+  margin-left: calc(var(--tw-space-x) * calc(1 - var(--tw-space-x-reverse)));
+}
+
+/* Test environment specific styles */
+.test-mode {
+  position: relative;
+}
+
+.test-mode::before {
+  content: "TEST MODE";
+  position: fixed;
+  top: 0;
+  left: 0;
+  background: linear-gradient(45deg, #ff6b6b, #ffa500);
+  color: white;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: bold;
+  z-index: 9999;
+  border-radius: 0 0 8px 0;
+}
+
+/* Mock data indicator */
+.mock-data::after {
+  content: "📋";
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  opacity: 0.6;
+  font-size: 12px;
+}
+
+/* Loading states for testing */
+.test-loading {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: .5;
+  }
+}
+
+/* Test console styling */
+.test-console {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  background: rgba(0, 0, 0, 0.9);
+  color: #00ff00;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  max-width: 300px;
+  z-index: 9998;
+  display: none;
+}
+
+.test-console.active {
+  display: block;
+}
+
+/* Hebrew font optimization for testing */
+body {
+  font-family: 'Segoe UI', 'Arial Hebrew', 'Narkisim', Arial, sans-serif;
+}
+
+/* Test navigation highlight */
+.test-nav-active {
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+/* Performance indicators */
+.perf-good { border-left: 4px solid #10b981; }
+.perf-warning { border-left: 4px solid #f59e0b; }
+.perf-error { border-left: 4px solid #ef4444; }
+
+/* Component boundary visualization (dev mode only) */
+.component-boundary {
+  outline: 1px dashed rgba(59, 130, 246, 0.3);
+  outline-offset: 2px;
+}
+
+/* Test data table styling */
+.test-table {
+  font-size: 14px;
+}
+
+.test-table th {
+  background: #f8fafc;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.test-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+/* Mock API response indicator */
+.mock-api-response {
+  position: relative;
+}
+
+.mock-api-response::before {
+  content: "🔄 Mock API";
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #8b5cf6;
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 12px;
+  z-index: 10;
+}
+
+/* Test accessibility indicators */
+.a11y-test {
+  position: relative;
+}
+
+.a11y-test[aria-label]::after {
+  content: "♿";
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  opacity: 0.5;
+  font-size: 12px;
+}
+
+/* Responsive test breakpoints indicator */
+@media (max-width: 640px) {
+  body::before {
+    content: "📱 Mobile";
+    position: fixed;
+    top: 40px;
+    left: 0;
+    background: #06b6d4;
+    color: white;
+    padding: 2px 8px;
+    font-size: 10px;
+    z-index: 9999;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  body::before {
+    content: "📱 Tablet";
+    position: fixed;
+    top: 40px;
+    left: 0;
+    background: #8b5cf6;
+    color: white;
+    padding: 2px 8px;
+    font-size: 10px;
+    z-index: 9999;
+  }
+}
+
+@media (min-width: 1025px) {
+  body::before {
+    content: "🖥️ Desktop";
+    position: fixed;
+    top: 40px;
+    left: 0;
+    background: #10b981;
+    color: white;
+    padding: 2px 8px;
+    font-size: 10px;
+    z-index: 9999;
+  }
+}

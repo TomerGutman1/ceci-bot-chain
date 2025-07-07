@@ -205,10 +205,6 @@ class ReferenceResolver:
             # Determine required slots based on intent
             required_slots = REQUIRED_SLOTS_BY_INTENT.get(intent, [])
             
-            # If no required slots defined for intent, try common slots
-            if not required_slots:
-                required_slots = ['decision_number']  # Default requirement
-            
             # Find missing slots
             missing_slots = [
                 slot for slot in required_slots 

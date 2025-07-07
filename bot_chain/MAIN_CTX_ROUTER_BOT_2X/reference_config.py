@@ -94,12 +94,13 @@ HEBREW_ENTITY_LABELS = {
 
 # Required slots for different intents
 REQUIRED_SLOTS_BY_INTENT = {
-    'search': ['topic'],
+    'search': [],  # Search queries don't require specific entities
     'count': ['government_number'],
     'specific_decision': ['decision_number'],
-    'comparison': ['governments', 'topic'],
-    'QUERY': ['decision_number'],
-    'ANALYSIS': ['decision_number']
+    'comparison': [],  # Comparison queries can work with partial info
+    'QUERY': [],  # QUERY is for general searches, no specific requirement
+    'ANALYSIS': ['decision_number'],  # ANALYSIS specifically needs a decision
+    'EVAL': ['decision_number']  # EVAL also needs a specific decision
 }
 
 # Global reference configuration instance

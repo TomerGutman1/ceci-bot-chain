@@ -13,6 +13,7 @@ const Navbar = () => {
     { label: "אודות", path: "/about" },
     { label: "דירוגים", path: "/rankings" },
     { label: "איך אנחנו עובדים", path: "/methodology" },
+    { label: "📊 לוח מחוונים", path: "/dashboard/statistics" },
   ];
 
   const isActive = (path: string) => {

@@ -15,9 +15,10 @@ interface Message {
 
 interface ChatInterfaceProps {
   externalMessage?: { text: string; timestamp: number } | null;
+  externalEditMessage?: { text: string; timestamp: number } | null;
 }
 
-const ChatInterface = ({ externalMessage }: ChatInterfaceProps) => {
+const ChatInterface = ({ externalMessage, externalEditMessage }: ChatInterfaceProps) => {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -92,6 +93,12 @@ const ChatInterface = ({ externalMessage }: ChatInterfaceProps) => {
       processNewMessage(externalMessage.text);
     }
   }, [externalMessage]);
+
+  useEffect(() => {
+    if (externalEditMessage && externalEditMessage.text) {
+      setInputMessage(externalEditMessage.text);
+    }
+  }, [externalEditMessage]);
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString("he-IL", {
@@ -248,7 +255,7 @@ const ChatInterface = ({ externalMessage }: ChatInterfaceProps) => {
   // }, []);
 
   return (
-    <div className="flex flex-col h-[400px] bg-white rounded-xl shadow-sm border border-gray-200 w-full">
+    <div className="flex flex-col h-[700px] bg-white rounded-xl shadow-sm border border-gray-200 w-full">
       <div className="p-4 border-b border-gray-200">
         <h2 className="font-bold text-lg">יועץ ה-AI של <span className="text-ceci-blue">המרכז להעצמת האזרח</span></h2>
         <p className="text-sm text-gray-500">שאל שאלות על החלטות ממשלה וקבל תשובות בזמן אמת</p>

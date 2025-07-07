@@ -54,7 +54,8 @@ function transformToApiFormat(detectorResult, conv_id) {
     count_target: detectorResult.route_flags.is_statistical ? "decisions" : null,
     comparison_target: detectorResult.entities.comparison_target || null,
     limit: detectorResult.entities.limit || null,
-    operation: detectorResult.entities.operation || null
+    operation: detectorResult.entities.operation || null,
+    decision_type: detectorResult.entities.decision_type || null
   };
   
   // Normalize entities for legacy compatibility

@@ -108,13 +108,10 @@ SQL_TEMPLATES = {
         description="Count total decisions by government",
         sql="""
         SELECT 
-            government_number,
-            COUNT(*) as decision_count,
-            MIN(decision_date) as first_decision,
-            MAX(decision_date) as last_decision
+            %(government_number)s as government_number,
+            COUNT(*) as count
         FROM government_decisions 
-        WHERE government_number = %(government_number)s
-        GROUP BY government_number;
+        WHERE government_number = %(government_number)s;
         """,
         required_params=["government_number"],
         optional_params=[],
@@ -143,6 +140,84 @@ SQL_TEMPLATES = {
         example_params={
             "topic": "חינוך",
             "government_number": 37
+        },
+        intent_match=["count"]
+    ),
+    
+    "count_by_topic_and_year": SQLTemplate(
+        name="count_by_topic_and_year",
+        description="Count decisions by topic and year",
+        sql="""
+        SELECT 
+            COUNT(*) as count
+        FROM government_decisions 
+        WHERE %(topic)s = ANY(topics)
+        AND EXTRACT(YEAR FROM decision_date) = %(year)s;
+        """,
+        required_params=["topic", "year"],
+        optional_params=[],
+        example_params={
+            "topic": "חינוך",
+            "year": 2023
+        },
+        intent_match=["count"]
+    ),
+    
+    "count_by_topic_date_range": SQLTemplate(
+        name="count_by_topic_date_range",
+        description="Count decisions by topic within a date range",
+        sql="""
+        SELECT 
+            COUNT(*) as count
+        FROM government_decisions 
+        WHERE %(topic)s = ANY(topics)
+        AND decision_date >= %(start_date)s
+        AND decision_date <= %(end_date)s;
+        """,
+        required_params=["topic", "start_date", "end_date"],
+        optional_params=[],
+        example_params={
+            "topic": "בריאות",
+            "start_date": "2010-01-01",
+            "end_date": "2020-12-31"
+        },
+        intent_match=["count"]
+    ),
+    
+    "count_by_year": SQLTemplate(
+        name="count_by_year",
+        description="Count all decisions in a specific year",
+        sql="""
+        SELECT 
+            %(year)s as year,
+            COUNT(*) as count
+        FROM government_decisions 
+        WHERE EXTRACT(YEAR FROM decision_date) = %(year)s;
+        """,
+        required_params=["year"],
+        optional_params=[],
+        example_params={
+            "year": 2023
+        },
+        intent_match=["count"]
+    ),
+    
+    "count_operational_by_topic": SQLTemplate(
+        name="count_operational_by_topic",
+        description="Count operational decisions by topic",
+        sql="""
+        SELECT 
+            %(topic)s as topic,
+            'אופרטיבית' as decision_type,
+            COUNT(*) as count
+        FROM government_decisions 
+        WHERE %(topic)s = ANY(topics)
+        AND operativity = 'אופרטיבית';
+        """,
+        required_params=["topic"],
+        optional_params=[],
+        example_params={
+            "topic": "חינוך"
         },
         intent_match=["count"]
     ),
@@ -270,6 +345,221 @@ SQL_TEMPLATES = {
         intent_match=["search"]
     ),
     
+    "search_by_year_and_topic": SQLTemplate(
+        name="search_by_year_and_topic",
+        description="Search decisions by year and topic, automatically finding relevant governments",
+        sql="""
+        SELECT 
+            id, government_number, decision_number, decision_date,
+            title, summary, topics, ministries, decision_url
+        FROM government_decisions 
+        WHERE EXTRACT(YEAR FROM decision_date) = %(year)s
+        {topic_filter}
+        ORDER BY decision_date DESC, government_number DESC, decision_number DESC
+        LIMIT %(limit)s;
+        """,
+        required_params=["year"],
+        optional_params=["topic", "limit"],
+        example_params={
+            "year": 2024,
+            "topic": "חינוך",
+            "limit": 20
+        },
+        intent_match=["search"]
+    ),
+    
+    "trend_analysis": SQLTemplate(
+        name="trend_analysis",
+        description="Analyze trends in government decisions over multiple years",
+        sql="""
+        SELECT 
+            EXTRACT(YEAR FROM decision_date) as year,
+            government_number,
+            COUNT(*) as decision_count,
+            COUNT(CASE WHEN %(topic)s = ANY(topics) THEN 1 END) as topic_count,
+            ROUND(
+                100.0 * COUNT(CASE WHEN %(topic)s = ANY(topics) THEN 1 END) / COUNT(*),
+                2
+            ) as topic_percentage,
+            STRING_AGG(DISTINCT 
+                CASE WHEN %(topic)s = ANY(topics) THEN title END, 
+                ' | ' ORDER BY decision_date DESC
+            ) as sample_titles
+        FROM government_decisions 
+        WHERE decision_date >= %(start_date)s
+        AND decision_date <= %(end_date)s
+        {topic_filter}
+        GROUP BY EXTRACT(YEAR FROM decision_date), government_number
+        ORDER BY year DESC, government_number DESC;
+        """,
+        required_params=["topic"],
+        optional_params=["start_date", "end_date", "limit"],
+        example_params={
+            "topic": "דיור",
+            "start_date": "2020-01-01",
+            "end_date": "2025-12-31",
+            "limit": 50
+        },
+        intent_match=["search", "analysis"]
+    ),
+    
+    "deep_analysis": SQLTemplate(
+        name="deep_analysis",
+        description="Deep analysis of decisions with obstacles and enablers identification",
+        sql="""
+        SELECT 
+            id, government_number, decision_number, decision_date,
+            title, summary, content, topics, ministries, decision_url,
+            CASE 
+                WHEN content ILIKE '%חסם%' OR content ILIKE '%מניעה%' OR content ILIKE '%קושי%' 
+                THEN 'מכיל חסמים אפשריים'
+                ELSE 'ללא חסמים מזוהים'
+            END as obstacle_indicators,
+            CASE 
+                WHEN content ILIKE '%מאפשר%' OR content ILIKE '%תמיכה%' OR content ILIKE '%עידוד%'
+                THEN 'מכיל מאפשרים אפשריים'
+                ELSE 'ללא מאפשרים מזוהים'
+            END as enabler_indicators,
+            LENGTH(content) as content_length
+        FROM government_decisions 
+        WHERE %(topic)s = ANY(topics)
+        {government_filter}
+        {date_filter}
+        ORDER BY decision_date DESC, government_number DESC, decision_number DESC
+        LIMIT %(limit)s;
+        """,
+        required_params=["topic"],
+        optional_params=["government_number", "start_date", "end_date", "limit"],
+        example_params={
+            "topic": "תחבורה ציבורית",
+            "limit": 20
+        },
+        intent_match=["analysis", "EVAL"]
+    ),
+    
+    "historical_comparison": SQLTemplate(
+        name="historical_comparison",
+        description="Compare decisions between different time periods",
+        sql="""
+        WITH period_stats AS (
+            SELECT 
+                CASE 
+                    WHEN EXTRACT(YEAR FROM decision_date) BETWEEN %(start_year)s AND %(start_year)s + 1
+                    THEN 'תקופה ראשונה'
+                    WHEN EXTRACT(YEAR FROM decision_date) BETWEEN %(end_year)s - 1 AND %(end_year)s
+                    THEN 'תקופה שנייה'
+                END as period,
+                COUNT(*) as total_decisions,
+                COUNT(CASE WHEN %(topic)s = ANY(topics) THEN 1 END) as topic_decisions,
+                STRING_AGG(DISTINCT government_number::text, ', ') as governments,
+                AVG(LENGTH(content)) as avg_content_length
+            FROM government_decisions 
+            WHERE (
+                EXTRACT(YEAR FROM decision_date) BETWEEN %(start_year)s AND %(start_year)s + 1 OR
+                EXTRACT(YEAR FROM decision_date) BETWEEN %(end_year)s - 1 AND %(end_year)s
+            )
+            {topic_filter}
+            GROUP BY CASE 
+                WHEN EXTRACT(YEAR FROM decision_date) BETWEEN %(start_year)s AND %(start_year)s + 1
+                THEN 'תקופה ראשונה'
+                WHEN EXTRACT(YEAR FROM decision_date) BETWEEN %(end_year)s - 1 AND %(end_year)s
+                THEN 'תקופה שנייה'
+            END
+        )
+        SELECT * FROM period_stats
+        ORDER BY period;
+        """,
+        required_params=["start_year", "end_year", "topic"],
+        optional_params=["limit"],
+        example_params={
+            "start_year": 2020,
+            "end_year": 2024,
+            "topic": "בריאות"
+        },
+        intent_match=["comparison", "analysis"]
+    ),
+    
+    "ministry_breakdown": SQLTemplate(
+        name="ministry_breakdown",
+        description="Breakdown of decisions by ministry for specific topics",
+        sql="""
+        SELECT 
+            unnest(ministries) as ministry,
+            COUNT(*) as decision_count,
+            COUNT(DISTINCT government_number) as government_span,
+            MIN(decision_date) as earliest_decision,
+            MAX(decision_date) as latest_decision,
+            STRING_AGG(DISTINCT 
+                CASE WHEN char_length(title) > 100 
+                THEN substring(title, 1, 97) || '...'
+                ELSE title END, 
+                ' | ' ORDER BY decision_date DESC
+            ) as sample_titles
+        FROM government_decisions 
+        WHERE %(topic)s = ANY(topics)
+        {government_filter}
+        {date_filter}
+        GROUP BY unnest(ministries)
+        HAVING COUNT(*) >= %(min_count)s
+        ORDER BY decision_count DESC
+        LIMIT %(limit)s;
+        """,
+        required_params=["topic"],
+        optional_params=["government_number", "start_date", "end_date", "min_count", "limit"],
+        example_params={
+            "topic": "חינוך",
+            "min_count": 1,
+            "limit": 15
+        },
+        intent_match=["search", "analysis"]
+    ),
+    
+    "recommendations_analysis": SQLTemplate(
+        name="recommendations_analysis", 
+        description="Analyze successful decisions to generate operational recommendations",
+        sql="""
+        WITH successful_patterns AS (
+            SELECT 
+                id, government_number, decision_number, decision_date,
+                title, summary, topics, ministries, decision_url,
+                CASE 
+                    WHEN content ILIKE '%הצלחה%' OR content ILIKE '%יעיל%' OR content ILIKE '%חיובי%'
+                    THEN 'הצלחה מזוהה'
+                    WHEN content ILIKE '%יישום%' AND content ILIKE '%מלא%'
+                    THEN 'יישום מלא'
+                    WHEN content ILIKE '%תוצאות%' AND content ILIKE '%טוב%'
+                    THEN 'תוצאות חיוביות'
+                    ELSE 'רגיל'
+                END as success_indicator,
+                LENGTH(content) as detail_level
+            FROM government_decisions 
+            WHERE %(topic)s = ANY(topics)
+            {government_filter}
+            ORDER BY decision_date DESC
+        )
+        SELECT 
+            government_number,
+            COUNT(*) as total_decisions,
+            COUNT(CASE WHEN success_indicator != 'רגיל' THEN 1 END) as successful_decisions,
+            STRING_AGG(DISTINCT unnest(ministries), ', ') as involved_ministries,
+            STRING_AGG(DISTINCT 
+                CASE WHEN success_indicator != 'רגיל' THEN title END,
+                ' | '
+            ) as successful_examples
+        FROM successful_patterns
+        GROUP BY government_number
+        ORDER BY successful_decisions DESC, government_number DESC
+        LIMIT %(limit)s;
+        """,
+        required_params=["topic"],
+        optional_params=["government_number", "limit"],
+        example_params={
+            "topic": "איכות הסביבה",
+            "limit": 10
+        },
+        intent_match=["analysis", "search"]
+    ),
+    
     "topic_summary": SQLTemplate(
         name="topic_summary",
         description="Summarize decisions by topic across governments",
@@ -300,6 +590,63 @@ SQL_TEMPLATES = {
 }
 
 
+def extract_year_from_entities(entities: Dict[str, Any]) -> Optional[int]:
+    """Extract year from entities - from date_range or topic text."""
+    # DO NOT extract year from date_range if it has both start and end
+    # This is to prevent date range queries from being converted to year queries
+    if entities.get("date_range"):
+        date_range = entities["date_range"]
+        if isinstance(date_range, dict) and date_range.get("start") and date_range.get("end"):
+            # If we have a full date range, don't extract year
+            return None
+        elif isinstance(date_range, dict) and date_range.get("start"):
+            try:
+                # Extract year from start date only if no end date (format: "2024-01-01")
+                year_str = str(date_range["start"]).split("-")[0]
+                return int(year_str)
+            except (ValueError, IndexError):
+                pass
+    
+    # Check topic text for year patterns like "מ2024", "ב-2024", "2024"
+    topic = entities.get("topic", "")
+    if topic:
+        # Look for 4-digit years in topic
+        year_match = re.search(r'\b(20\d{2})\b', topic)
+        if year_match:
+            year = int(year_match.group(1))
+            # Clean the topic by removing the year pattern
+            cleaned_topic = re.sub(r'\s*מ(20\d{2})\s*', ' ', topic)
+            cleaned_topic = re.sub(r'\s*ב[-\s]?(20\d{2})\s*', ' ', cleaned_topic)
+            cleaned_topic = re.sub(r'\s*(20\d{2})\s*', ' ', cleaned_topic)
+            entities["topic"] = cleaned_topic.strip()
+            return year
+        
+        # Look for Hebrew year patterns like "מ2024", "ב2024"
+        year_match = re.search(r'מ(20\d{2})|ב[-\s]?(20\d{2})', topic)
+        if year_match:
+            year = int(year_match.group(1) or year_match.group(2))
+            # Clean the topic by removing the year pattern
+            cleaned_topic = re.sub(r'\s*מ(20\d{2})\s*', ' ', topic)
+            cleaned_topic = re.sub(r'\s*ב[-\s]?(20\d{2})\s*', ' ', cleaned_topic)
+            entities["topic"] = cleaned_topic.strip()
+            return year
+    
+    return None
+
+
+def extract_comparison_years(text: str) -> Optional[tuple]:
+    """Extract two years for comparison from text like 'בין 2020 ל-2024'."""
+    # Look for patterns like "בין 2020 ל-2024", "מ-2020 עד 2024"
+    year_pattern = r'בין\s*(20\d{2})\s*ל?[-\s]*(20\d{2})|מ[-\s]*(20\d{2})\s*עד\s*(20\d{2})'
+    match = re.search(year_pattern, text)
+    if match:
+        year1 = match.group(1) or match.group(3)
+        year2 = match.group(2) or match.group(4)
+        if year1 and year2:
+            return (int(year1), int(year2))
+    return None
+
+
 def get_template_by_intent(intent: str, entities: Dict[str, Any]) -> Optional[SQLTemplate]:
     """Select the best template based on intent and available entities."""
     
@@ -323,13 +670,78 @@ def get_template_by_intent(intent: str, entities: Dict[str, Any]) -> Optional[SQ
     
     # For count queries - check both intent and operation
     if intent == "count" or entities.get("operation") == "count":
-        if entities.get("government_number") and not entities.get("topic"):
+        # Extract year from entities if present
+        year = extract_year_from_entities(entities)
+        
+        # Count by topic and year
+        if entities.get("topic") and year:
+            entities["year"] = year
+            return SQL_TEMPLATES["count_by_topic_and_year"]
+        
+        # Count by topic and date range
+        elif entities.get("topic") and entities.get("date_range"):
+            date_range = entities["date_range"]
+            if date_range.get("start") and date_range.get("end"):
+                entities["start_date"] = date_range["start"]
+                entities["end_date"] = date_range["end"]
+                return SQL_TEMPLATES["count_by_topic_date_range"]
+        
+        # Count by year only
+        elif year and not entities.get("topic"):
+            entities["year"] = year
+            return SQL_TEMPLATES["count_by_year"]
+        
+        # Count operational decisions by topic
+        elif entities.get("topic") and entities.get("decision_type") == "אופרטיבית":
+            return SQL_TEMPLATES["count_operational_by_topic"]
+        
+        # Count by government only
+        elif entities.get("government_number") and not entities.get("topic"):
             return SQL_TEMPLATES["count_decisions_by_government"]
+        
+        # Count by topic only
         elif entities.get("topic"):
             return SQL_TEMPLATES["count_decisions_by_topic"]
     
     # For search queries (handle both "search" and "QUERY" intents)
     if intent == "search" or intent == "QUERY":
+        # Check if this is actually a count operation within a QUERY intent
+        if entities.get("operation") == "count":
+            print(f"DEBUG: Count operation detected, entities: {entities}")
+            # Count by topic and date range (check this BEFORE extracting year)
+            if entities.get("topic") and entities.get("date_range"):
+                date_range = entities["date_range"]
+                print(f"DEBUG: Has topic and date_range, date_range type: {type(date_range)}, value: {date_range}")
+                if isinstance(date_range, dict) and date_range.get("start") and date_range.get("end"):
+                    entities["start_date"] = date_range["start"]
+                    entities["end_date"] = date_range["end"]
+                    print(f"DEBUG: Selecting count_by_topic_date_range template")
+                    return SQL_TEMPLATES["count_by_topic_date_range"]
+            
+            # Extract year from entities if present
+            year = extract_year_from_entities(entities)
+            
+            # Count by topic and year
+            if entities.get("topic") and year:
+                entities["year"] = year
+                return SQL_TEMPLATES["count_by_topic_and_year"]
+            
+            # Count by year only
+            elif year and not entities.get("topic"):
+                entities["year"] = year
+                return SQL_TEMPLATES["count_by_year"]
+            
+            # Count operational decisions by topic
+            elif entities.get("topic") and entities.get("decision_type") == "אופרטיבית":
+                return SQL_TEMPLATES["count_operational_by_topic"]
+            
+            # Count by government only
+            elif entities.get("government_number") and not entities.get("topic"):
+                return SQL_TEMPLATES["count_decisions_by_government"]
+            
+            # Count by topic only
+            elif entities.get("topic"):
+                return SQL_TEMPLATES["count_decisions_by_topic"]
         # Decision number search - with or without government number
         if entities.get("decision_number"):
             print(f"DEBUG: Found decision_number: {entities.get('decision_number')}, choosing specific_decision template")
@@ -349,6 +761,56 @@ def get_template_by_intent(intent: str, entities: Dict[str, Any]) -> Optional[SQ
         # Government + topic search
         if entities.get("government_number") and entities.get("topic"):
             return SQL_TEMPLATES["search_by_government_and_topic"]
+        
+        # Check for analysis-type queries based on operation or keywords
+        operation = entities.get("operation", "")
+        topic = entities.get("topic", "")
+        
+        # Trend analysis queries
+        if ("מגמות" in topic or "טרנד" in topic or operation == "trend" or
+            "השנים האחרונות" in topic or "ב-5 השנים" in topic):
+            # Clean trend-specific phrases from topic
+            cleaned_topic = re.sub(r'\s*ב[-\s]?\d+\s*השנים\s*האחרונות\s*', ' ', topic)
+            cleaned_topic = re.sub(r'\s*המגמות\s*ב\s*', ' ', cleaned_topic)
+            cleaned_topic = re.sub(r'\s*הראה\s*לי\s*את\s*', '', cleaned_topic)
+            entities["topic"] = cleaned_topic.strip()
+            return SQL_TEMPLATES["trend_analysis"]
+        
+        # Deep analysis queries  
+        if ("נתח" in topic or "ניתוח" in topic or "חסמים" in topic or "מאפשרים" in topic or
+            operation == "analyze" or entities.get("intent") == "EVAL"):
+            # Clean analysis-specific phrases from topic
+            cleaned_topic = re.sub(r'\s*נתח\s*את\s*ה?', '', topic)
+            cleaned_topic = re.sub(r'\s*וזהה\s*חסמים\s*ומאפשרים\s*', '', cleaned_topic)
+            cleaned_topic = re.sub(r'\s*החלטות\s*', 'החלטות ', cleaned_topic)
+            entities["topic"] = cleaned_topic.strip()
+            return SQL_TEMPLATES["deep_analysis"]
+        
+        # Historical comparison queries
+        if ("השווה" in topic or "השוואה" in topic or "בין" in topic or 
+            operation == "compare" or entities.get("comparison_target")):
+            # Extract years for comparison if available
+            years = extract_comparison_years(topic)
+            if years:
+                entities["start_year"] = years[0]
+                entities["end_year"] = years[1]
+                return SQL_TEMPLATES["historical_comparison"]
+        
+        # Recommendations queries
+        if ("המלצות" in topic or "המלצה" in topic or "לקדם" in topic or
+            operation == "recommend"):
+            return SQL_TEMPLATES["recommendations_analysis"]
+        
+        # Ministry breakdown for detailed searches
+        if ("משרד" in topic or "משרדים" in topic or entities.get("ministries")):
+            return SQL_TEMPLATES["ministry_breakdown"]
+        
+        # Year + topic search - extract year from date_range or topic
+        year = extract_year_from_entities(entities)
+        if year and entities.get("topic"):
+            # Add year parameter for the template
+            entities["year"] = year
+            return SQL_TEMPLATES["search_by_year_and_topic"]
         
         # Topic only search
         if entities.get("topic"):
@@ -380,10 +842,24 @@ def build_dynamic_filters(template: SQLTemplate, entities: Dict[str, Any]) -> st
     # Topic filter
     if "{topic_filter}" in sql:
         if entities.get("topic"):
-            topic_filter = "AND %(topic)s = ANY(topics)"
+            topic_filter = "AND tags_policy_area ILIKE '%' || %(topic)s || '%'"
         else:
             topic_filter = ""
         sql = sql.replace("{topic_filter}", topic_filter)
+    
+    # Date filter
+    if "{date_filter}" in sql:
+        date_conditions = []
+        if entities.get("start_date"):
+            date_conditions.append("decision_date >= %(start_date)s")
+        if entities.get("end_date"):
+            date_conditions.append("decision_date <= %(end_date)s")
+        
+        if date_conditions:
+            date_filter = "AND " + " AND ".join(date_conditions)
+        else:
+            date_filter = ""
+        sql = sql.replace("{date_filter}", date_filter)
     
     return sql
 

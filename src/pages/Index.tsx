@@ -1,9 +1,14 @@
 
 import { useState } from "react";
 import ChatInterface from "@/components/chat/ChatInterface"; // Updated import path
+import ExampleQueries from "@/components/chat/ExampleQueries";
 
 const Index = () => {
   const [chatTriggerMessage, setChatTriggerMessage] = useState<{ text: string; timestamp: number } | null>(null);
+  const [chatEditMessage, setChatEditMessage] = useState<{ text: string; timestamp: number } | null>(null);
+  
+  // Check if examples should be shown (default to true if not set)
+  const showExamples = import.meta.env.VITE_SHOW_EXAMPLES !== 'false';
 
   return (
     <div className="max-w-5xl mx-auto w-full flex flex-col h-full px-4">
@@ -32,8 +37,32 @@ const Index = () => {
       <div id="chat-body" className="flex flex-col flex-grow">
         {/* ChatInterface replaces the old input - Aligned with login button */}
         <div className="w-full mt-auto mb-4 flex justify-center">
-          <div className="w-full max-w-3xl">
-            <ChatInterface externalMessage={chatTriggerMessage} />
+          <div className={`flex items-start gap-4 ${showExamples ? 'max-w-7xl' : 'max-w-3xl'} w-full`}>
+            {/* Left Examples */}
+            {showExamples && (
+              <ExampleQueries 
+                position="left" 
+                onQueryClick={(query) => setChatTriggerMessage({ text: query, timestamp: Date.now() })}
+                onQueryEdit={(query) => setChatEditMessage({ text: query, timestamp: Date.now() })}
+              />
+            )}
+            
+            {/* Chat Interface */}
+            <div className="w-full max-w-3xl">
+              <ChatInterface 
+                externalMessage={chatTriggerMessage} 
+                externalEditMessage={chatEditMessage}
+              />
+            </div>
+            
+            {/* Right Examples */}
+            {showExamples && (
+              <ExampleQueries 
+                position="right" 
+                onQueryClick={(query) => setChatTriggerMessage({ text: query, timestamp: Date.now() })}
+                onQueryEdit={(query) => setChatEditMessage({ text: query, timestamp: Date.now() })}
+              />
+            )}
           </div>
         </div>
       </div>

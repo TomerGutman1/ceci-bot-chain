@@ -4,6 +4,14 @@
 
 ---
 
+1. First think through the problem, read the codebase for relevant files, and write a plan to tasks/todo.md.
+2. The plan should have a list of todo items that you can check off as you complete them
+3. Before you begin working, check in with me and I will verify the plan.
+4. Then, begin working on the todo items, marking them as complete as you go.
+5. Please every step of the way just give me a high level explanation of what changes you made
+6. Make every task and code change you do as simple as possible. We want to avoid making any massive or complex changes. Every change should impact as little code as possible. Everything is about simplicity.
+7. Finally, add a review section to the [todo.md](http://todo.md/) file with a summary of the changes you made and any other relevant information.
+
 ## 1 · Mission
 
 Answer Hebrew questions about Israeli government decisions through a 7‑layer GPT pipeline, while **minimising cost** and **maintaining ≥ 95 % accuracy**.
@@ -192,6 +200,59 @@ Answer Hebrew questions about Israeli government decisions through a 7‑layer G
 - `reference_resolver.py` - Main resolution logic
 - `main.py` - Updated with integration hooks
 - Backend clarification handling for `reference_resolution` type
+
+### 📊 Macro Filter View Dashboard - IMPLEMENTED (6 Jul 2025)
+
+**Status**: Fully functional statistics dashboard with zero impact on chat system
+
+**Implementation Summary**:
+1. ✓ Created complete statistics service with direct DB queries (no GPT costs)
+2. ✓ Fixed all data transformation issues causing frontend crashes
+3. ✓ Added missing API endpoints for data optimization
+4. ✓ Updated navigation - "מבט מאקרו" button now leads to dashboard
+5. ✓ Enhanced export functionality - "ייצוא דוח" with chart support
+
+**Key Fixes Applied**:
+- **Timeline Data**: Hebrew month names now properly converted to Date objects
+- **Filter Options**: Government/committee/policy area data structures aligned
+- **NULL Handling**: All statistics endpoints now filter out invalid/null data
+- **Date Validation**: Decisions with dates before 1990 or null are excluded
+- **Field Mapping**: Fixed mismatches (operativeCount→operationalCount, name→area/committee)
+
+**New Features**:
+- **Statistics API Endpoints**:
+  - GET /api/statistics/overview
+  - GET /api/statistics/timeline
+  - GET /api/statistics/policy-areas
+  - GET /api/statistics/committees
+  - GET /api/statistics/governments
+  - GET /api/statistics/filter-options
+  - POST /api/statistics/decisions/paginated
+  - POST /api/statistics/optimized
+  - POST /api/statistics/export
+
+- **Dashboard Components**:
+  - KPI Cards with real-time stats
+  - Timeline charts with month/year granularity
+  - Policy distribution pie charts
+  - Committee activity analysis
+  - Government comparison tools
+  - Data optimizer for large datasets
+  - Smart alerts and predictions
+  - Report sharing with export options
+
+**Environment Variables Added**:
+- `VITE_SHOW_MACRO_BUTTON=false` - Toggle macro buttons in example queries
+
+**Files Modified**:
+- `server/src/services/statisticsService.ts` - Core statistics logic
+- `server/src/routes/statistics.ts` - REST API endpoints
+- `src/macro_filter_view/services/api.ts` - Frontend API transformations
+- `src/components/layout/Layout.tsx` - Navigation update
+- `src/components/chat/ExampleQueries.tsx` - Optional macro buttons
+- `src/macro_filter_view/components/shared/ReportSharing.tsx` - Enhanced export
+
+**Access**: http://localhost/dashboard/statistics
 
 ---
 

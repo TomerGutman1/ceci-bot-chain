@@ -144,6 +144,100 @@ class IntentDetector {
       "מאי": 5, "יוני": 6, "יולי": 7, "אוגוסט": 8,
       "ספטמבר": 9, "אוקטובר": 10, "נובמבר": 11, "דצמבר": 12
     };
+
+    // Hebrew Topic Mapping - normalize variations to standard forms
+    this.topicMapping = {
+      // Security variations
+      "ביטחון": "ביטחון",
+      "בטחון": "ביטחון", 
+      "ביטחון לאומי": "ביטחון",
+      "בטחון פנימי": "ביטחון",
+      "ביטחון פנים": "ביטחון",
+      
+      // Education variations
+      "חינוך": "חינוך",
+      "השכלה": "חינוך", 
+      "חינוך והשכלה": "חינוך",
+      "חינוך וחברה": "חינוך",
+      "מערכת החינוך": "חינוך",
+      "חנוך": "חינוך", // common typo
+      
+      // Health variations
+      "בריאות": "בריאות",
+      "רפואה": "בריאות",
+      "בריאות הציבור": "בריאות",
+      "שירותי בריאות": "בריאות",
+      "רפואה וחירום": "בריאות",
+      "בראות": "בריאות", // common typo
+      
+      // Economy variations
+      "כלכלה": "כלכלה",
+      "כלכלה ותעשייה": "כלכלה",
+      "כלכלי": "כלכלה",
+      "התעשייה": "כלכלה",
+      "מסחר": "כלכלה",
+      "מסחר וכלכלה": "כלכלה",
+      
+      // Transportation variations
+      "תחבורה": "תחבורה",
+      "תחבורה ציבורית": "תחבורה",
+      "תחבורה וכבישים": "תחבורה",
+      "כבישים": "תחבורה",
+      "תיחבורה": "תחבורה", // common typo
+      
+      // Agriculture variations
+      "חקלאות": "חקלאות",
+      "חקלאות וכפר": "חקלאות",
+      "פיתוח הכפר": "חקלאות",
+      "חקלאי": "חקלאות",
+      
+      // Housing variations
+      "שיכון": "שיכון",
+      "דיור": "שיכון",
+      "בנייה ודיור": "שיכון",
+      "שיכון ובינוי": "שיכון",
+      
+      // Environment variations
+      "איכות הסביבה": "איכות הסביבה",
+      "סביבה": "איכות הסביבה",
+      "הגנת הסביבה": "איכות הסביבה",
+      "איכות סביבה": "איכות הסביבה",
+      
+      // Justice variations
+      "משפטים": "משפטים",
+      "מערכת המשפט": "משפטים",
+      "צדק": "משפטים",
+      
+      // Foreign affairs variations
+      "חוץ": "חוץ",
+      "יחסי חוץ": "חוץ",
+      "מדיניות חוץ": "חוץ",
+      "יחסים בינלאומיים": "חוץ",
+      
+      // Interior variations
+      "פנים": "פנים",
+      "הפנים": "פנים",
+      "מדיניות פנים": "פנים",
+      
+      // Technology variations
+      "טכנולוגיה": "טכנולוגיה",
+      "מדע וטכנולוגיה": "מדע וטכנולוגיה",
+      "מדע": "מדע וטכנולוגיה",
+      "מחקר ופיתוח": "מדע וטכנולוגיה",
+      "דיגיטל": "טכנולוגיה",
+      
+      // Social affairs variations
+      "רווחה": "רווחה",
+      "שירותים חברתיים": "רווחה",
+      "רווחה וביטחון סוציאלי": "רווחה",
+      "ביטחון סוציאלי": "רווחה",
+      
+      // Energy variations
+      "אנרגיה": "אנרגיה",
+      "משאבי אנרגיה": "אנרגיה",
+      "תשתיות אנרגיה": "אנרגיה",
+      "חשמל": "אנרגיה"
+    };
   }
 
   detect(query) {
@@ -154,8 +248,15 @@ class IntentDetector {
       // 2. Quick length check for CLARIFICATION - but allow specific patterns
       const words = normalized.split(/\s+/);
       if (words.length < 3) {
-        // Check if it's a valid short pattern like "החלטה 2983"
-        if (!(/החלטה\s+\d+/.test(normalized) || /ממשלה\s+\d+/.test(normalized))) {
+        // Check if it's a valid short pattern like "החלטה 2983", "ממשלה 37", or contains dates
+        const hasValidPattern = /החלטה\s+\d+/.test(normalized) || 
+                              /ממשלה\s+\d+/.test(normalized) ||
+                              /ב[־-]?\d{4}/.test(normalized) || // Year patterns like "ב-2020"
+                              normalized.includes("השנה") ||
+                              normalized.includes("החודש") ||
+                              /משנת\s+\d{4}/.test(normalized);
+        
+        if (!hasValidPattern) {
           return this.clarificationResult("Query too short");
         }
         // If it matches the pattern, continue processing
@@ -264,6 +365,7 @@ class IntentDetector {
         }
         
         const queryEntities = this.extractEntities(normalized);
+        console.log("DEBUG: queryEntities from extractEntities:", JSON.stringify(queryEntities));
         
         // Check for ambiguous number references
         if (queryEntities._ambiguity_type === "government_or_decision") {
@@ -295,7 +397,7 @@ class IntentDetector {
           };
         }
         
-        return {
+        const result = {
           intent_type: "QUERY",
           entities: {
             ...queryEntities,
@@ -309,6 +411,8 @@ class IntentDetector {
           },
           explanation: `${queryCheck.operation} operation`
         };
+        console.log("DEBUG: QUERY result entities:", JSON.stringify(result.entities));
+        return result;
       }
 
       // 7. Check for remaining CLARIFICATION patterns
@@ -482,6 +586,13 @@ class IntentDetector {
     if (query.includes("עוד פרטים על") && query.includes("הקודמת")) {
       confidence += 0.6;
       referenceType = "previous";
+      referencePosition = 1;
+    }
+
+    // Check for standalone government number - likely clarification response
+    if (/^ממשלה\s+\d+$/.test(query.trim()) || /^\d+$/.test(query.trim())) {
+      confidence += 0.8;
+      referenceType = "clarification";
       referencePosition = 1;
     }
 
@@ -660,8 +771,15 @@ class IntentDetector {
     // Too short - but allow specific patterns
     const words = query.split(/\s+/);
     if (words.length < 3) {
-      // Check if it's a valid short pattern like "החלטה 2983"
-      if (/החלטה\s+\d+/.test(query) || /ממשלה\s+\d+/.test(query)) {
+      // Check if it's a valid short pattern like "החלטה 2983", "ממשלה 37", or contains dates
+      const hasValidPattern = /החלטה\s+\d+/.test(query) || 
+                            /ממשלה\s+\d+/.test(query) ||
+                            /ב[־-]?\d{4}/.test(query) || // Year patterns like "ב-2020"
+                            query.includes("השנה") ||
+                            query.includes("החודש") ||
+                            /משנת\s+\d{4}/.test(query);
+      
+      if (hasValidPattern) {
         return { needsClarification: false };
       }
       return { needsClarification: true, reason: "Query too short", priority: true };
@@ -817,22 +935,35 @@ class IntentDetector {
       }
     }
 
-    // Extract topic - multiple patterns with multi-word support
-    let topicMatch = query.match(/ב?נושא\s+(.+?)(?:\s+היו\s+ב[־-]?\d|\s+מ[שאז]|\s+ב[יש]ן|\s+ש[אמעה]|\s+ב\d{4}|\s*$)/);
+    // Extract topic - simplified patterns that properly stop at Hebrew verbs and government references
+    // Pattern 1: "בנושא [topic]" stopping at verbs or government references
+    let topicMatch = query.match(/בנושא\s+(.+?)\s+(?:קיבלה?|ש?קיבל|נתקבל|החליט|החליטה?|ממשלה\s+\d+|של\s+ממשלה)/);
     if (!topicMatch) {
-      topicMatch = query.match(/על\s+(.+?)(?:\s+מ[שאז]|\s+ב[יש]ן|\s+ש[אמעה]|\s+ב\d{4}|\s*$)/);
+      topicMatch = query.match(/בנושא\s+([א-ת\s]+?)(?:\s+מ[שאז]|\s+ב[יש]ן|\s+ש[אמעה]|\s+ב\d{4}|\s*$)/);
+    }
+    
+    // Pattern 2: "על [topic]" stopping at verbs or government references  
+    if (!topicMatch) {
+      topicMatch = query.match(/על\s+(.+?)\s+(?:קיבלה?|ש?קיבל|נתקבל|החליט|החליטה?|ממשלה\s+\d+|של\s+ממשלה)/);
     }
     if (!topicMatch) {
-      topicMatch = query.match(/בתחום\s+(.+?)(?:\s+מ[שאז]|\s+ב[יש]ן|\s+ש[אמעה]|\s+ב\d{4}|\s*$)/);
+      topicMatch = query.match(/על\s+([א-ת\s]+?)(?:\s+מ[שאז]|\s+ב[יש]ן|\s+ש[אמעה]|\s+ב\d{4}|\s*$)/);
+    }
+    
+    // Pattern 3: "בתחום [topic]" stopping at verbs or government references
+    if (!topicMatch) {
+      topicMatch = query.match(/בתחום\s+(.+?)\s+(?:קיבלה?|ש?קיבל|נתקבל|החליט|החליטה?|ממשלה\s+\d+|של\s+ממשלה)/);
     }
     if (!topicMatch) {
-      topicMatch = query.match(/עוסקות\s+ב[־-]?(.+?)(?:\s+מ[שאז]|\s+ב[יש]ן|\s+ש[אמעה]|\s+ב\d{4}|\s*$)/);
+      topicMatch = query.match(/בתחום\s+([א-ת\s]+?)(?:\s+מ[שאז]|\s+ב[יש]ן|\s+ש[אמעה]|\s+ב\d{4}|\s*$)/);
+    }
+    
+    // Pattern 4: "החלטות [topic]" stopping at verbs or government references
+    if (!topicMatch) {
+      topicMatch = query.match(/החלטות\s+(.+?)\s+(?:קיבלה?|ש?קיבל|נתקבל|החליט|החליטה?|ממשלה\s+\d+|של\s+ממשלה)/);
     }
     if (!topicMatch) {
-      topicMatch = query.match(/נוגעות\s+ל[־-]?(.+?)(?:\s+ב[־-]?\d|\s+ב\d{4}|\s*$)/);
-    }
-    if (!topicMatch) {
-      topicMatch = query.match(/[ש]?קשור[ותים]*\s+ל[־-]?(.+?)(?:\s+ב\d{4}|\s*$)/);
+      topicMatch = query.match(/החלטות\s+([א-ת]+)(?:\s+מ[שאז]|\s+ב[יש]ן|\s+ש[אמעה]|\s+ב\d{4}|\s*$)/);
     }
     
     // Topic in comparison patterns
@@ -847,16 +978,26 @@ class IntentDetector {
     }
     
     if (topicMatch) {
-      entities.topic = topicMatch[1].trim();
+      const extractedTopic = this.cleanTopicFromGovernmentReferences(topicMatch[1].trim());
+      // Special case: "האחרונות" should not be treated as a topic but as "most recent"
+      if (extractedTopic !== "האחרונות" && extractedTopic !== "אחרונות") {
+        entities.topic = extractedTopic;
+      }
     }
     
-    // Special case: extract topic from "החלטות X" pattern
+    // Special case: extract topic from "החלטות X" pattern - but stop at government references
     if (!entities.topic) {
-      const simpleTopicMatch = query.match(/החלטות\s+([^\s]+\s+[^\s]+?)(?:\s+ב[יש]ן|\s+מ[שאז]|\s*$)/);
+      const simpleTopicMatch = query.match(/החלטות\s+(.+?)(?:\s+ממשלה|\s+בממשל|\s+קיבלה?|\s+ב[יש]ן|\s+מ[שאז]|\s*$)/);
       if (simpleTopicMatch && 
-          !simpleTopicMatch[1].match(/^(ממשלה|של|משרד|על|בנושא)$/) &&
-          !simpleTopicMatch[1].match(/^ממשלה\s+\d+$/)) {  // Don't treat "ממשלה 37" as topic
-        entities.topic = simpleTopicMatch[1].trim();
+          !simpleTopicMatch[1].match(/^(ממשלה|של|משרד|על|בנושא|היו|היה|יש|בשנת)$/) &&
+          !simpleTopicMatch[1].match(/^ממשלה\s+\d+$/) &&
+          !simpleTopicMatch[1].match(/^ממשלה\s+היו/) &&
+          !simpleTopicMatch[1].match(/היו\s+בממשל/)) {  // Don't treat "היו בממשלה" as topic
+        const extractedTopic = this.cleanTopicFromGovernmentReferences(simpleTopicMatch[1].trim());
+        // Special case: "האחרונות" should not be treated as a topic but as "most recent"
+        if (extractedTopic !== "האחרונות" && extractedTopic !== "אחרונות") {
+          entities.topic = extractedTopic;
+        }
       }
     }
 
@@ -875,6 +1016,7 @@ class IntentDetector {
 
     // Extract date ranges
     const dateRange = this.extractDateRange(query);
+    console.log(`[DEBUG] extractDateRange for query "${query}" returned:`, dateRange);
     if (dateRange) {
       entities.date_range = dateRange;
     }
@@ -927,6 +1069,13 @@ class IntentDetector {
       }
     }
 
+    // Check for operational decisions
+    if (query.includes("אופרטיביות") || query.includes("אופרטיבי") || 
+        query.includes("אופרטיביים") || query.includes("אופרטיבית")) {
+      entities.decision_type = "אופרטיבית";
+      console.log("DEBUG: Operational decision detected, added decision_type:", entities.decision_type);
+    }
+
     return entities;
   }
 
@@ -969,6 +1118,15 @@ class IntentDetector {
       };
     }
 
+    // "בשנת YYYY" pattern
+    const inYearMatch2 = query.match(/בשנת\s+(\d{4})/);
+    if (inYearMatch2) {
+      return {
+        start: `${inYearMatch2[1]}-01-01`,
+        end: `${inYearMatch2[1]}-12-31`
+      };
+    }
+    
     // "ב-YYYY" pattern
     const inYearMatch = query.match(/ב[־-]?(\d{4})/);
     if (inYearMatch) {
@@ -993,6 +1151,34 @@ class IntentDetector {
       return {
         start: `${yearRangeMatch[1]}-01-01`,
         end: `${yearRangeMatch[2]}-12-31`
+      };
+    }
+    
+    // "בין YYYY ל-YYYY" pattern - handle Hebrew maqaf (־), hyphen (-), and en-dash (–)
+    const yearRangeMatch2 = query.match(/בין\s+(\d{4})\s+ל[־\-–]?\s*(\d{4})/);
+    console.log(`[DEBUG] Testing pattern /בין\\s+(\\d{4})\\s+ל[־\\-–]?\\s*(\\d{4})/ against "${query}":`, yearRangeMatch2);
+    if (yearRangeMatch2) {
+      return {
+        start: `${yearRangeMatch2[1]}-01-01`,
+        end: `${yearRangeMatch2[2]}-12-31`
+      };
+    }
+    
+    // "בין YYYY ל YYYY" pattern - without any hyphen
+    const yearRangeMatch3 = query.match(/בין\s+(\d{4})\s+ל\s+(\d{4})/);
+    if (yearRangeMatch3) {
+      return {
+        start: `${yearRangeMatch3[1]}-01-01`,
+        end: `${yearRangeMatch3[2]}-12-31`
+      };
+    }
+    
+    // "משנת YYYY" pattern
+    const fromYearSimple = query.match(/משנת\s+(\d{4})(?!\s+והלאה)/);
+    if (fromYearSimple) {
+      return {
+        start: `${fromYearSimple[1]}-01-01`,
+        end: `${fromYearSimple[1]}-12-31`
       };
     }
 
@@ -1078,6 +1264,60 @@ class IntentDetector {
       },
       explanation: clarificationMessage
     };
+  }
+
+  cleanTopicFromGovernmentReferences(topic) {
+    if (!topic) return topic;
+    
+    // Remove government references and Hebrew verbs that indicate end of topic
+    let cleaned = topic
+      // Remove "ממשלה X" patterns
+      .replace(/\s+ממשלה\s+\d+.*$/, '')
+      .replace(/\s+של\s+ממשלה.*$/, '')
+      // Remove Hebrew verbs that indicate end of topic
+      .replace(/\s+(?:קיבלה?|ש?קיבל|נתקבל|החליט|החליטה?).*$/, '')
+      // Remove other stopping patterns
+      .replace(/\s+(?:היו|ש?היה|נעשה|נעשו).*$/, '')
+      .trim();
+    
+    // Remove common prefixes
+    cleaned = cleaned
+      .replace(/^בנושא\s+/, '')
+      .replace(/^על\s+/, '')
+      .replace(/^בתחום\s+/, '')
+      .replace(/^לגבי\s+/, '')
+      .trim();
+    
+    // Normalize using topic mapping if available
+    if (this.topicMapping[cleaned]) {
+      cleaned = this.topicMapping[cleaned];
+    }
+    
+    // Additional cleanup - remove articles and prepositions at the end
+    cleaned = cleaned
+      .replace(/\s+(ה|את|של|על|ב|מ|ל)$/, '')
+      .trim();
+    
+    return cleaned;
+  }
+
+  normalizeHebrewTopic(topic) {
+    if (!topic) return topic;
+    
+    // Check direct mapping first
+    if (this.topicMapping[topic]) {
+      return this.topicMapping[topic];
+    }
+    
+    // Try fuzzy matching for partial matches
+    const topicLower = topic.toLowerCase();
+    for (const [variation, normalized] of Object.entries(this.topicMapping)) {
+      if (topicLower.includes(variation.toLowerCase()) || variation.toLowerCase().includes(topicLower)) {
+        return normalized;
+      }
+    }
+    
+    return topic;
   }
 }
 

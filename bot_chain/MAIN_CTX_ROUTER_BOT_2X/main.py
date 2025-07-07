@@ -176,7 +176,14 @@ async def update_context_with_query(
     context.user_queries.append(query)
     context.last_intent = intent
     
-    # Merge entities (new ones override existing)
+    # Merge entities - preserve previous topic if not specified in current query
+    if entities.get("topic") and not context.extracted_entities.get("topic"):
+        context.extracted_entities["topic"] = entities["topic"]
+    elif not entities.get("topic") and context.extracted_entities.get("topic"):
+        # Keep previous topic if current query doesn't specify one
+        entities["topic"] = context.extracted_entities["topic"]
+    
+    # Merge entities (new ones override existing, but preserve important context)
     context.extracted_entities.update(entities)
     
     # DISABLED: Handle "full content" requests to prevent entity persistence bug

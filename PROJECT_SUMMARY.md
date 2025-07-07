@@ -539,3 +539,46 @@ http://localhost:8080 - Nginx חלופי
 - החלפת שגיאת context על פני תגובות בוט
 - שאלות הבהרה בעברית טבעית
 - ביצועים: <100ms, >90% הצלחה
+
+---
+
+## 📊 Macro Filter View Dashboard - הושלם (6 ביולי 2025)
+
+### ✅ סטטוס: דאשבורד סטטיסטיקות מלא פועל ללא השפעה על מערכת הצ'אט
+
+**יישום מוצלח**:
+1. **שירות סטטיסטיקות מלא** - שאילתות ישירות לDB ללא עלויות GPT
+2. **תיקון באגי frontend** - כל בעיות התרסקות נפתרו
+3. **API endpoints חדשים** - תמיכה מלאה בכל רכיבי הדאשבורד
+4. **ניווט מעודכן** - כפתור "מבט מאקרו" מוביל לדאשבורד
+5. **ייצוא משופר** - "ייצוא דוח" עם תמיכה בתרשימים
+
+### 🐛 תיקונים קריטיים:
+- **נתוני Timeline**: המרת שמות חודשים בעברית ל-Date objects
+- **מבני נתונים**: יישור בין backend ל-frontend (governments/committees/policy)
+- **טיפול ב-NULL**: סינון נתונים לא תקינים בכל ה-endpoints
+- **ולידציית תאריכים**: החרגת החלטות עם תאריכים לפני 1990 או null
+- **מיפוי שדות**: תיקון אי-התאמות (operativeCount→operationalCount, name→area)
+
+### 📈 רכיבי הדאשבורד:
+- **KPI Cards** - סטטיסטיקות בזמן אמת
+- **Timeline Charts** - גרפי זמן עם granularity גמיש
+- **Policy Distribution** - התפלגות לפי תחומי מדיניות
+- **Committee Activity** - ניתוח פעילות ועדות
+- **Government Comparison** - השוואה בין ממשלות
+- **Data Optimizer** - טיפול בנפחי נתונים גדולים
+- **Smart Alerts** - התראות חכמות וחיזויים
+- **Report Export** - ייצוא דוחות עם תרשימים
+
+### 🔧 קבצים שעודכנו:
+- `server/src/services/statisticsService.ts` - לוגיקת סטטיסטיקות
+- `server/src/routes/statistics.ts` - API endpoints
+- `src/macro_filter_view/services/api.ts` - טרנספורמציות frontend
+- `src/components/layout/Layout.tsx` - עדכון ניווט
+- `src/components/chat/ExampleQueries.tsx` - כפתורי מאקרו אופציונליים
+- `src/macro_filter_view/components/shared/ReportSharing.tsx` - ייצוא משופר
+
+### 🔗 גישה: http://localhost/dashboard/statistics
+
+### 🎛️ משתני סביבה חדשים:
+- `VITE_SHOW_MACRO_BUTTON=false` - הצגת/הסתרת כפתורי מאקרו ב-example queries

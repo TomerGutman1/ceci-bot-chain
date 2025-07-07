@@ -143,13 +143,16 @@ def format_topics_and_ministries(result: Dict[str, Any]) -> str:
     
     topics = result.get("topics", [])
     if topics:
+        parts.append("")
         if len(topics) == 1:
+            
             parts.append(f"🏷️ נושא: {topics[0]}")
         else:
             parts.append(f"🏷️ נושאים: {', '.join(topics[:3])}")
     
     ministries = result.get("ministries", [])
     if ministries:
+        parts.append("")
         if len(ministries) == 1:
             parts.append(f"🏢 משרד: {ministries[0]}")
         else:
@@ -224,18 +227,45 @@ def format_markdown_response(
     include_metadata: bool = True,
     include_scores: bool = False,
     evaluation_summary: Optional[Dict] = None,
-    ranking_explanation: Optional[str] = None
+    ranking_explanation: Optional[str] = None,
+    entities: Optional[Dict[str, Any]] = None
 ) -> str:
     """Format results as Markdown."""
     
     lines = []
     
+    
     # Header and special handling for different intents
-    if intent == "count":
-        lines.append(f"# 📊 תוצאות ספירה: {query}")
+    
+    if intent == "count" or (results and len(results) == 1 and isinstance(results[0], dict) and "count" in results[0]):
+        # Handle count queries with better formatting
         if results and isinstance(results[0], dict) and "count" in results[0]:
             count = results[0]["count"]
-            lines.append(f"\n**✅ מספר ההחלטות:** {count}")
+            result = results[0]
+            
+            
+            # Build descriptive message based on available fields
+            # Check for operational decisions - use query text as primary indicator
+            # or check if decision_type field contains operational
+            is_operational = ("אופרטיב" in query) or (result.get("decision_type") and "אופרטיב" in str(result.get("decision_type")))
+            
+            if is_operational and result.get("topic"):
+                lines.append(f"📊 מספר החלטות אופרטיביות בתחום {result['topic']}: **{count}**")
+            elif result.get("topic") and result.get("year"):
+                lines.append(f"📊 מספר החלטות בתחום {result['topic']} בשנת {result['year']}: **{count}**")
+            elif result.get("topic") and result.get("start_date") and result.get("end_date"):
+                start_year = result["start_date"].split("-")[0]
+                end_year = result["end_date"].split("-")[0]
+                lines.append(f"📊 מספר החלטות בתחום {result['topic']} בין {start_year} ל-{end_year}: **{count}**")
+            elif result.get("topic"):
+                lines.append(f"📊 מספר החלטות בתחום {result['topic']}: **{count}**")
+            elif result.get("year"):
+                lines.append(f"📊 מספר החלטות בשנת {result['year']}: **{count}**")
+            elif result.get("government_number"):
+                lines.append(f"📊 מספר החלטות בממשלת {result['government_number']}: **{count}**")
+            else:
+                lines.append(f"📊 מספר ההחלטות: **{count}**")
+            
             return "\n".join(lines)
     elif intent == "EVAL" and evaluation_summary:
         # For EVAL intent, return the evaluator's formatted response directly
@@ -308,6 +338,7 @@ def format_markdown_response(
             # Add clickable link to government decision - ONLY from DB
             decision_url = result.get('decision_url')
             if decision_url and decision_url.strip():
+                lines.append("")
                 lines.append(f"🔗 [לינק להחלטה באתר הממשלה]({decision_url})")
             # No fallback - only use URLs from database
             
@@ -321,22 +352,29 @@ def format_markdown_response(
             # Determine if full content was explicitly requested
             full_content_requested = any(phrase in query.lower() for phrase in [
                 "תוכן מלא", "התוכן המלא", "את התוכן המלא", 
-                "תן לי תוכן מלא", "הבא תוכן מלא", "תוכן מפורט"
+                "תן לי תוכן מלא", "הבא תוכן מלא", "תוכן מפורט",
+                "תן לי את התוכן המלא", "תוכן המלא של", "את כל התוכן",
+                "הבא לי את התוכן המלא", "תוכן מלא של החלטה"
             ])
             
             if full_content_requested:
                 # Show full content when explicitly requested
-                content = result.get('decision_content') or result.get('content', '')
-                if content:
-                    lines.append(f"📝 **תוכן מלא:**")
+                full_content = result.get('decision_content') or result.get('content', '')
+                if full_content and full_content.strip():
+                    lines.append(f"📝 **תוכן מלא של ההחלטה:**")
                     lines.append("")
-                    lines.append(content)
+                    lines.append(full_content)
+                    lines.append("")
+                else:
+                    lines.append(f"📝 **תוכן מלא:** לא זמין להחלטה זו")
                     lines.append("")
             else:
                 # Show only summary for regular requests
-                content = result.get('content', '')  # Use summary field only
-                if content:
-                    summary = truncate_hebrew_text(content, 200)  # Limit to 200 chars
+                summary = result.get('summary') or result.get('content', '')
+                if summary and summary.strip():
+                    # Truncate if too long
+                    if len(summary) > 200:
+                        summary = truncate_hebrew_text(summary, 200)
                     lines.append(f"📝 **תקציר:**")
                     lines.append("")
                     lines.append(summary)
@@ -608,6 +646,8 @@ async def format_response(request: FormattingRequest):
     try:
         logger.info(f"Processing formatting request: {request.conv_id}")
         logger.info(f"Intent: {request.intent}, Has evaluation_summary: {request.evaluation_summary is not None}")
+        logger.info(f"Output format: {request.output_format}, Results: {request.ranked_results[:1] if request.ranked_results else 'No results'}")
+        logger.info(f"Original query: {request.original_query}")
         if request.evaluation_summary:
             logger.info(f"Evaluation summary keys: {list(request.evaluation_summary.keys())}")
         
@@ -632,7 +672,8 @@ async def format_response(request: FormattingRequest):
                 request.include_metadata,
                 request.include_scores,
                 request.evaluation_summary,
-                request.ranking_explanation
+                request.ranking_explanation,
+                request.entities
             )
             
         elif output_format == OutputFormat.JSON:

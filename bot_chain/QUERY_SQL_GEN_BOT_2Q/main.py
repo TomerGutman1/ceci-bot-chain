@@ -173,13 +173,84 @@ async def call_gpt_for_sql(intent: str, entities: Dict[str, Any]) -> Dict[str, A
         raise HTTPException(status_code=500, detail=f"GPT call failed: {str(e)}")
 
 
+def clean_topic_entity(topic: str) -> str:
+    """Clean topic entity from government references and Hebrew verbs."""
+    if not topic:
+        return topic
+    
+    import re
+    
+    # Remove government references and Hebrew verbs that indicate end of topic
+    cleaned = topic
+    # Remove "ממשלה X" patterns
+    cleaned = re.sub(r'\s+ממשלה\s+\d+.*$', '', cleaned)
+    cleaned = re.sub(r'\s+של\s+ממשלה.*$', '', cleaned)
+    # Remove Hebrew verbs that indicate end of topic
+    cleaned = re.sub(r'\s+(?:קיבלה?|ש?קיבל|נתקבל|החליט|החליטה?).*$', '', cleaned)
+    # Remove other stopping patterns
+    cleaned = re.sub(r'\s+(?:היו|ש?היה|נעשה|נעשו).*$', '', cleaned)
+    cleaned = cleaned.strip()
+    
+    # Hebrew topic normalization mapping
+    topic_mapping = {
+        # Security variations
+        "בטחון": "ביטחון", 
+        "ביטחון לאומי": "ביטחון",
+        "בטחון פנימי": "ביטחון",
+        "ביטחון פנים": "ביטחון",
+        
+        # Education variations
+        "השכלה": "חינוך", 
+        "חינוך והשכלה": "חינוך",
+        "חינוך וחברה": "חינוך",
+        "מערכת החינוך": "חינוך",
+        "חנוך": "חינוך", # common typo
+        
+        # Health variations
+        "רפואה": "בריאות",
+        "בריאות הציבור": "בריאות",
+        "שירותי בריאות": "בריאות",
+        "רפואה וחירום": "בריאות",
+        "בראות": "בריאות", # common typo
+        
+        # Economy variations
+        "כלכלה ותעשייה": "כלכלה",
+        "כלכלי": "כלכלה",
+        "התעשייה": "כלכלה",
+        "מסחר": "כלכלה",
+        "מסחר וכלכלה": "כלכלה",
+        
+        # Transportation variations
+        "תחבורה ציבורית": "תחבורה",
+        "תחבורה וכבישים": "תחבורה",
+        "כבישים": "תחבורה",
+        "תיחבורה": "תחבורה", # common typo
+    }
+    
+    # Apply normalization
+    if cleaned in topic_mapping:
+        cleaned = topic_mapping[cleaned]
+    
+    # Additional cleanup - remove articles and prepositions at the end
+    cleaned = re.sub(r'\s+(ה|את|של|על|ב|מ|ל)$', '', cleaned).strip()
+    
+    return cleaned
+
+
 def enhance_entities_with_context(
     entities: Dict[str, Any],
     conversation_history: List[ConversationTurn]
 ) -> Dict[str, Any]:
-    """Extract missing entities from conversation history (LINK 3 implementation)."""
+    """Extract missing entities from conversation history and clean topic entities."""
     
     enhanced_entities = entities.copy()
+    
+    # Clean topic entity if it exists
+    if enhanced_entities.get("topic"):
+        cleaned_topic = clean_topic_entity(enhanced_entities["topic"])
+        if cleaned_topic != enhanced_entities["topic"]:
+            logger.info(f"Cleaned topic: '{enhanced_entities['topic']}' -> '{cleaned_topic}'")
+            enhanced_entities["topic"] = cleaned_topic
     
     # Look for missing decision numbers in previous queries
     if not enhanced_entities.get("decision_number"):
@@ -237,6 +308,14 @@ def generate_sql_from_template(intent: str, entities: Dict[str, Any]) -> Optiona
             params[param] = entities["ministries"][0]  # Take first ministry
         elif param == "government_list" and entities.get("government_numbers"):
             params[param] = entities["government_numbers"]
+        elif param == "year" and entities.get("year"):
+            params[param] = entities["year"]
+        elif param == "start_year" and entities.get("start_year"):
+            params[param] = entities["start_year"]
+        elif param == "end_year" and entities.get("end_year"):
+            params[param] = entities["end_year"]
+        elif param == "min_count":
+            params[param] = entities.get("min_count", 1)
         else:
             # Missing required parameter
             return None

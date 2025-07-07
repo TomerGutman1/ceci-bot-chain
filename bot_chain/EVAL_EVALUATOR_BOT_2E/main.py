@@ -59,7 +59,7 @@ async def fetch_decision_content(government_number: int, decision_number: int, c
             async with session.post(
                 f"{SQL_GEN_BOT_URL}/sqlgen",
                 json=sql_request,
-                timeout=aiohttp.ClientTimeout(total=30)
+                timeout=aiohttp.ClientTimeout(total=60)
             ) as response:
                 if response.status != 200:
                     logger.error(f"SQL generation failed: {response.status}")
