@@ -53,12 +53,16 @@ interface BotChainResponse {
       prompt_tokens: number;
       completion_tokens: number;
       estimated_cost_usd: number;
+      route_type?: string;
       bot_breakdown: Record<string, {
         tokens: number;
         cost_usd: number;
       }>;
     };
     cache_hit?: boolean;
+    sessionId?: string;
+    session_id?: string;
+    engine?: string;
   };
   error?: string;
 }
@@ -123,33 +127,54 @@ class BotChainService {
   private sqlTemplateCache: Map<string, SqlTemplateCache> = new Map();
   private intentPatternCache: Map<string, IntentPatternCache> = new Map();
   private tokenUsageHistory: TokenUsage[] = [];
+  private sessionEntities: Map<string, any> = new Map(); // Track entities per session
   private readonly CACHE_TTL = 14400000; // 4 hours in milliseconds
   private readonly SQL_CACHE_TTL = 86400000; // 24 hours in milliseconds
   private readonly INTENT_CACHE_TTL = 86400000; // 24 hours in milliseconds
   private readonly MAX_CACHE_SIZE = 100;
+  private readonly useUnifiedIntent: boolean;
+  private readonly useLLMFormatter: boolean;
   private readonly MODEL_COSTS = {
-    'gpt-4-turbo': { prompt: 0.01, completion: 0.03 }, // per 1K tokens
+    'gpt-4o': { prompt: 0.005, completion: 0.015 },         // $5/$15 per 1M tokens
+    'gpt-4o-mini': { prompt: 0.00015, completion: 0.0006 }, // $0.15/$0.60 per 1M tokens
+    'gpt-4-turbo': { prompt: 0.01, completion: 0.03 },      // per 1K tokens
     'gpt-4': { prompt: 0.03, completion: 0.06 },
     'gpt-3.5-turbo': { prompt: 0.0005, completion: 0.0015 },
     'gpt-3.5-turbo-16k': { prompt: 0.003, completion: 0.004 }
   };
 
   constructor() {
+    // Feature flags for unified architecture
+    this.useUnifiedIntent = process.env.USE_UNIFIED_INTENT === 'true';
+    this.useLLMFormatter = process.env.USE_LLM_FORMATTER === 'true';
+    
     this.config = {
       timeout: parseInt(process.env.BOT_CHAIN_TIMEOUT || '30000'),
       evaluatorTimeout: parseInt(process.env.EVALUATOR_TIMEOUT || '120000'), // 120 seconds for EVALUATOR
       enabled: true, // Always enabled
       urls: {
         rewrite: process.env.REWRITE_BOT_URL || 'http://localhost:8010',
-        intent: process.env.INTENT_BOT_URL || 'http://localhost:8011',
+        intent: this.useUnifiedIntent 
+          ? (process.env.UNIFIED_INTENT_BOT_URL || 'http://localhost:8011')
+          : (process.env.INTENT_BOT_URL || 'http://localhost:8011'),
         sqlGen: process.env.SQL_GEN_BOT_URL || 'http://localhost:8012',
         contextRouter: process.env.CONTEXT_ROUTER_BOT_URL || 'http://localhost:8013',
         evaluator: process.env.EVALUATOR_BOT_URL || 'http://localhost:8014',
         clarify: process.env.CLARIFY_BOT_URL || 'http://localhost:8015',
         ranker: process.env.RANKER_BOT_URL || 'http://localhost:8016',
-        formatter: process.env.FORMATTER_BOT_URL || 'http://localhost:8017'
+        formatter: this.useLLMFormatter
+          ? (process.env.LLM_FORMATTER_BOT_URL || 'http://localhost:8017')
+          : (process.env.FORMATTER_BOT_URL || 'http://localhost:8017')
       }
     };
+    
+    // Log feature flag status
+    logger.info('Bot Chain Feature Flags', {
+      useUnifiedIntent: this.useUnifiedIntent,
+      useLLMFormatter: this.useLLMFormatter,
+      intentUrl: this.config.urls.intent,
+      formatterUrl: this.config.urls.formatter
+    });
 
     logger.info('BotChainService initialized', { 
       urls: this.config.urls,
@@ -158,6 +183,9 @@ class BotChainService {
 
     // Start cache cleanup interval
     setInterval(() => this.cleanupCache(), 300000); // Cleanup every 5 minutes
+    
+    // Start session cleanup interval
+    setInterval(() => this.cleanupSessions(), 3600000); // Cleanup every hour
     
     // Start daily spend monitoring
     setInterval(() => this.checkDailySpendLimits(), 600000); // Check every 10 minutes
@@ -199,6 +227,37 @@ class BotChainService {
     
     if (cleaned > 0) {
       logger.info(`Cache cleanup: removed ${cleaned} expired entries`);
+    }
+  }
+
+  // Clean up old session entity tracking data
+  private cleanupSessions(): void {
+    const now = Date.now();
+    const SESSION_TTL = 7200000; // 2 hours
+    let cleaned = 0;
+    
+    // Note: This is a simple implementation. In production, you'd want to track
+    // last access time for each session
+    for (const [sessionId, _entities] of this.sessionEntities.entries()) {
+      // For now, we'll clean up sessions that have no recent cache entries
+      let hasRecentActivity = false;
+      
+      for (const [_key, entry] of this.responseCache.entries()) {
+        if (entry.response.metadata?.sessionId === sessionId && 
+            now - entry.timestamp < SESSION_TTL) {
+          hasRecentActivity = true;
+          break;
+        }
+      }
+      
+      if (!hasRecentActivity) {
+        this.sessionEntities.delete(sessionId);
+        cleaned++;
+      }
+    }
+    
+    if (cleaned > 0) {
+      logger.info(`Session cleanup: removed ${cleaned} inactive sessions`);
     }
   }
 
@@ -244,6 +303,47 @@ class BotChainService {
       timestamp: Date.now(),
       hits: 0
     });
+  }
+
+  // Cache invalidation for conversation context changes
+  private invalidateConversationCache(sessionId: string): void {
+    // Invalidate all cached responses for this conversation
+    let invalidated = 0;
+    
+    for (const [key, entry] of this.responseCache.entries()) {
+      // Check if the cached response belongs to this session
+      if (entry.response.metadata?.sessionId === sessionId) {
+        this.responseCache.delete(key);
+        invalidated++;
+      }
+    }
+    
+    if (invalidated > 0) {
+      logger.info(`Invalidated ${invalidated} cache entries for session ${sessionId}`);
+    }
+  }
+
+  // Invalidate cache when entities significantly change
+  private checkEntityChangesAndInvalidate(
+    sessionId: string,
+    previousEntities: any,
+    currentEntities: any
+  ): void {
+    // Check if critical entities have changed
+    const criticalEntityKeys = ['decision_number', 'government_number', 'topic'];
+    
+    for (const key of criticalEntityKeys) {
+      if (previousEntities[key] !== currentEntities[key]) {
+        logger.info('Critical entity change detected, invalidating cache', {
+          sessionId,
+          entityKey: key,
+          oldValue: previousEntities[key],
+          newValue: currentEntities[key]
+        });
+        this.invalidateConversationCache(sessionId);
+        return;
+      }
+    }
   }
 
   // Track token usage
@@ -294,8 +394,22 @@ class BotChainService {
     };
   }
 
+  // Determine route type based on intent and flow
+  private getRouteType(intent: string, needs_clarification: boolean): string {
+    if (needs_clarification) {
+      return 'CLARIFY';
+    }
+    if (intent === 'ANALYSIS' || intent === 'analysis' || intent.includes('EVAL')) {
+      return 'EVAL';
+    }
+    if (intent === 'RESULT_REF' || intent.includes('reference')) {
+      return 'QUERY_CONTEXT';
+    }
+    return 'QUERY';
+  }
+
   // Get token usage summary for current request only
-  private getCurrentRequestTokenSummary(currentRequestTokens: TokenUsage[]): NonNullable<BotChainResponse['metadata']>['token_usage'] {
+  private getCurrentRequestTokenSummary(currentRequestTokens: TokenUsage[], routeType?: string): NonNullable<BotChainResponse['metadata']>['token_usage'] {
     const botBreakdown: Record<string, { tokens: number; cost_usd: number }> = {};
     let totalTokens = 0;
     let totalCost = 0;
@@ -317,13 +431,19 @@ class BotChainService {
     promptTokens = Math.floor(totalTokens * 0.4);
     completionTokens = totalTokens - promptTokens;
     
-    return {
+    const result: any = {
       total_tokens: totalTokens,
       prompt_tokens: promptTokens,
       completion_tokens: completionTokens,
       estimated_cost_usd: totalCost,
       bot_breakdown: botBreakdown
     };
+    
+    if (routeType) {
+      result.route_type = routeType;
+    }
+    
+    return result;
   }
 
   // Check daily spend and alert if approaching limits
@@ -464,13 +584,33 @@ class BotChainService {
       return true;
     }
     
+    // Check for reference words that depend on context
+    if (/זה|זו|זאת|האחרון|הקודם|הנ"ל|שאמרת|ההחלטה|אותה/.test(query)) {
+      return true;
+    }
+    
+    // Check for ordinal references (e.g., "השני", "הראשון")
+    if (/הראשון|השני|השלישי|הרביעי|החמישי/.test(query)) {
+      return true;
+    }
+    
+    // Check for "full content" requests which often relate to previous queries
+    if (/תוכן\s*מלא|התוכן\s*המלא|פרטים\s*נוספים/.test(query)) {
+      return true;
+    }
+    
     return false;
   }
 
   // Step 2.2: Smart Context Router activation logic
   private shouldCallContextRouter(query: string, intent: string, entities: any, contextDetection: ContextDetectionResult): boolean {
     // Always call for clarification intents
-    if (intent === 'CLARIFICATION') {
+    if (intent === 'CLARIFICATION' || intent === 'UNCLEAR') {
+      return true;
+    }
+    
+    // Always call for RESULT_REF intent (requires conversation history)
+    if (intent === 'RESULT_REF') {
       return true;
     }
     
@@ -705,8 +845,9 @@ class BotChainService {
 
   async checkHealth(): Promise<boolean> {
     try {
-      // Check rewrite bot as a representative health check
-      const response = await axios.get(`${this.config.urls.rewrite}/health`, {
+      // Check intent bot as a representative health check
+      const intentUrl = this.useUnifiedIntent ? this.config.urls.intent : this.config.urls.sqlGen;
+      const response = await axios.get(`${intentUrl}/health`, {
         timeout: 5000
       });
       return response.status === 200 && response.data?.status === 'ok';
@@ -760,13 +901,18 @@ class BotChainService {
         const botName = endpoint.replace('/', '').toUpperCase();
         const tokens = tokenUsageData.total_tokens || 0;
         
+        // Use bot-provided cost if available, otherwise calculate
+        let cost = tokenUsageData.cost_usd;
+        if (!cost && cost !== 0) {
+          const costs = this.MODEL_COSTS[model as keyof typeof this.MODEL_COSTS] || this.MODEL_COSTS['gpt-3.5-turbo'];
+          cost = (tokens / 1000) * ((costs.prompt + costs.completion) / 2);
+        }
+        
         // Track globally for history
         this.trackTokenUsage(botName, tokens, model);
         
         // Track for current request if array provided
         if (currentRequestTokens) {
-          const costs = this.MODEL_COSTS[model as keyof typeof this.MODEL_COSTS] || this.MODEL_COSTS['gpt-3.5-turbo'];
-          const cost = (tokens / 1000) * ((costs.prompt + costs.completion) / 2);
           currentRequestTokens.push({
             bot_name: botName,
             tokens,
@@ -830,14 +976,13 @@ class BotChainService {
         return cachedResponse.response;
       }
 
-      // NEW UNIFIED FLOW: Check if we should use the unified intent bot
-      const useUnifiedIntent = process.env.USE_UNIFIED_INTENT === 'true';
+      // NEW UNIFIED FLOW: Use the unified intent bot if enabled
       
       let cleanText: string;
       let intent: string, entities: any, confidence: number;
       let routeFlags: any = {};
       
-      if (useUnifiedIntent) {
+      if (this.useUnifiedIntent) {
         // NEW FLOW: Single call to unified intent bot
         logger.info('Using unified intent bot (GPT-4o-turbo)', { 
           conversationId,
@@ -937,6 +1082,11 @@ class BotChainService {
 
       logger.debug('Intent detection completed', { intent, entities, confidence });
 
+      // Track entity changes for cache invalidation
+      const previousEntities = this.sessionEntities.get(conversationId) || {};
+      this.checkEntityChangesAndInvalidate(conversationId, previousEntities, entities);
+      this.sessionEntities.set(conversationId, { ...entities }); // Store copy of entities
+
       // Intelligent bot activation based on query complexity
       const isSimpleQuery = this.isSimpleQuery(intent, entities, confidence);
       const shouldSkipExpensiveBots = isSimpleQuery && process.env.SMART_ROUTING !== 'false';
@@ -971,7 +1121,7 @@ class BotChainService {
           intent,
           entities,
           confidence_score: confidence,
-          route_flags: {
+          route_flags: routeFlags.needs_context ? routeFlags : {
             needs_context: contextDetection.needs_context,
             context_type: contextDetection.context_type,
             context_confidence: contextDetection.confidence
@@ -988,6 +1138,25 @@ class BotChainService {
         route = routingResponse.route;
         needs_clarification = routingResponse.needs_clarification;
         clarification_type = routingResponse.clarification_type;
+        
+        // Use resolved entities if reference resolution occurred
+        if (routingResponse.resolved_entities) {
+          logger.info('Using resolved entities from context router', {
+            originalEntities: entities,
+            resolvedEntities: routingResponse.resolved_entities,
+            enrichedQuery: routingResponse.enriched_query
+          });
+          entities = routingResponse.resolved_entities;
+        }
+        
+        // Use enriched query if available
+        if (routingResponse.enriched_query && routingResponse.enriched_query !== cleanText) {
+          logger.info('Using enriched query from reference resolution', {
+            originalQuery: cleanText,
+            enrichedQuery: routingResponse.enriched_query
+          });
+          cleanText = routingResponse.enriched_query;
+        }
       } else {
         logger.info('Skipping Context Router - direct query with complete entities', {
           intent,
@@ -1003,11 +1172,11 @@ class BotChainService {
 
       logger.debug('Context routing completed', { route, needs_clarification });
 
-      // Check if intent itself is CLARIFICATION
-      if (intent === 'CLARIFICATION') {
+      // Check if intent itself is CLARIFICATION or UNCLEAR
+      if (intent === 'CLARIFICATION' || intent === 'UNCLEAR') {
         needs_clarification = true;
-        clarification_type = 'low_confidence';
-        logger.info('CLARIFICATION intent detected - triggering clarify bot');
+        clarification_type = intent === 'UNCLEAR' ? 'unclear_query' : 'low_confidence';
+        logger.info(`${intent} intent detected - triggering clarify bot`);
       }
 
       // Handle clarification needed
@@ -1079,6 +1248,18 @@ class BotChainService {
           last_query: cleanText,
           context_type: contextDetection.context_type
         };
+        logger.info('Adding conversation history to SQL request', {
+          conversationId,
+          historyLength: routingResponse.conversation_history.length,
+          contextType: contextDetection.context_type
+        });
+      } else if (contextDetection.needs_context && !routingResponse) {
+        // This shouldn't happen now that RESULT_REF always goes through context router
+        logger.warn('Context needed but no routing response available', {
+          conversationId,
+          intent,
+          contextType: contextDetection.context_type
+        });
       }
       
       // Call SQL generation bot
@@ -1147,13 +1328,22 @@ class BotChainService {
         console.log('  - Intent =', intent);
         
         // SPECIAL HANDLING FOR COUNT QUERIES
+        console.log('🔴 COUNT QUERY DETECTION DEBUG:');
+        console.log('  - template_used:', template_used);
+        console.log('  - template_used includes count_:', template_used && template_used.includes('count_'));
+        console.log('  - entities.operation:', entities.operation);
+        console.log('  - intent:', intent);
+        
         const isCountQuery = template_used && (
           template_used.includes('count_') ||
           template_used === 'compare_governments'
         ) || (entities.operation === 'count' || intent === 'count');
         
+        console.log('  - isCountQuery result:', isCountQuery);
+        
         if (isCountQuery) {
           logger.info('Processing COUNT query with special handling', { template_used, intent });
+          console.log('✅ ENTERING COUNT QUERY HANDLING BLOCK');
           
           // For count queries, we need to execute actual counting logic
           if (template_used === 'count_decisions_by_topic') {
@@ -1343,6 +1533,7 @@ class BotChainService {
           }
         } else {
           // REGULAR SEARCH QUERIES - existing logic
+          console.log('❌ NOT A COUNT QUERY - ENTERING REGULAR SEARCH BLOCK');
           logger.info('Processing regular search query');
           
           // Build Supabase query based on SQL parameters (not entities)
@@ -1366,11 +1557,18 @@ class BotChainService {
         }
         
         // Date range filter
-        if (entities.date_range && entities.date_range.start && entities.date_range.end) {
+        if (entities.date_range && typeof entities.date_range === 'object' && 
+            entities.date_range.start && entities.date_range.end) {
           query = query
             .gte('decision_date', entities.date_range.start)
             .lte('decision_date', entities.date_range.end);
           logger.debug('Added date range filter', entities.date_range);
+        } else if (entities.date_range && typeof entities.date_range === 'string') {
+          // Log warning if date_range is a string instead of an object
+          logger.warn('Date range received as string instead of object', { 
+            date_range: entities.date_range,
+            type: typeof entities.date_range 
+          });
         }
         
         // Ministry filter - search in tags_government_body
@@ -1387,6 +1585,14 @@ class BotChainService {
         if (entities.topic && entities.topic !== 'אחרונות') {
           query = query.ilike('tags_policy_area', `%${entities.topic}%`);
           logger.debug('Added topic filter', { topic: entities.topic });
+        }
+        
+        // For "latest" queries, ensure we only get decisions with valid dates
+        if (entities.order === 'latest' || entities.topic === 'אחרונות') {
+          query = query
+            .not('decision_date', 'is', null)
+            .gte('decision_date', '1990-01-01'); // Exclude very old or invalid dates
+          logger.debug('Added date validity filter for latest decisions');
         }
         
         // Order and limit
@@ -1644,12 +1850,11 @@ class BotChainService {
         ministries: result.tags_government_body ? result.tags_government_body.split(';').map((m: string) => m.trim()) : []
       }));
       
-      // NEW LLM FORMATTER: Check if we should use the LLM formatter
-      const useLLMFormatter = process.env.USE_LLM_FORMATTER === 'true';
+      // NEW LLM FORMATTER: Use the LLM formatter if enabled
       
       let formatResponse: any;
       
-      if (useLLMFormatter) {
+      if (this.useLLMFormatter) {
         // NEW FLOW: Use LLM-based formatter
         logger.info('Using LLM formatter (GPT-4o-mini)', { 
           conversationId,
@@ -1729,7 +1934,8 @@ class BotChainService {
           evaluation,
           processing_time_ms: processingTime,
           service: 'bot-chain-full-pipeline',
-          token_usage: this.getCurrentRequestTokenSummary(currentRequestTokens)
+          token_usage: this.getCurrentRequestTokenSummary(currentRequestTokens, this.getRouteType(intent, needs_clarification)),
+          sessionId: request.sessionId
         }
       };
       

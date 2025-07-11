@@ -49,7 +49,12 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            title, summary, topics, ministries, decision_url
+            title, 
+            CASE 
+                WHEN LENGTH(summary) > 500 THEN SUBSTRING(summary, 1, 497) || '...'
+                ELSE summary
+            END as summary,
+            topics, ministries, decision_url
         FROM government_decisions 
         WHERE %(topic)s = ANY(topics)
         ORDER BY decision_date DESC, government_number DESC, decision_number DESC
@@ -59,9 +64,9 @@ SQL_TEMPLATES = {
         optional_params=["limit"],
         example_params={
             "topic": "ביטחון",
-            "limit": 50
+            "limit": 10
         },
-        intent_match=["search"]
+        intent_match=["search", "DATA_QUERY"]
     ),
     
     "specific_decision": SQLTemplate(
@@ -322,6 +327,85 @@ SQL_TEMPLATES = {
         intent_match=["comparison"]
     ),
     
+    "compare_governments_detailed": SQLTemplate(
+        name="compare_governments_detailed",
+        description="Compare specific decisions between governments on a topic",
+        sql="""
+        WITH gov_decisions AS (
+            SELECT 
+                government_number,
+                decision_number,
+                decision_date,
+                title,
+                summary,
+                topics,
+                ministries,
+                decision_url,
+                operativity
+            FROM government_decisions 
+            WHERE government_number IN %(government_list)s
+            AND %(topic)s = ANY(topics)
+        )
+        SELECT 
+            government_number,
+            json_agg(json_build_object(
+                'decision_number', decision_number,
+                'decision_date', decision_date,
+                'title', title,
+                'summary', summary,
+                'topics', topics,
+                'ministries', ministries,
+                'decision_url', decision_url,
+                'operativity', operativity
+            ) ORDER BY decision_date DESC) as decisions,
+            COUNT(*) as decision_count
+        FROM gov_decisions
+        GROUP BY government_number
+        ORDER BY government_number;
+        """,
+        required_params=["government_list", "topic"],
+        optional_params=[],
+        example_params={
+            "government_list": [35, 36],
+            "topic": "דיור"
+        },
+        intent_match=["comparison", "DATA_QUERY"]
+    ),
+    
+    "compare_policy_between_governments": SQLTemplate(
+        name="compare_policy_between_governments",
+        description="Compare policy decisions between two governments with details",
+        sql="""
+        SELECT 
+            government_number,
+            decision_number,
+            decision_date,
+            title,
+            summary,
+            topics,
+            ministries,
+            decision_url,
+            CASE 
+                WHEN government_number = %(gov1)s THEN 'ממשלה ' || %(gov1)s::text
+                WHEN government_number = %(gov2)s THEN 'ממשלה ' || %(gov2)s::text
+            END as government_label
+        FROM government_decisions 
+        WHERE government_number IN (%(gov1)s, %(gov2)s)
+        AND %(topic)s = ANY(topics)
+        ORDER BY government_number, decision_date DESC
+        LIMIT %(limit)s;
+        """,
+        required_params=["gov1", "gov2", "topic"],
+        optional_params=["limit"],
+        example_params={
+            "gov1": 35,
+            "gov2": 36,
+            "topic": "דיור",
+            "limit": 20
+        },
+        intent_match=["comparison", "DATA_QUERY"]
+    ),
+    
     "recent_decisions": SQLTemplate(
         name="recent_decisions",
         description="Get most recent decisions",
@@ -331,6 +415,8 @@ SQL_TEMPLATES = {
             title, summary, topics, ministries, decision_url
         FROM government_decisions 
         WHERE 1=1
+        AND decision_date IS NOT NULL
+        AND decision_date >= '1990-01-01'
         {government_filter}
         {topic_filter}
         ORDER BY decision_date DESC, government_number DESC, decision_number DESC
@@ -587,6 +673,193 @@ SQL_TEMPLATES = {
         intent_match=["search", "count"]
     ),
     
+    "joint_ministries_decisions": SQLTemplate(
+        name="joint_ministries_decisions",
+        description="Find decisions involving ALL specified ministries",
+        sql="""
+        SELECT 
+            id, government_number, decision_number, decision_date,
+            title, summary, topics, ministries, decision_url
+        FROM government_decisions 
+        WHERE ministries @> %(ministry_list)s::text[]
+        {government_filter}
+        {date_filter}
+        ORDER BY decision_date DESC, government_number DESC, decision_number DESC
+        LIMIT %(limit)s;
+        """,
+        required_params=["ministry_list"],
+        optional_params=["government_number", "start_date", "end_date", "limit"],
+        example_params={
+            "ministry_list": ["משרד הבריאות", "משרד האוצר"],
+            "limit": 20
+        },
+        intent_match=["search", "DATA_QUERY"]
+    ),
+    
+    "decisions_by_multiple_topics": SQLTemplate(
+        name="decisions_by_multiple_topics",
+        description="Find decisions covering multiple topics",
+        sql="""
+        SELECT 
+            id, government_number, decision_number, decision_date,
+            title, summary, topics, ministries, decision_url,
+            array_length(topics, 1) as topic_count
+        FROM government_decisions 
+        WHERE topics && %(topic_list)s::text[]
+        {government_filter}
+        ORDER BY array_length(topics && %(topic_list)s::text[], 1) DESC, decision_date DESC
+        LIMIT %(limit)s;
+        """,
+        required_params=["topic_list"],
+        optional_params=["government_number", "limit"],
+        example_params={
+            "topic_list": ["חינוך", "תקציב"],
+            "limit": 20
+        },
+        intent_match=["search", "DATA_QUERY"]
+    ),
+    
+    "budget_decisions": SQLTemplate(
+        name="budget_decisions",
+        description="Find decisions with budget implications",
+        sql="""
+        SELECT 
+            id, government_number, decision_number, decision_date,
+            title, summary, topics, ministries, decision_url,
+            CASE 
+                WHEN content ~* 'מיליון|מיליארד|תקציב|הקצאה|מימון' THEN true
+                ELSE false
+            END as has_budget_mention
+        FROM government_decisions 
+        WHERE content ~* 'ש"ח|₪|מיליון|מיליארד|תקציב'
+        {topic_filter}
+        {government_filter}
+        ORDER BY decision_date DESC
+        LIMIT %(limit)s;
+        """,
+        required_params=[],
+        optional_params=["topic", "government_number", "limit"],
+        example_params={
+            "topic": "חינוך",
+            "limit": 20
+        },
+        intent_match=["search", "DATA_QUERY"]
+    ),
+    
+    "urgent_decisions": SQLTemplate(
+        name="urgent_decisions",
+        description="Find urgent or immediate decisions",
+        sql="""
+        SELECT 
+            id, government_number, decision_number, decision_date,
+            title, summary, topics, ministries, decision_url
+        FROM government_decisions 
+        WHERE (title ~* 'דחוף|מיידי|חירום' OR content ~* 'דחוף|מיידי|חירום|בהול')
+        {topic_filter}
+        {government_filter}
+        {date_filter}
+        ORDER BY decision_date DESC
+        LIMIT %(limit)s;
+        """,
+        required_params=[],
+        optional_params=["topic", "government_number", "start_date", "end_date", "limit"],
+        example_params={
+            "limit": 20
+        },
+        intent_match=["search", "DATA_QUERY"]
+    ),
+    
+    "canceled_decisions": SQLTemplate(
+        name="canceled_decisions",
+        description="Find canceled or revoked decisions",
+        sql="""
+        SELECT 
+            id, government_number, decision_number, decision_date,
+            title, summary, topics, ministries, decision_url,
+            operativity
+        FROM government_decisions 
+        WHERE operativity = 'בוטלה' OR title ~* 'ביטול|בטל'
+        {topic_filter}
+        {government_filter}
+        ORDER BY decision_date DESC
+        LIMIT %(limit)s;
+        """,
+        required_params=[],
+        optional_params=["topic", "government_number", "limit"],
+        example_params={
+            "limit": 20
+        },
+        intent_match=["search", "DATA_QUERY"]
+    ),
+    
+    "committee_decisions": SQLTemplate(
+        name="committee_decisions",
+        description="Find decisions by specific committee",
+        sql="""
+        SELECT 
+            id, government_number, decision_number, decision_date,
+            title, summary, topics, ministries, decision_url,
+            goverment_secretary_name as committee
+        FROM government_decisions 
+        WHERE goverment_secretary_name ILIKE '%' || %(committee_name)s || '%'
+        {topic_filter}
+        {government_filter}
+        ORDER BY decision_date DESC
+        LIMIT %(limit)s;
+        """,
+        required_params=["committee_name"],
+        optional_params=["topic", "government_number", "limit"],
+        example_params={
+            "committee_name": "ועדת שרים",
+            "limit": 20
+        },
+        intent_match=["search", "DATA_QUERY"]
+    ),
+    
+    "implementation_decisions": SQLTemplate(
+        name="implementation_decisions",
+        description="Find decisions about implementing previous decisions",
+        sql="""
+        SELECT 
+            id, government_number, decision_number, decision_date,
+            title, summary, topics, ministries, decision_url
+        FROM government_decisions 
+        WHERE (title ~* 'יישום|ביצוע|הוצאה לפועל' OR content ~* 'ליישום החלטה|לביצוע החלטה')
+        {topic_filter}
+        {government_filter}
+        ORDER BY decision_date DESC
+        LIMIT %(limit)s;
+        """,
+        required_params=[],
+        optional_params=["topic", "government_number", "limit"],
+        example_params={
+            "limit": 20
+        },
+        intent_match=["search", "DATA_QUERY"]
+    ),
+    
+    "extension_decisions": SQLTemplate(
+        name="extension_decisions", 
+        description="Find decisions extending or updating previous decisions",
+        sql="""
+        SELECT 
+            id, government_number, decision_number, decision_date,
+            title, summary, topics, ministries, decision_url
+        FROM government_decisions 
+        WHERE title ~* 'הארכ|עדכון|תיקון החלטה|שינוי'
+        {topic_filter}
+        {government_filter}
+        ORDER BY decision_date DESC
+        LIMIT %(limit)s;
+        """,
+        required_params=[],
+        optional_params=["topic", "government_number", "limit"],
+        example_params={
+            "limit": 20
+        },
+        intent_match=["search", "DATA_QUERY"]
+    ),
+    
 }
 
 
@@ -650,10 +923,10 @@ def extract_comparison_years(text: str) -> Optional[tuple]:
 def get_template_by_intent(intent: str, entities: Dict[str, Any]) -> Optional[SQLTemplate]:
     """Select the best template based on intent and available entities."""
     
-    # For EVAL intent - always look for specific decision
-    if intent == "EVAL":
+    # For EVAL or ANALYSIS intent - always look for specific decision
+    if intent == "EVAL" or intent == "ANALYSIS":
         if entities.get("decision_number"):
-            # For EVAL, we need a specific decision
+            # For EVAL/ANALYSIS, we need a specific decision
             if not entities.get("government_number"):
                 entities["government_number"] = 37
             return SQL_TEMPLATES["specific_decision"]
@@ -668,8 +941,8 @@ def get_template_by_intent(intent: str, entities: Dict[str, Any]) -> Optional[SQ
             entities["government_number"] = 37
             return SQL_TEMPLATES["specific_decision"]
     
-    # For count queries - check both intent and operation
-    if intent == "count" or entities.get("operation") == "count":
+    # For count queries - check intent, operation, or count_only flag
+    if intent == "count" or entities.get("operation") == "count" or entities.get("count_only"):
         # Extract year from entities if present
         year = extract_year_from_entities(entities)
         
@@ -703,10 +976,11 @@ def get_template_by_intent(intent: str, entities: Dict[str, Any]) -> Optional[SQ
         elif entities.get("topic"):
             return SQL_TEMPLATES["count_decisions_by_topic"]
     
-    # For search queries (handle both "search" and "QUERY" intents)
-    if intent == "search" or intent == "QUERY":
+    # For search queries (handle "search", "QUERY", and "DATA_QUERY" intents)
+    if intent == "search" or intent == "QUERY" or intent == "DATA_QUERY":
+        print(f"DEBUG: Entered DATA_QUERY block with entities: {entities}")
         # Check if this is actually a count operation within a QUERY intent
-        if entities.get("operation") == "count":
+        if entities.get("operation") == "count" or entities.get("count_only"):
             print(f"DEBUG: Count operation detected, entities: {entities}")
             # Count by topic and date range (check this BEFORE extracting year)
             if entities.get("topic") and entities.get("date_range"):
@@ -756,7 +1030,13 @@ def get_template_by_intent(intent: str, entities: Dict[str, Any]) -> Optional[SQ
         
         # Ministry search
         if entities.get("ministries"):
-            return SQL_TEMPLATES["search_by_ministry"]
+            # Check if we need joint ministries (ALL ministries must be involved)
+            if len(entities.get("ministries", [])) > 1:
+                entities["ministry_list"] = entities["ministries"]
+                return SQL_TEMPLATES["joint_ministries_decisions"]
+            else:
+                # Single ministry search
+                return SQL_TEMPLATES["search_by_ministry"]
         
         # Government + topic search
         if entities.get("government_number") and entities.get("topic"):
@@ -820,7 +1100,33 @@ def get_template_by_intent(intent: str, entities: Dict[str, Any]) -> Optional[SQ
         return SQL_TEMPLATES["recent_decisions"]
     
     # For comparison queries
-    if intent == "comparison":
+    if intent == "comparison" or entities.get("comparison_target"):
+        # Check if we have two specific governments to compare
+        if entities.get("government_numbers") and len(entities["government_numbers"]) == 2:
+            entities["gov1"] = entities["government_numbers"][0]
+            entities["gov2"] = entities["government_numbers"][1]
+            if entities.get("topic"):
+                return SQL_TEMPLATES["compare_policy_between_governments"]
+        
+        # Check for comparison keywords in topic
+        elif entities.get("topic") and ("השווה" in entities["topic"] or "השוואה" in entities["topic"]):
+            # Extract government numbers from topic if available
+            import re
+            gov_pattern = r'ממשלה\s*(\d+)'
+            gov_matches = re.findall(gov_pattern, entities["topic"])
+            if len(gov_matches) >= 2:
+                entities["gov1"] = int(gov_matches[0])
+                entities["gov2"] = int(gov_matches[1])
+                # Clean the topic to remove comparison words
+                clean_topic = re.sub(r'השווה\s+את\s+מדיניות\s+ה?', '', entities["topic"])
+                clean_topic = re.sub(r'בין\s+ממשלה\s+\d+\s+ל?ממשלה\s+\d+', '', clean_topic).strip()
+                entities["topic"] = clean_topic
+                return SQL_TEMPLATES["compare_policy_between_governments"]
+        
+        # Default comparison with aggregated counts
+        elif entities.get("government_list") and entities.get("topic"):
+            return SQL_TEMPLATES["compare_governments_detailed"]
+        
         return SQL_TEMPLATES["compare_governments"]
     
     # Default fallback
@@ -926,7 +1232,7 @@ def get_template_coverage() -> Dict[str, Any]:
 
 # Default parameters for common cases
 DEFAULT_PARAMS = {
-    "limit": 20,
+    "limit": 5,  # Reduced from 20 to prevent token overflow for large topics like environment
     "min_count": 1,
     "start_date": "2020-01-01",
     "end_date": "2025-12-31"
