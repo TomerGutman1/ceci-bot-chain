@@ -410,7 +410,7 @@ async def format_response(request: FormatterRequest) -> FormatterResponse:
         logger.warning(f"Decision 2000 request - Content: {request.content}")
         
     # Check if we have actual results
-    if request.data_type == DataType.ranked_rows and request.content:
+    if request.data_type == DataType.RANKED_ROWS and request.content:
         results = request.content.get('results', [])
         if not results:
             logger.warning("No results provided but formatter was called")
