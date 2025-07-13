@@ -34,6 +34,7 @@ via **Frontend → FastAPI → Bot-Chain → Supabase PG**.
 | `UNIFIED_ARCHITECTURE_REPORT.md`  | Migration details    | Understand changes       |
 | `bot_chain/test_all_routes.py`    | Python tester        | Full route tests         |
 | `bot_chain/test_routes.sh`        | Bash tester          | Quick sanity check       |
+| `PRODUCTION_DEPLOYMENT_GUIDE.md`  | **Deploy guide**     | Production updates       |
 
 ---
 
@@ -43,7 +44,7 @@ via **Frontend → FastAPI → Bot-Chain → Supabase PG**.
 2. **Layer isolation** – specs are self-contained.
 3. Track `debug_info.token_usage`.
 
-* Unified-Intent removed one GPT call (\~100 tokens saved).
+* Unified-Intent removed one GPT call (~100 tokens saved).
 * Prompt shrinks deliver 75 % average reduction.
 
 ---
@@ -93,8 +94,25 @@ Health: `/api/chat/health` + `/health` per bot.
 
 ---
 
-## 8 · Contact
+## 8 · Production Status (13 Jul 2025) 🚀
+
+- **Live at**: https://ceci-ai.ceci.org.il
+- **Server**: DigitalOcean droplet (178.62.39.248)
+- **Branch**: `production-deploy`
+- **SSL**: Let's Encrypt (auto-renewal)
+- **Deployment Guide**: See `PRODUCTION_DEPLOYMENT_GUIDE.md`
+
+### Recent Updates:
+- ✅ Fixed LLM formatter validation errors
+- ✅ Prevented fake data generation
+- ✅ Added date display (DD/MM/YYYY) to results
+- ✅ Configured automated backups
+- ✅ Created comprehensive deployment guide
+
+---
+
+## 9 · Contact
 
 **Maintainer:** Tomer · [tomer@example.com](mailto:tomer@example.com)
 
-Domain for deployment in digital ocean droplet : [https://ceci-ai.ceci.org.il/](https://ceci-ai.ceci.org.il/)
+Domain for deployment in digital ocean droplet : [https://ceci-ai.ceci.org.il/](https://ceci-ai.ceci.org.il/)

@@ -1,6 +1,6 @@
 # 🧠 CLAUDE MAIN MEMORY – CECI Bot Chain
 
-<small>Last updated: **10 Jul 2025 (Rev‑4 - Route Testing Complete)**</small>
+<small>Last updated: **13 Jul 2025 (Rev‑5 - Production Deployed)**</small>
 
 ---
 
@@ -21,12 +21,13 @@ Answer Hebrew questions about Israeli government decisions through a **unified G
 ## 2 · Must‑Read Files
 
 1. **PROJECT\_SUMMARY.md** – current status & ports
-2. **bot_chain/ARCHITECTURE.md** – unified GPT-4o architecture design
-3. **bot_chain/MICRO\_LEVEL\_GUIDE.md** – cross‑layer coding rules
-4. **bot_chain/MIGRATION\_GUIDE.md** – step-by-step migration to new architecture
-5. **TEST\_RESULTS\_HEBREW.md** – comprehensive test results with costs
-6. **ROUTE\_TEST\_REPORT.md** – detailed route testing analysis
-7. **UNIFIED\_ARCHITECTURE\_REPORT.md** – implementation report
+2. **PRODUCTION\_DEPLOYMENT\_GUIDE.md** – 🚀 HOW TO DEPLOY CHANGES
+3. **bot_chain/ARCHITECTURE.md** – unified GPT-4o architecture design
+4. **bot_chain/MICRO\_LEVEL\_GUIDE.md** – cross‑layer coding rules
+5. **bot_chain/MIGRATION\_GUIDE.md** – step-by-step migration to new architecture
+6. **TEST\_RESULTS\_HEBREW.md** – comprehensive test results with costs
+7. **ROUTE\_TEST\_REPORT.md** – detailed route testing analysis
+8. **UNIFIED\_ARCHITECTURE\_REPORT.md** – implementation report
 
 *(Open only the layer spec you are actively editing – nothing more.)*
 
@@ -39,7 +40,23 @@ Answer Hebrew questions about Israeli government decisions through a **unified G
 
 ---
 
-## 3 · Cost & Testing Constraints
+## 3 · Production Deployment 🚀
+
+### Quick Deploy Commands:
+```bash
+# 1. Commit and push changes
+git add . && git commit -m "fix: description" && git push origin production-deploy
+
+# 2. Deploy to server
+ssh root@178.62.39.248 "cd /root/CECI-W-BOTS && git pull && docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod build [service] && ./run-compose.sh up -d [service]"
+```
+
+* **Live Site**: https://ceci-ai.ceci.org.il
+* **Branch**: `production-deploy` (ALWAYS use this)
+* **Server**: 178.62.39.248
+* **Guide**: See `PRODUCTION_DEPLOYMENT_GUIDE.md`
+
+## 4 · Cost & Testing Constraints
 
 * **Budget restored**: Allows GPT-4o usage on critical layers
 * **New cost structure**: ~\$0.016/query (typical), ~\$0.031/analysis 
@@ -52,7 +69,7 @@ Answer Hebrew questions about Israeli government decisions through a **unified G
 
 ---
 
-## 4 · Unified Architecture Changes (10 Jul 2025)
+## 5 · Unified Architecture Changes (10 Jul 2025)
 
 ### What Changed?
 - **MERGED**: `0_REWRITE_BOT` + `1_INTENT_BOT` → Single **`1_UNIFIED_INTENT_BOT`** (GPT-4o-turbo)
@@ -75,31 +92,39 @@ Answer Hebrew questions about Israeli government decisions through a **unified G
 
 ---
 
-## 5 · Implementation Checklist (progress‑ordered)
+## 6 · Implementation Checklist (progress‑ordered)
 
-* [x] **Unified Intent Bot** Created ✓ / Tested ✓ / Deployed ⬜
-* [x] **LLM Formatter Bot** Created ✓ / Tested ✓ / Deployed ⬜
+* [x] **Unified Intent Bot** Created ✓ / Tested ✓ / Deployed ✓
+* [x] **LLM Formatter Bot** Created ✓ / Tested ✓ / Deployed ✓
 * [x] **Feature Flags** Added ✓ / A/B testing setup ✓
 * [x] **Documentation** Architecture ✓ / Micro Guide ✓ / CLAUDE.md ✓
-* [ ] **Migration** Phase 1 ⬜ / Phase 2 ⬜ / Phase 3 ⬜ / Phase 4 ⬜
+* [x] **Production Deploy** SSL ✓ / Monitoring ✓ / Backups ✓
+* [x] **Migration** Phase 1 ✓ (100% traffic on new architecture)
 
 *(Tick boxes as soon as a task is merged; Claude reloads fresh memory each convo.)*
 
 ---
 
-## 6 · Current Project Status (10 Jul 2025)
+## 7 · Current Project Status (13 Jul 2025)
 
-### 🆕 Unified Architecture Implementation
+### 🚀 Production Deployment Complete (13 Jul 2025)
 
-**Completed**:
-1. ✓ Created `UNIFIED_INTENT_BOT_1` combining rewrite + intent (GPT-4o-turbo)
-2. ✓ Created `LLM_FORMATTER_BOT_4` for flexible Hebrew formatting (GPT-4o-mini)
-3. ✓ Updated `botChainService.ts` with feature flags for gradual rollout
-4. ✓ Created comprehensive test suites for both new bots
-5. ✓ Updated documentation: ARCHITECTURE.md, MICRO_LEVEL_GUIDE.md
-6. ✓ Created new branch `unified-gpt-architecture` with all changes
-7. ✓ Fixed statistical queries - count_only flag now working correctly
-8. ✓ Removed old bot containers and directories (rewrite-bot, intent-bot)
+**System is LIVE at**: https://ceci-ai.ceci.org.il
+
+**Today's Fixes**:
+1. ✓ Fixed LLM formatter DataType enum error (500 errors)
+2. ✓ Fixed FormatterResponse validation errors 
+3. ✓ Prevented LLM from generating fake data
+4. ✓ Added date display (DD/MM/YYYY) to all query results
+5. ✓ URL validation - only gov.il URLs shown
+
+**Unified Architecture Status**:
+1. ✓ `UNIFIED_INTENT_BOT_1` deployed (GPT-4o-turbo)
+2. ✓ `LLM_FORMATTER_BOT_4` deployed (GPT-4o-mini)
+3. ✓ All services running healthy on production
+4. ✓ SSL certificate active (Let's Encrypt)
+5. ✓ Automated backups configured (3 AM daily)
+6. ✓ Log rotation enabled
 
 **Feature Flags** (currently enabled):
 - `USE_UNIFIED_INTENT=true` - Enable unified intent bot ✅
@@ -176,7 +201,7 @@ Answer Hebrew questions about Israeli government decisions through a **unified G
 
 ---
 
-## 7 · Temporary Overrides & Monitoring
+## 8 · Temporary Overrides & Monitoring
 
 * **Evaluator & Ranker** remain OFF unless explicitly required.
 * Log `token_usage` & daily spend; alert > \$10 or p95 latency > 2 s.
@@ -294,6 +319,27 @@ Answer Hebrew questions about Israeli government decisions through a **unified G
 - `src/macro_filter_view/components/shared/ReportSharing.tsx` - Enhanced export
 
 **Access**: http://localhost/dashboard/statistics
+
+### 🚀 Production Deployment Summary (13 Jul 2025)
+
+**Deployment Complete**:
+- Application live at https://ceci-ai.ceci.org.il
+- All services deployed to DigitalOcean droplet (178.62.39.248)
+- SSL certificate configured and auto-renewal enabled
+- Database backups scheduled daily at 3 AM
+- Log rotation configured for all containers
+- Production deployment guide created at `PRODUCTION_DEPLOYMENT_GUIDE.md`
+
+**Critical Fixes Applied**:
+1. ✓ LLM formatter no longer generates fake data
+2. ✓ Date formatting (DD/MM/YYYY) added to all results
+3. ✓ Invalid URLs filtered out - only gov.il URLs shown
+4. ✓ Empty results handled gracefully ("לא נמצאו תוצאות")
+
+**Deployment Workflow**:
+- Always use `production-deploy` branch
+- Quick deploy: `ssh root@178.62.39.248 "cd /root/CECI-W-BOTS && git pull && ./run-compose.sh up -d [service]"`
+- See `PRODUCTION_DEPLOYMENT_GUIDE.md` for detailed instructions
 
 ---
 
