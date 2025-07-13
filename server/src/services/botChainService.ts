@@ -1917,10 +1917,10 @@ class BotChainService {
       const mappedResults = isCountQuery ? rankedResults : rankedResults.map((result: any) => ({
         ...result,
         title: result.decision_title || 'ללא כותרת',
-        // If full content requested, use the full decision_content, otherwise use summary or truncated content
+        // If full content requested, use the full decision_content, otherwise DO NOT send content
         content: isFullContentRequest 
           ? (result.decision_content || result.content || result.summary || '')
-          : (result.summary || result.decision_content?.substring(0, 500) || ''),
+          : '',  // Empty string when full content not requested
         decision_content: result.decision_content || result.content || '', // Ensure full content is available
         summary: result.summary || '', // Ensure summary is available separately
         topics: result.tags_policy_area ? result.tags_policy_area.split(';').map((t: string) => t.trim()) : [],

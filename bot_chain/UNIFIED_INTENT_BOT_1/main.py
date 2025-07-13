@@ -143,6 +143,7 @@ Your task is to:
 - ministries: [list of ministry names]
 - decision_type: "אופרטיבית" if mentioned
 - comparison_target: for השווה queries
+- full_content: true if "תוכן מלא" or "התוכן המלא" mentioned
 
 ## Date Normalization:
 - "השנה" → current year range
@@ -203,6 +204,24 @@ Output: {{
   "confidence": 0.92,
   "route_flags": {{
     "needs_context": true,
+    "is_statistical": false,
+    "is_comparison": false
+  }},
+  "corrections": []
+}}
+
+Input: "החלטה 550, התוכן המלא"
+Output: {{
+  "clean_query": "החלטה 550 - התוכן המלא",
+  "intent": "DATA_QUERY",
+  "params": {{
+    "decision_number": 550,
+    "government_number": 37,
+    "full_content": true
+  }},
+  "confidence": 0.95,
+  "route_flags": {{
+    "needs_context": false,
     "is_statistical": false,
     "is_comparison": false
   }},
