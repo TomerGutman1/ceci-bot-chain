@@ -254,13 +254,37 @@ async def call_gpt_formatter(
                     if "summary" in result and isinstance(result["summary"], str) and len(result["summary"]) > 500:
                         result["summary"] = result["summary"][:497] + "..."
         
-        # Build the prompt
-        prompt = prompt_template.format(
-            content=json.dumps(truncated_content, ensure_ascii=False, indent=2),
-            query=query,
-            style=style,
-            max_results=max_results
-        )
+        # Build the prompt - special handling for analysis
+        if isinstance(truncated_content, dict) and 'decision_number' in truncated_content:
+            # For analysis, the template expects individual fields
+            try:
+                prompt = prompt_template.format(
+                    decision_number=truncated_content.get('decision_number', ''),
+                    title=truncated_content.get('title', ''),
+                    government_number=truncated_content.get('government_number', ''),
+                    prime_minister=truncated_content.get('prime_minister', ''),
+                    decision_date=truncated_content.get('decision_date', ''),
+                    committee=truncated_content.get('committee', ''),
+                    operativity=truncated_content.get('operativity', ''),
+                    decision_url=truncated_content.get('decision_url', ''),
+                    tags_policy_area=truncated_content.get('tags_policy_area', ''),
+                    summary=truncated_content.get('summary', ''),
+                    content=truncated_content.get('content', ''),
+                    query=query,
+                    style=style
+                )
+            except KeyError as e:
+                logger.error(f"Missing field in analysis template: {e}")
+                # Fallback to JSON format
+                prompt = f"Format this analysis data in Hebrew:\n\nData: {json.dumps(truncated_content, ensure_ascii=False, indent=2)}\n\nOriginal query: {query}"
+        else:
+            # Regular format for non-analysis requests
+            prompt = prompt_template.format(
+                content=json.dumps(truncated_content, ensure_ascii=False, indent=2),
+                query=query,
+                style=style,
+                max_results=max_results
+            )
         
         # Safety check: ensure prompt doesn't exceed reasonable size
         MAX_PROMPT_LENGTH = 50000  # ~12.5K tokens approximately
@@ -386,7 +410,31 @@ def fallback_format(data_type: DataType, content: Dict, query: str) -> str:
             return "\n".join(lines)
         
         elif data_type == DataType.ANALYSIS:
-            return content.get("explanation", "ניתוח לא זמין.")
+            # Try to format analysis with available data
+            decision = content.get("decision", {})
+            evaluation = content.get("evaluation", {})
+            
+            if decision:
+                lines = ["# 📄 פרטי ההחלטה"]
+                lines.append(f"\n## החלטה {decision.get('decision_number', '')} - {decision.get('title', decision.get('decision_title', ''))}")
+                lines.append(f"\n**ממשלה:** {decision.get('government_number', '')}")
+                lines.append(f"**תאריך:** {decision.get('decision_date', '')}")
+                if decision.get('decision_url'):
+                    lines.append(f"\n🔗 [קישור להחלטה]({decision['decision_url']})")
+                
+                if decision.get('summary'):
+                    lines.append(f"\n### 📝 תקציר:\n{decision['summary']}")
+                
+                if evaluation:
+                    lines.append("\n---\n# 🔬 ניתוח ההחלטה")
+                    if evaluation.get('overall_score'):
+                        lines.append(f"\n## 📊 ציון ישימות: {evaluation['overall_score']}/100")
+                    if evaluation.get('explanation'):
+                        lines.append(f"\n{evaluation['explanation']}")
+                
+                return "\n".join(lines)
+            else:
+                return content.get("explanation", "ניתוח לא זמין.")
         
         else:
             return json.dumps(content, ensure_ascii=False, indent=2)
@@ -536,10 +584,26 @@ async def format_response(request: FormatterRequest) -> FormatterResponse:
     except Exception as e:
         logger.error(f"Formatting failed: {e}", extra={
             "conv_id": request.conv_id,
-            "error_type": type(e).__name__
+            "error_type": type(e).__name__,
+            "data_type": request.data_type.value
         })
         
-        # Try fallback formatting
+        # Special handling for analysis failures
+        if request.data_type == DataType.ANALYSIS:
+            logger.error(f"Analysis formatting failed - returning default message")
+            return FormatterResponse(
+                conv_id=request.conv_id,
+                formatted_response="מצטערים, לא הצלחנו להציג את הניתוח. נסה שוב מאוחר יותר.",
+                metadata=FormatterMetadata(
+                    cards_generated=0,
+                    format_type="error",
+                    word_count=10,
+                    truncated=False
+                ),
+                token_usage=None
+            )
+        
+        # Try fallback formatting for other types
         try:
             fallback_text = fallback_format(
                 request.data_type,
@@ -556,7 +620,15 @@ async def format_response(request: FormatterRequest) -> FormatterResponse:
                 )
             )
         except:
-            raise HTTPException(status_code=500, detail="Formatting failed")
+            # Last resort - return error message
+            return FormatterResponse(
+                conv_id=request.conv_id,
+                formatted_response="מצטערים, אירעה שגיאה בעיבוד התשובה.",
+                metadata=FormatterMetadata(
+                    format_type="error",
+                    word_count=6
+                )
+            )
 
 
 @app.get("/health", response_model=HealthResponse)
