@@ -105,11 +105,12 @@ Rules:
 4. For links, use ONLY the decision_url from the data (never generate URLs)
 5. Be concise but informative
 6. Maximum {max_results} results
+7. Format dates as DD/MM/YYYY (e.g., 15/03/2024)
 
 Card Format:
 ## [icon] [number]. [title]
 
-**ממשלה [government_number] | החלטה [decision_number]**
+**ממשלה [government_number] | החלטה [decision_number] | תאריך: [decision_date in DD/MM/YYYY format]**
 
 🔗 [לינק להחלטה באתר הממשלה](url) (only if decision_url exists)
 
