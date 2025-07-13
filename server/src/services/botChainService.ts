@@ -1726,6 +1726,27 @@ class BotChainService {
           has_decision_number: !!entities.decision_number,
           result_count: results?.length || 0
         });
+        
+        // Additional safety check
+        if (!results || results.length === 0) {
+          logger.error('EVALUATOR called but no results available', {
+            intent,
+            entities
+          });
+          return {
+            success: false,
+            response: "לא נמצאה ההחלטה המבוקשת לניתוח.",
+            metadata: {
+              intent,
+              entities,
+              confidence,
+              processing_time_ms: (Date.now() - startTime),
+              service: 'bot-chain',
+              token_usage: tokenTracker
+            }
+          };
+        }
+        
         // Step 1.3: Content validation for EVALUATOR
         const contentSuitabilityCheck = this.validateContentForEvaluation(results[0]);
         if (!contentSuitabilityCheck.suitable) {
