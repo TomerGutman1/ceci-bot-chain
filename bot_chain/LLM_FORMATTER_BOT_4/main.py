@@ -109,6 +109,7 @@ Rules:
 8. CRITICAL: Use ONLY the data provided - NEVER invent decisions, titles, summaries or any other information
 9. If no results provided, say "לא נמצאו תוצאות"
 10. For URLs: Show link ONLY if decision_url field exists and starts with https://www.gov.il - otherwise completely omit the link line
+11. Full Content: If the 'content' field has more than 500 characters, display it in the "תוכן" section. This indicates the user requested full content ("תוכן מלא")
 
 Card Format:
 ## [icon] [number]. [title]
@@ -120,7 +121,10 @@ Card Format:
 **תחומים:** [topics and ministries]
 
 📝 **תקציר:**
-[summary or truncated content]
+[summary]
+
+📋 **תוכן:**
+[If the result has content field with more than 500 characters, display it here, otherwise omit this section]
 
 ---
 

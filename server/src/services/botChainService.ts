@@ -1882,12 +1882,18 @@ class BotChainService {
         template_used === 'compare_governments'
       ) || (entities.operation === 'count');
       
+      // Check if user requested full content
+      const isFullContentRequest = entities.full_content === true;
+      
       // For count queries, pass the results as-is (they contain count information)
       // For regular queries, map database fields to formatter expected fields
       const mappedResults = isCountQuery ? rankedResults : rankedResults.map((result: any) => ({
         ...result,
         title: result.decision_title || 'ללא כותרת',
-        content: result.summary || result.decision_content?.substring(0, 500) || '',
+        // If full content requested, use the full decision_content, otherwise use summary or truncated content
+        content: isFullContentRequest 
+          ? (result.decision_content || result.content || result.summary || '')
+          : (result.summary || result.decision_content?.substring(0, 500) || ''),
         decision_content: result.decision_content || result.content || '', // Ensure full content is available
         summary: result.summary || '', // Ensure summary is available separately
         topics: result.tags_policy_area ? result.tags_policy_area.split(';').map((t: string) => t.trim()) : [],
