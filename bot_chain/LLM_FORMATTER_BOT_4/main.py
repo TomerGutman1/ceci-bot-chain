@@ -108,13 +108,14 @@ Rules:
 7. Format dates as DD/MM/YYYY (e.g., 15/03/2024)
 8. CRITICAL: Use ONLY the data provided - NEVER invent decisions, titles, summaries or any other information
 9. If no results provided, say "לא נמצאו תוצאות"
+10. For URLs: Show link ONLY if decision_url field exists and starts with https://www.gov.il - otherwise completely omit the link line
 
 Card Format:
 ## [icon] [number]. [title]
 
 **ממשלה [government_number] | החלטה [decision_number] | תאריך: [decision_date in DD/MM/YYYY format]**
 
-🔗 [לינק להחלטה באתר הממשלה](url) (only if decision_url exists)
+🔗 [לינק להחלטה באתר הממשלה](url) (only if decision_url exists and is a valid gov.il URL, otherwise omit this line completely)
 
 **תחומים:** [topics and ministries]
 
@@ -407,6 +408,24 @@ async def format_response(request: FormatterRequest) -> FormatterResponse:
     if request.original_query and "2000" in request.original_query:
         print(f"[DEBUG] Decision 2000 request - Full content: {request.content}")
         logger.warning(f"Decision 2000 request - Content: {request.content}")
+        
+    # Check if we have actual results
+    if request.data_type == DataType.ranked_rows and request.content:
+        results = request.content.get('results', [])
+        if not results:
+            logger.warning("No results provided but formatter was called")
+            return FormatterResponse(
+                formatted_response="לא נמצאו תוצאות עבור השאילתה שלך.",
+                token_usage=0
+            )
+            
+        # Validate results have real URLs
+        for result in results:
+            if 'decision_url' in result:
+                url = result.get('decision_url', '')
+                if url and not url.startswith('https://www.gov.il'):
+                    logger.error(f"Invalid URL found: {url}")
+                    result['decision_url'] = None  # Remove invalid URLs
     
     try:
         # Select appropriate prompt template
