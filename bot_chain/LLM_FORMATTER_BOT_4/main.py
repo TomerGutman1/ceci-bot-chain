@@ -438,6 +438,48 @@ async def format_response(request: FormatterRequest) -> FormatterResponse:
                     logger.error(f"Invalid URL found: {url}")
                     result['decision_url'] = None  # Remove invalid URLs
     
+    # Special handling for analysis data type
+    if request.data_type == DataType.ANALYSIS and request.content:
+        # Log the content structure for debugging
+        logger.info(f"Analysis content structure: {list(request.content.keys())}")
+        
+        # Extract decision data from content
+        decision = request.content.get('decision', {})
+        if not decision:
+            logger.error("No decision data provided for analysis")
+            return FormatterResponse(
+                conv_id=request.conv_id,
+                formatted_response="שגיאה: לא נמצאו נתוני החלטה לניתוח.",
+                metadata=FormatterMetadata(
+                    cards_generated=0,
+                    format_type="error",
+                    word_count=6,
+                    truncated=False
+                ),
+                token_usage=None
+            )
+        
+        # Flatten the content structure for the prompt
+        # The prompt expects fields like {decision_number}, {title}, etc. directly
+        flattened_content = {
+            "decision_number": decision.get("decision_number", ""),
+            "title": decision.get("title", decision.get("decision_title", "")),
+            "government_number": decision.get("government_number", ""),
+            "prime_minister": decision.get("prime_minister", ""),
+            "decision_date": decision.get("decision_date", ""),
+            "committee": decision.get("committee", ""),
+            "operativity": decision.get("operativity", ""),
+            "decision_url": decision.get("decision_url", ""),
+            "tags_policy_area": decision.get("tags_policy_area", decision.get("topics", [])),
+            "summary": decision.get("summary", ""),
+            "content": decision.get("decision_content", decision.get("content", "")),
+            "evaluation": request.content.get("evaluation", {}),
+            "explanation": request.content.get("explanation", "")
+        }
+        
+        # Update request content with flattened structure
+        request.content = flattened_content
+    
     try:
         # Select appropriate prompt template
         prompt_template = FORMATTER_PROMPTS.get(
