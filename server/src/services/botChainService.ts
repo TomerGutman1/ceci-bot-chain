@@ -1742,7 +1742,13 @@ class BotChainService {
               confidence,
               processing_time_ms: (Date.now() - startTime),
               service: 'bot-chain',
-              token_usage: currentRequestTokens
+              token_usage: {
+                total_tokens: 0,
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                estimated_cost_usd: 0,
+                bot_breakdown: {}
+              }
             }
           };
         }
