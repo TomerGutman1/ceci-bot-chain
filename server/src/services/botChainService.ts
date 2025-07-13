@@ -1742,7 +1742,7 @@ class BotChainService {
               confidence,
               processing_time_ms: (Date.now() - startTime),
               service: 'bot-chain',
-              token_usage: tokenTracker
+              token_usage: currentRequestTokens
             }
           };
         }
