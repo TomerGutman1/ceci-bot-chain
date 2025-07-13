@@ -415,8 +415,15 @@ async def format_response(request: FormatterRequest) -> FormatterResponse:
         if not results:
             logger.warning("No results provided but formatter was called")
             return FormatterResponse(
+                conv_id=request.conv_id,
                 formatted_response="לא נמצאו תוצאות עבור השאילתה שלך.",
-                token_usage=0
+                metadata=FormatterMetadata(
+                    cards_generated=0,
+                    format_type="empty_results",
+                    word_count=6,
+                    truncated=False
+                ),
+                token_usage=None
             )
             
         # Validate results have real URLs
