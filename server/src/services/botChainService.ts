@@ -658,8 +658,8 @@ class BotChainService {
 
   // Step 2.1: Smart EVALUATOR activation logic
   private shouldRunEvaluator(intent: string, entities: any, results: any[]): boolean {
-    // Must be EVAL intent
-    if (intent !== 'EVAL') {
+    // Must be EVAL or ANALYSIS intent (unified intent bot returns ANALYSIS)
+    if (intent !== 'EVAL' && intent !== 'ANALYSIS') {
       return false;
     }
     
@@ -1806,9 +1806,10 @@ class BotChainService {
             };
           }
         }
-      } else if (intent === 'EVAL') {
-        // EVAL intent but conditions not met for running evaluator
-        logger.info('EVAL intent but skipping EVALUATOR', {
+      } else if (intent === 'EVAL' || intent === 'ANALYSIS') {
+        // EVAL/ANALYSIS intent but conditions not met for running evaluator
+        logger.info('EVAL/ANALYSIS intent but skipping EVALUATOR', {
+          intent,
           reason: !results || results.length === 0 ? 'no_results' : 
                   results.length > 1 && !entities.decision_number ? 'multiple_results_no_specific_decision' :
                   'incomplete_entity_set',
