@@ -106,6 +106,8 @@ Rules:
 5. Be concise but informative
 6. Maximum {max_results} results
 7. Format dates as DD/MM/YYYY (e.g., 15/03/2024)
+8. CRITICAL: Use ONLY the data provided - NEVER invent decisions, titles, summaries or any other information
+9. If no results provided, say "לא נמצאו תוצאות"
 
 Card Format:
 ## [icon] [number]. [title]
@@ -400,6 +402,11 @@ async def format_response(request: FormatterRequest) -> FormatterResponse:
         "style": request.presentation_style,
         "content_keys": list(request.content.keys()) if request.content else []
     })
+    
+    # Debug logging for decision 2000
+    if request.original_query and "2000" in request.original_query:
+        print(f"[DEBUG] Decision 2000 request - Full content: {request.content}")
+        logger.warning(f"Decision 2000 request - Content: {request.content}")
     
     try:
         # Select appropriate prompt template
