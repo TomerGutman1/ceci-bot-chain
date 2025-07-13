@@ -445,7 +445,10 @@ async def format_response(request: FormatterRequest) -> FormatterResponse:
         
         # Extract decision data from content
         decision = request.content.get('decision', {})
-        if not decision:
+        logger.info(f"Decision data: {decision}")
+        
+        # Handle None or empty decision
+        if not decision or decision is None:
             logger.error("No decision data provided for analysis")
             return FormatterResponse(
                 conv_id=request.conv_id,
@@ -461,21 +464,26 @@ async def format_response(request: FormatterRequest) -> FormatterResponse:
         
         # Flatten the content structure for the prompt
         # The prompt expects fields like {decision_number}, {title}, etc. directly
+        # Use safe get with defaults to avoid None values
+        decision = decision if isinstance(decision, dict) else {}
+        
         flattened_content = {
-            "decision_number": decision.get("decision_number", ""),
-            "title": decision.get("title", decision.get("decision_title", "")),
-            "government_number": decision.get("government_number", ""),
-            "prime_minister": decision.get("prime_minister", ""),
-            "decision_date": decision.get("decision_date", ""),
-            "committee": decision.get("committee", ""),
-            "operativity": decision.get("operativity", ""),
-            "decision_url": decision.get("decision_url", ""),
-            "tags_policy_area": decision.get("tags_policy_area", decision.get("topics", [])),
-            "summary": decision.get("summary", ""),
-            "content": decision.get("decision_content", decision.get("content", "")),
-            "evaluation": request.content.get("evaluation", {}),
-            "explanation": request.content.get("explanation", "")
+            "decision_number": decision.get("decision_number", "") or "",
+            "title": decision.get("title", decision.get("decision_title", "")) or "",
+            "government_number": decision.get("government_number", "") or "",
+            "prime_minister": decision.get("prime_minister", "") or "",
+            "decision_date": decision.get("decision_date", "") or "",
+            "committee": decision.get("committee", "") or "",
+            "operativity": decision.get("operativity", "") or "",
+            "decision_url": decision.get("decision_url", "") or "",
+            "tags_policy_area": decision.get("tags_policy_area", decision.get("topics", [])) or [],
+            "summary": decision.get("summary", "") or "",
+            "content": decision.get("decision_content", decision.get("content", "")) or "",
+            "evaluation": request.content.get("evaluation", {}) or {},
+            "explanation": request.content.get("explanation", "") or ""
         }
+        
+        logger.info(f"Flattened content keys: {list(flattened_content.keys())}")
         
         # Update request content with flattened structure
         request.content = flattened_content
