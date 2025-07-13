@@ -6,7 +6,7 @@ echo "🚀 Starting deployment to production server..."
 # Server details
 SERVER_IP="178.62.39.248"
 DOMAIN="ceci-ai.ceci.org.il"
-EMAIL="your-email@example.com"  # UPDATE THIS
+EMAIL="project@ceci.org.il"
 
 echo "📋 Prerequisites:"
 echo "1. Update EMAIL variable in this script"
