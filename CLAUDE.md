@@ -1,6 +1,6 @@
 # 🧠 CLAUDE MAIN MEMORY – CECI Bot Chain
 
-<small>Last updated: **7 Jul 2025 (Rev‑3 - Unified Architecture)**</small>
+<small>Last updated: **10 Jul 2025 (Rev‑4 - Route Testing Complete)**</small>
 
 ---
 
@@ -21,11 +21,21 @@ Answer Hebrew questions about Israeli government decisions through a **unified G
 ## 2 · Must‑Read Files
 
 1. **PROJECT\_SUMMARY.md** – current status & ports
-2. **ARCHITECTURE.md** – unified GPT-4o architecture design
-3. **MICRO\_LEVEL\_GUIDE.md** – cross‑layer coding rules
-4. **MIGRATION\_GUIDE.md** – step-by-step migration to new architecture
+2. **bot_chain/ARCHITECTURE.md** – unified GPT-4o architecture design
+3. **bot_chain/MICRO\_LEVEL\_GUIDE.md** – cross‑layer coding rules
+4. **bot_chain/MIGRATION\_GUIDE.md** – step-by-step migration to new architecture
+5. **TEST\_RESULTS\_HEBREW.md** – comprehensive test results with costs
+6. **ROUTE\_TEST\_REPORT.md** – detailed route testing analysis
+7. **UNIFIED\_ARCHITECTURE\_REPORT.md** – implementation report
 
 *(Open only the layer spec you are actively editing – nothing more.)*
+
+## 2.5 · Testing & Results Documentation
+
+- **TEST\_RESULTS\_HEBREW.md** – 25+ test queries with costs & coverage (✅ 100% success rate)
+- **ROUTE\_TEST\_REPORT.md** – comprehensive route testing & bot sequence verification
+- **bot_chain/TESTING\_RESULTS\_PHASE1.md** – individual bot test results
+- **bot_chain/MAIN\_CTX\_ROUTER\_BOT\_2X/REFERENCE\_RESOLUTION\_INTEGRATION\_GUIDE.md** – context handling guide
 
 ---
 
@@ -42,7 +52,7 @@ Answer Hebrew questions about Israeli government decisions through a **unified G
 
 ---
 
-## 4 · Unified Architecture Changes (7 Jul 2025)
+## 4 · Unified Architecture Changes (10 Jul 2025)
 
 ### What Changed?
 - **MERGED**: `0_REWRITE_BOT` + `1_INTENT_BOT` → Single **`1_UNIFIED_INTENT_BOT`** (GPT-4o-turbo)
@@ -77,7 +87,7 @@ Answer Hebrew questions about Israeli government decisions through a **unified G
 
 ---
 
-## 6 · Current Project Status (7 Jul 2025)
+## 6 · Current Project Status (10 Jul 2025)
 
 ### 🆕 Unified Architecture Implementation
 
@@ -88,11 +98,24 @@ Answer Hebrew questions about Israeli government decisions through a **unified G
 4. ✓ Created comprehensive test suites for both new bots
 5. ✓ Updated documentation: ARCHITECTURE.md, MICRO_LEVEL_GUIDE.md
 6. ✓ Created new branch `unified-gpt-architecture` with all changes
+7. ✓ Fixed statistical queries - count_only flag now working correctly
+8. ✓ Removed old bot containers and directories (rewrite-bot, intent-bot)
 
-**Feature Flags**:
-- `USE_UNIFIED_INTENT=true` - Enable unified intent bot
-- `USE_LLM_FORMATTER=true` - Enable LLM formatter
+**Feature Flags** (currently enabled):
+- `USE_UNIFIED_INTENT=true` - Enable unified intent bot ✅
+- `USE_LLM_FORMATTER=true` - Enable LLM formatter ✅
 - `UNIFIED_INTENT_ROLLOUT_PERCENTAGE=10` - Gradual rollout control
+
+### Route Testing Results (10 Jul 2025)
+
+**✅ Working Correctly:**
+- Statistical queries (count_only) - "כמה החלטות בנושא X" returns count not list
+- ANALYSIS routes trigger Evaluator correctly
+- Basic DATA_QUERY routes use proper SQL templates
+
+**⚠️ Issues Found:**
+- UNCLEAR routes don't trigger Clarify bot (returns recent decisions instead)
+- RESULT_REF routes don't retrieve conversation context properly
 
 ### Critical Fixes (from previous)
 

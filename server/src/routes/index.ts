@@ -3,6 +3,7 @@ import chatRouter from './chat';
 import evaluationsRouter from './evaluations';
 import statisticsRouter from './statistics';
 import decisionsRouter from './decisions';
+import decisionGuideRouter from './decisionGuide';
 import { getDataProviderService } from '../services/dataProviderService';
 
 const router = Router();
@@ -11,6 +12,7 @@ router.use('/chat', chatRouter);
 router.use('/evaluations', evaluationsRouter);
 router.use('/statistics', statisticsRouter);
 router.use('/decisions', decisionsRouter);
+router.use('/decision-guide', decisionGuideRouter);
 
 // Debug endpoint for data provider service
 router.get('/data-provider/status', (_req, res) => {

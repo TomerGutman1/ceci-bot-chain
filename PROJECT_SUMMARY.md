@@ -1,606 +1,100 @@
-# 📑 PROJECT SUMMARY – CECI AI BOT CHAIN
+# 📑 PROJECT SUMMARY – CECI AI Bot-Chain
 
-> **Purpose (EN)** – Lightweight, always‑loaded overview for Claude: explains what the project does, where the critical instructions live, and how to read them *only when needed* to save tokens.
->
-> **מטרה (עברית)** – תקציר קומפקטי ש‑Claude טוען בתחילת כל שיחה, עם מפות קבצים והנחיות קריאה ממוקדת לחיסכון בטוקנים.
+Lightweight overview *with* full data folded away.
 
 ---
 
 ## 1 · What the System Does ⏩
 
-*Answer complex Hebrew queries about Israeli government decisions.*
+Answers Hebrew questions on Israeli gov-decisions
+via **Frontend → FastAPI → Bot-Chain → Supabase PG**.
 
-1. **Frontend** sends `POST /api/process-query` with free‑text Hebrew.
-2. **Backend** proxies the payload to a single **BOT CHAIN** container (port 8002).
-3. **BOT CHAIN** runs **GPT bots** in sequence:
-   - **NEW**: `1_UNIFIED_INTENT → 2X_ROUTER → 2C_CLARIFY? → 2Q_SQL → 2E_EVAL → 3Q_RANK → 4_LLM_FORMATTER`
-   - **OLD**: `0_REWRITE → 1_INTENT → 2X_ROUTER → 2C_CLARIFY? → 2Q_SQL → 2E_EVAL → 3Q_RANK → 4_FORMATTER`
-4. **Unified Architecture**: Single GPT-4o entry point, LLM-based formatter exit point
-5. Data source is **Supabase PostgreSQL** (`israeli_government_decisions_*` tables).
-
-👉 *Unified GPT-4o architecture with feature flags for gradual rollout.*
+1. `POST /api/process-query` (frontend)
+2. Container `BOT_CHAIN` (port 8002) runs:
+   `1_UNIFIED_INTENT → 2X_ROUTER → 2C_CLARIFY? → 2Q_SQL → 2E_EVAL → 3Q_RANK → 4_LLM_FORMATTER`
+3. Source tables: `israeli_government_decisions_*`.
 
 ---
 
 ## 2 · Directory Landmarks 📂
 
-| Path                                        | What lives here                                        | When to read                                                                                        |
-| ------------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| `bot_chain/ARCHITECTURE.md`                 | Full system architecture (unified GPT-4o design)       | **Overview only** – skim for context.                                                               |
-| `bot_chain/LAYERS_SPECS/`                   | **Individual bot specs** (prompt, examples, weights)   | **Load *only* the spec of the layer in focus**.                                                     |
-| `bot_chain/MICRO_LEVEL_GUIDE.md`            | Cross‑layer principles (naming, scoring, security)     | Reference for *any* layer deep dive.                                                                |
-| `bot_chain/UNIFIED_INTENT_BOT_1/`           | **NEW**: Unified intent + rewrite bot (GPT-4o)        | Read when working on entry point.                                                                   |
-| `bot_chain/LLM_FORMATTER_BOT_4/`            | **NEW**: LLM-based formatter (GPT-4o-mini)            | Read when working on formatting.                                                                    |
-| `bot_chain/MIGRATION_GUIDE.md`              | **NEW**: Step-by-step migration to unified arch        | Read for migration strategy.                                                                        |
+| Path                        | What lives here     | When to read     |
+| --------------------------- | ------------------- | ---------------- |
+| `bot_chain/ARCHITECTURE.md` | Full system diagram | Skim for context |
 
-> 🔖 **Rule of Thumb** – *If you are interacting with or modifying a single bot layer, read:*<br>  1. That layer's spec (one file).<br>  2. The `MICRO_LEVEL_GUIDE` for common rules.<br>  3. Skip everything else unless explicitly required.
+| Path                              | What lives here      | When to read             |
+| --------------------------------- | -------------------- | ------------------------ |
+| `bot_chain/LAYERS_SPECS/`         | **Per-bot specs**    | Load only layer in focus |
+|                                   |                      |                          |
+| `bot_chain/UNIFIED_INTENT_BOT_1/` | Entry bot impl       | When editing entry       |
+| `bot_chain/LLM_FORMATTER_BOT_4/`  | Formatter impl       | When editing formatter   |
+| `bot_chain/MIGRATION_GUIDE.md`    | Step-by-step rollout | Migration tasks          |
+| `TEST_RESULTS_HEBREW.md`          | 25+ test queries     | Validate behaviour       |
+| `ROUTE_TEST_REPORT.md`            | Route analysis       | Debug routing            |
+| `UNIFIED_ARCHITECTURE_REPORT.md`  | Migration details    | Understand changes       |
+| `bot_chain/test_all_routes.py`    | Python tester        | Full route tests         |
+| `bot_chain/test_routes.sh`        | Bash tester          | Quick sanity check       |
 
 ---
 
-## 3 · Token‑Saving Guidelines 🪙
+## 3 · Token-Saving Guidelines 🪙
 
-1. **Minimal Context Loading** – Never ingest the entire repo. Pick the smallest relevant doc(s).
-2. **Layer Isolation** – Each bot spec is self‑contained; do not preload specs for other layers.
-3. **Debug Info** – Use `debug_info.token_usage` returned from BOT CHAIN to monitor consumption.
-4. **NEW**: Unified Intent saves ~100 tokens per query (one less API call).
+1. **Minimal context** – load only docs you touch.
+2. **Layer isolation** – specs are self-contained.
+3. Track `debug_info.token_usage`.
+
+* Unified-Intent removed one GPT call (\~100 tokens saved).
+* Prompt shrinks deliver 75 % average reduction.
 
 ---
 
 ## 4 · Quick Reference ✏️
 
-| Need                    | Open this                                            |
-| ----------------------- | ---------------------------------------------------- |
-| Understand overall flow | `ARCHITECTURE.md` (Section 2 Runtime Flow - Updated) |
-| Check REST contract     | `ARCHITECTURE.md` (Section 5 API Contracts)          |
-| Tune a prompt           | `bot_chain/LAYERS_SPECS/<layer>.md`                  |
-| Validate DB columns     | `SQL_DB_SPEC.md` + `*_DB_SCHEME.md`                  |
-| Estimate cost           | Token budget table (Architecture §8)                 |
-| Migration strategy      | `MIGRATION_GUIDE.md` (NEW)                           |
+| Need            | Open                                |
+| --------------- | ----------------------------------- |
+| REST contract   | `ARCHITECTURE.md` §5                |
+| Tune prompt     | `LAYERS_SPECS/<layer>.md`           |
+| DB columns      | `SQL_DB_SPEC.md` + `*_DB_SCHEME.md` |
+| Cost table      | `ARCHITECTURE.md` §8                |
+| Migration guide | `MIGRATION_GUIDE.md`                |
 
 ---
 
-## 5 · Contact
+## 5 · Testing Docs 🧪
 
-*Maintainer*: **Tomer** – [tomer@example.com](mailto:tomer@example.com)
+Current **status 12 Jul 2025**: *6 pass · 2 warn*.
 
----
+| Doc                      | Purpose                 | Key insights   |
+| ------------------------ | ----------------------- | -------------- |
+| `TEST_RESULTS_HEBREW.md` | Hebrew scenarios & cost | \$0.002-0.020  |
+| `ROUTE_TEST_REPORT.md`   | Intent→Bot mapping      | Clarify now OK |
+| …                        | …                       | …              |
 
-*Loaded at conversation start – keep it short & actionable.*
-
----
-
-## 🔌 פורטים מעודכנים של השירותים (7 ביולי 2025 - Unified Architecture)
-
-### Backend Service
-- **Backend**: פורט 5001 (היה 5000) - מחובר ל-5173 בתוך הקונטיינר
-  - פורט נוסף: 5174 גם מחובר ל-5173
-
-### Bot Chain Services (כולם פועלים ב-healthy)
-- ~~**Rewrite Bot**: פורט 8010~~ **DEPRECATED - merged into Unified Intent**
-- **Unified Intent Bot**: פורט 8011 **NEW - GPT-4o-turbo**
-- **SQL Gen Bot**: פורט 8012
-- **Context Router Bot**: פורט 8013
-- **Evaluator Bot**: פורט 8014
-- **Clarify Bot**: פורט 8015
-- **Ranker Bot**: פורט 8016
-- **LLM Formatter Bot**: פורט 8017 **NEW - GPT-4o-mini**
-
-### Other Services
-- **Frontend**: פורט 3001
-- **Nginx**: פורטים 80, 443, 8080
-- **PostgreSQL**: פורט 5433 (מחובר ל-5432 בקונטיינר)
-- **Redis**: פורט 6380 (מחובר ל-6379 בקונטיינר)
-
-### API Endpoints
-- **Health Check**: `http://localhost:5001/api/chat/health`
-- **Chat API**: `http://localhost:5001/api/chat`
-- **Test Bot Chain**: `http://localhost:5001/api/chat/test-bot-chain`
+**Failures ❌** – OpenAI quota; renew key or wait.
 
 ---
 
-## 🆕 Unified Architecture Implementation (7 ביולי 2025)
+## 6 · Optimisation Tracker
 
-### What Changed?
-- **MERGED**: Rewrite + Intent → Single **Unified Intent Bot** (GPT-4o-turbo)
-- **UPGRADED**: Code formatter → **LLM Formatter Bot** (GPT-4o-mini)
-- **FEATURE FLAGS**: Gradual rollout with `USE_UNIFIED_INTENT` and `USE_LLM_FORMATTER`
+*P1 Quick Wins* & *P2 Smart Routing* complete
+(cost ↓ 85 %, p95 latency ≤ 4 s)‏
 
-### Performance Impact:
-- **Latency**: 40% reduction (one less API call)
-- **Quality**: Superior Hebrew handling
-- **Cost**: ~$0.01 increase per query (acceptable tradeoff)
-
-### Migration Status:
-- ✅ New bots implemented and tested
-- ✅ Feature flags configured
-- ✅ Documentation updated
-- ⏳ Pending deployment to staging
+* Model downgrades: SQL\_GEN → gpt-3.5 (-83 %).
+* 11 SQL templates cover 90 % queries.
+* Cache: resp 4 h, SQL 24 h.
+* Prompt trims 50-80 % each bot.
 
 ---
 
-## 🚨 בעיות קריטיות שזוהו (30 ביוני 2025) 
+## 7 · Ports & Health
 
-### 1. **בעיית זרימה - Evaluator Bot נקרא בכל שאילתא**
-**הבעיה**: ה-Evaluator Bot (2E) אמור להיקרא רק במסלול EVAL לניתוח מעמיק של החלטה ספציפית.
-**מה קורה בפועל**: הוא נקרא בכל שאילתת QUERY רגילה, מה שגורם ל:
-- צריכת טוקנים מיותרת (GPT-4-turbo יקר)
-- האטה משמעותית בתגובות
-- חריגה מתקציב ה-API
-
-**הפתרון**: הוסרה הקריאה ל-Evaluator ממסלול QUERY. הוא יישאר רק למסלול EVAL.
-
-### 2. **Ranker Bot - מושבת זמנית**
-**הבעיה**: ה-Ranker Bot (3Q) גורם לעיכובים ארוכים וצורך טוקנים רבים.
-**הפתרון הזמני**: דילוג על שלב הדירוג (SKIP_RANKER = true בקוד).
-**השפעה**: התוצאות מוחזרות בסדר ברירת המחדל (תאריך יורד).
-
-### 3. **חריגה ממכסת OpenAI**
-**הבעיה**: "You exceeded your current quota" - נגמר התקציב של ה-API Key.
-**הסיבה**: שימוש לא יעיל בבוטים (בעיקר Evaluator שלא לצורך).
-**השפעה**: רוב השאילתות נכשלות עם שגיאת 500.
-
-### 4. **עלויות לא כצפוי**
-**התכנון המקורי**: עד $0.05 לשאילתא
-**מה קרה בפועל**: עלויות גבוהות בהרבה בגלל:
-- קריאות מיותרות ל-Evaluator בכל שאילתא
-- שימוש ב-GPT-4-turbo במקומות שלא נדרש
-- חוסר אופטימיזציה בגודל הבקשות
+Backend 5001 · Bots 8011-17 · PG 5433 · Redis 6380
+Health: `/api/chat/health` + `/health` per bot.
 
 ---
 
-## 7 · יכולות המערכת - סוגי שאלות נתמכות 🎯
+## 8 · Contact
 
-### המערכת יודעת לטפל במגוון רחב של שאילתות:
+**Maintainer:** Tomer · [tomer@example.com](mailto:tomer@example.com)
 
-#### 1. **חיפושים פשוטים**
-- "החלטות בנושא חינוך" → מחזירה את כל ההחלטות בנושא חינוך
-- "החלטות ממשלה 37" → מחזירה את כל החלטות ממשלה 37
-- "3 החלטות אחרונות" → מחזירה בדיוק 3 החלטות אחרונות
-
-#### 2. **חיפושים עם טווחי תאריכים**
-- "החלטות מינואר 2024" → מחזירה החלטות מינואר 2024
-- "החלטות בין 01/01/2024 ל-31/03/2024" → מחזירה החלטות בטווח המבוקש
-- "החלטות מ-2024" → מחזירה את כל החלטות 2024
-
-#### 3. **שאלות סטטיסטיות**
-- "כמה החלטות יש בנושא בריאות?" → סופרת ומחזירה מספר
-- "כמה החלטות קיבלה ממשלה 37?" → סופרת החלטות לפי ממשלה
-
-#### 4. **טיפול בשגיאות כתיב**
-- "החלטות בנושא חנוך" → מתקנת ל"חינוך" ומחזירה תוצאות
-- "ממשלה שלושים ושבע" → מזהה כממשלה 37
-
-#### 5. **הבנת כוונות מורכבות**
-- "תן לי 5 החלטות בנושא בריאות" → מבינה שזה limit ולא ממשלה
-- "37 החלטות של הממשלה" → מזהה ש-37 זה כמות, לא מספר ממשלה
-
-#### 6. **חיפושים משולבים**
-- "החלטות ממשלה 37 בנושא חינוך מ-2024" → משלבת ממשלה, נושא ותאריך
-- "5 החלטות אחרונות בנושא תחבורה" → משלבת limit, נושא וסדר
-
-### דוגמאות לתשובות:
-
-**שאילתא:** "3 החלטות בנושא חינוך"  
-**תשובה:** (2.2 שניות)
-```
-# תוצאות חיפוש: 3 החלטות בנושא חינוך
-
-**נמצאו 3 תוצאות**
-
-## 1. ישראל ריאלית: תוכנית רב-שנתית למתן מענה למצב החירום הלאומי במקצועות ה-STEM
-**מידע כללי:** ממשלה 37 | החלטה 2983 | 27 באפריל 2025
-**תחומים:** נושא: חינוך | משרד: משרד החינוך, משרד האוצר...
-
-## 2. הצעת חוק זכויות הסטודנט (תיקון - מסלולי לימוד נפרדים)
-**מידע כללי:** ממשלה 37 | החלטה 2948 | 3 באפריל 2025
-**תחומים:** נושא: חינוך | משרד: ועדת החינוך...
-
-## 3. [החלטה נוספת בנושא חינוך]
-...
-```
-
-**שאילתא:** "החלטות בנושא בולים"  
-**תשובה:** מוצאת החלטות על הנפקת בולים (לא מבלבלת עם "ביטחון")
-
-**שאילתא:** "כמה החלטות קיבלה ממשלה 37?"  
-**תשובה:** מזהה כוונה לספירה ומחזירה מספר כולל של החלטות
-
-### יכולות מתקדמות בפיתוח:
-- השוואות בין ממשלות
-- הקשר ורצף שיחה
-- שאלות הבהרה אינטליגנטיות
-- אגרגציות מורכבות
-
-### 29 בדצמבר 2024 - תיקון בעיות זיהוי ב-Intent Bot, שיפור חיפושים ואופטימיזציה של ביצועים
-
-**🐛 בעיות שתוקנו:**
-1. **זיהוי מספרים** - המערכת מזהה נכון ש"3 החלטות" = limit של 3 תוצאות (לא ממשלה 3)
-   - עדכון: `bot_chain/MAIN_INTENT_BOT_1/prompts.py` - הוספת כללים לזיהוי מספרים לפני מילים כמו "החלטות"
-   - הוספת שדה `limit` ל-IntentEntities
-
-2. **חיפוש נושאים** - תוקן באג שהמיר "בולים" ל"ביטחון"
-   - עדכון: `server/src/services/botChainService.ts` - שמירה על הנושא המקורי בחיפוש משני
-
-3. **תמיכה ב-limit דינמי** - המערכת מכבדת את מספר התוצאות המבוקש
-   - עדכון: הבקאנד קורא `entities.limit` במקום `entities.count_target`
-
-**📁 קבצים שעודכנו:**
-- `bot_chain/MAIN_INTENT_BOT_1/prompts.py`
-- `bot_chain/MAIN_INTENT_BOT_1/main.py`
-
-
-4. **אופטימיזציה של ביצועים** - הסרת evaluator ממסלול QUERY
-   - עדכון: הסרת קריאה ל-evaluator bot ממסלול חיפוש רגיל (לפי MICRO_LEVEL_GUIDE)
-   - שיפור: זמן תגובה ירד מ-8-17 שניות ל-**2.2 שניות** (שיפור של 75%!)
-   - ה-evaluator נשאר רק למסלול EVAL (ניתוח מעמיק של החלטה ספציפית)
-
-**📁 קבצים שעודכנו:**
-- `bot_chain/MAIN_INTENT_BOT_1/prompts.py`
-- `bot_chain/MAIN_INTENT_BOT_1/main.py`
-- `server/src/services/botChainService.ts`
-
-**✅ תוצאות בדיקות:**
-- "3 החלטות בנושא חינוך" → מחזיר בדיוק 3 תוצאות (2.2 שניות)
-- "החלטות בנושא בולים" → מוצא החלטות על בולים (לא ביטחון)
-- "החלטות בנושא חינוך מינואר 2024" → מחזיר תוצאות מהתאריך הנכון
-- "37 החלטות של הממשלה" → מזוהה נכון כ-limit=37 (לא כממשלה)
-- כל 14 הבדיקות האוטומטיות עברו בהצלחה
-
----
-
-**📊 מעקב בדיקות (30 ביוני 2025)**
-
-**בדיקות שעברו בהצלחה ✅**
-- test_runner.sh - Limit Recognition 1: "3 החלטות" מזוהה נכון כ-limit=3
-  - Path: `/mnt/c/Users/tomer/Downloads/ceci-w-bots/tests/bot_chain_tests/test_runner.sh`
-
-**בדיקות שנכשלו ❌**
-- רוב הבדיקות נכשלות בגלל חריגה ממכסת OpenAI
-- נדרש לחדש את ה-API Key או להמתין לאיפוס המכסה
-
-**המלצות דחופות 🚨**
-1. החלפת API Key או המתנה לאיפוס מכסה
-2. אופטימיזציה נוספת:
-   - להחליף GPT-4-turbo ל-GPT-3.5-turbo איפה שאפשר
-   - להקטין את גודל הפרומפטים
-   - להוסיף caching לתשובות חוזרות
-3. ניטור עלויות: להוסיף מנגנון tracking לכל קריאת API
-4. Rate limiting: להגביל מספר קריאות לדקה
-
----
-
-## 📄 מסמכים חדשים
-
-### 🚀 **OPTIMIZATION_PLAN.md** - תוכנית אופטימיזציה מפורטת
-- **מיקום**: `/mnt/c/Users/tomer/Downloads/ceci-w-bots/OPTIMIZATION_PLAN.md`
-- **תוכן**: תוכנית 4 שלבים להורדת עלויות ב-75% ושיפור ביצועים ב-60%
-- **כולל**:
-  - Quick Wins (שבוע 1)
-  - Smart Routing (שבוע 2-3)
-  - Advanced Optimization (שבוע 4-6)
-  - Intelligence Preservation
-  - ניתוח עלויות מפורט
-
----
-
-## ✅ עדכון סטטוס אופטימיזציות (30 ביוני 2025)
-
-### **P1 Quick Wins - הושלם ✅**
-1. **Model Downgrades**:
-   - SQL_GEN_BOT: GPT-4-turbo → GPT-3.5-turbo (83% חיסכון)
-   - INTENT_BOT: כבר היה ב-GPT-3.5-turbo
-   
-2. **SQL Templates**: 11 תבניות מכסות >90% מהשאילתות
-
-3. **Cache Boost**:
-   - Response cache: הוארך ל-4 שעות
-   - SQL cache: הוארך ל-24 שעות
-   - Intent pattern cache: נוסף cache חדש לדפוסי שאילתות
-
-4. **Cost Monitoring**: 
-   - מעקב יומי עם התראות ב-$8
-   - דיווח שימוש טוקנים בזמן אמת
-
-### **P2 Smart Routing - הושלם ✅**
-1. **Conditional Bot Activation**:
-   - SKIP_RANKER=true, SKIP_EVALUATOR=true
-   - isSimpleQuery() - מזהה שאילתות פשוטות
-   
-2. **Prompt Optimization** (75% חיסכון ממוצע):
-   - INTENT_BOT: 820→140 טוקנים (83% חיסכון)
-   - SQL_GEN_BOT: 320→85 טוקנים (73% חיסכון)  
-   - CLARIFY_BOT: 370→75 טוקנים (80% חיסכון)
-   - EVALUATOR_BOT: 280→65 טוקנים (77% חיסכון)
-   - RANKER_BOT: 180→45 טוקנים (75% חיסכון)
-   - REWRITE_BOT: 200→50 טוקנים (75% חיסכון)
-
-3. **Intent Pattern Cache**:
-   - נירמול דפוסי שאילתות (מספרים→#, עברית→HEB)
-   - 24 שעות TTL עם מעקב שימוש
-   - עוקף קריאות GPT לדפוסים מוכרים
-
-### **השפעה כוללת**:
-- **חיסכון בעלויות**: ~85% הפחתה לכל שאילתא
-- **שיפור ביצועים**: פחות קריאות GPT, יותר cache hits
-- **ניצול יעיל**: 4x פחות טוקנים בפרומפטים
-
-### **המשימות הבאות (P3)**:
-- Parallel pre-processing לבוטים
-- Batch processing עד 5 שאילתות
-- Hybrid decision tree לפי confidence
-
----
-
-## 🧪 בדיקות מקיפות של המערכת (1 ביולי 2025)
-
-### **תוצאות בדיקות מגוון שאילתות:**
-
-✅ **מה עובד מצוין:**
-1. **זיהוי Intent** - כל סוגי ה-intents מזוהים נכון
-2. **מספרים ונושאים** - מזוהים תמיד נכון
-3. **תאריכים** - תמיכה בפורמטים שונים (DD/MM/YYYY, "מינואר 2024")
-4. **שאילתות מורכבות** - שילוב ממשלה+נושא+תאריך
-5. **תיקון שגיאות כתיב** - "חנוך"→"חינוך"
-6. **השוואות** - intent comparison מזוהה נכון
-
-⚠️ **בעיות קלות שזוהו:**
-1. **מספרים בעברית** - "שלושים ושבע" לא מתורגם ל-37
-2. **משרדים** - "משרד החינוך" לא נתפס בשדה ministries
-3. **נושאים מרובים** - "חינוך או בריאות" נשמר כמחרוזת אחת
-4. **תאריכים יחסיים** - "היום", "השנה האחרונה" לא מתורגמים
-
-📊 **ביצועים:**
-- **זמן תגובה**: 1-4 שניות (מצוין!)
-- **עלות**: $0.001-0.002 לשאילתא (~98% חיסכון מהמקור!)
-- **אחוז הצלחה**: ~95%
-
-### **תיקונים שבוצעו (1 ביולי 2025):**
-1. ✅ תיקון Rewrite Bot - לא משנה מספרים קיימים ("3 החלטות" נשאר 3)
-2. ✅ תיקון Intent Bot - הוספת שדה explanation החסר בפרומפט
-3. ⏳ בתהליך: תמיכה במספרים בעברית וזיהוי משרדים
-
----
-
-## 🔧 שיפורים נוספים לחיסכון בטוקנים (1 ביולי 2025)
-
-### **1. Intent Bot - שינוי ל-intent_type**
-- שינוי מ-`intent` ל-`intent_type` עם ערכים חדשים: QUERY, STATISTICAL, EVAL, COMPARISON, CLARIFICATION
-- תואם למבנה המערכת ומאפשר routing טוב יותר
-
-### **2. Context Router - הפעלה מותנית חכמה**
-- **חיסכון**: ~300 טוקנים לשאילתא רגילה
-- **מופעל רק כאשר**:
-  - יש התייחסות לשיחה קודמת
-  - מילות מפתח: "אמרתי", "שאלתי", "ששלחת", "הקודם", "שדיברנו עליו", "בהמשך ל", "כמו ש"
-- **לא מופעל**: בשאילתות פשוטות ללא הקשר
-
-### **3. Evaluator Bot - הפעלה סלקטיבית מאוד**
-- **חיסכון**: ~1000 טוקנים (GPT-4-turbo יקר!)
-- **מופעל אך ורק**:
-  - עבור intent_type=EVAL
-  - דוגמאות: "נתח את החלטה X", "ניתוח מעמיק של...", "אני רוצה ניתוח של..."
-- **לא מופעל**: בשאילתות חיפוש רגילות (QUERY)
-
-### **4. שיפורים נוספים**
-- **מספרים בעברית מורחבים**: עשרים, שלושים, ארבעים וכו' (כולל צירופים)
-- **זיהוי משרדי ממשלה**: נרמול אוטומטי (החינוך → משרד החינוך) + זיהוי קיצורים
-- **מעקב טוקנים מפורט**: כל תגובה מכילה token_usage עם פירוט לפי בוט
-- **Endpoints למוניטורינג**: /api/chat/usage-stats, /api/chat/recent-usage
-
-### **תוצאות**:
-- **חיסכון כולל**: 40-60% בטוקנים לשאילתא רגילה
-- **עלות ממוצעת**: $0.0015-0.002 לשאילתא רגילה, $0.003-0.004 לניתוח EVAL
-- **זמן תגובה**: נשאר יעיל (1-4 שניות)
-
----
-
-## 🚀 פתרון הקפיצה הטכנולוגית: Intent Detector דטרמיניסטי (2 ביולי 2025)
-
-### **🎯 הפתרון המהפכני שפותח**
-במקום GPT-4 לזיהוי כוונות, פותח **Intent Detection Engine דטרמיניסטי ב-JavaScript** עם **100% דיוק מוכח**:
-
-**📊 השוואת ביצועים:**
-| קריטריון | לפני (GPT-4) | אחרי (דטרמיניסטי) | שיפור |
-|----------|-------------|----------------|-------|
-| **זמן תגובה** | 500-2000ms | <1ms | **99.95%** ⚡ |
-| **עלות** | $0.002-0.01/שאילתא | **$0** | **100%** 💰 |
-| **דיוק** | 85-95% | **100%** ✅ | **15%+** |
-| **אמינות** | תלוי ב-OpenAI | 99.9%+ | עצמאות מלאה |
-
-### **🧪 בדיקות מקיפות - 100% הצלחה**
-- **80 שאילתות בבדיקה מקיפה**: 80/80 (100%)
-- **כל קטגוריות ה-intent**: QUERY, EVAL, REFERENCE, CLARIFICATION
-- **רמות מורכבות**: פשוט, בינוני, מורכב
-- **תמיכה מלאה בעברית**: מספרים, תאריכים, שמות משרדים
-
-### **💡 יכולות מתקדמות**
-1. **זיהוי הפניות להקשר** (REFERENCE): "ההחלטה ששלחת", "עוד כמו האחרונה"
-2. **מספרים בעברית מלא**: "שלושים ושבע" → 37, "עשרים ואחת" → 21
-3. **תיקון שגיאות כתיב**: "החלתה" → "החלטה", "חנוך" → "חינוך"
-4. **זיהוי מבצעים**: search, count, compare
-5. **חילוץ ישויות מדויק**: ממשלות, תאריכים, נושאים, משרדים
-
-### **🔧 מוכן לאינטגרציה**
-- **מפרט שלם לאינטגרציה**: `INTENT_RCGNZR_0/INTEGRATION_SPEC.md`
-- **תאימות מלאה ל-API הקיים**: שמירה על ממשק FastAPI
-- **תוכנית מיגרציה מדורגת**: אפס סיכון
-- **Fallback mechanisms**: בטיחות מלאה
-
-### **💰 השפעה כלכלית מיידית**
-- **חיסכון בעלויות**: מיד $300+/חודש (עלויות OpenAI של Intent Bot)
-- **ROI מיידי**: התשואה מיידית מהיום הראשון
-- **יציבות תקציבית**: אפס עלויות משתנות
-- **יכולת הרחבה**: ללא גבלות עלות
-
-### **🎯 הצעד הבא: יישום**
-**זמן יישום מוערך**: 2-3 ימים
-**השפעה צפויה**: זינוק דרמטי בביצועים עם חיסכון מלא בעלויות Intent Detection
-
-> **📈 זהו הפתרון החסר למימוש החזון המקורי: מערכת מהירה, מדויקת וחסכונית ללא תלות ב-AI חיצוני.**
-
----
-
-## 🚨 עדכון קריטי - בעיית דיווח טוקנים (2 ביולי 2025)
-
-### ✅ הושלם בהצלחה:
-**1. החלפת Intent Bot ב-Intent Recognizer דטרמיניסטי**
-- מנוע זיהוי כוונות ב-JavaScript ללא תלות ב-OpenAI
-- ביצועים: <1ms במקום 500-2000ms  
-- עלות: $0 במקום ~$300/חודש
-- דיוק: 100% על כל הבדיקות
-- תוקן: בעיית זיהוי שאילתות קצרות ("החלטה 2983")
-
-**2. אופטימיזציות נוספות שעובדות:**
-- SQL Templates: מכסות >90% מהשאילתות
-- Response Cache: 4 שעות TTL
-- Intent Pattern Cache: 24 שעות TTL
-- עלות ממוצעת נמוכה: ~$0.0003-0.001 לשאילתא
-
-### ✅ תוקן בהצלחה - Token Tracking מלא בכל הבוטים (3 ביולי 2025)
-**הושלם**: כל הבוטים כעת מדווחים טוקנים נכון
-- **REWRITE Bot**: ✅ מדווח טוקנים
-- **SQL Gen Bot**: ✅ תוקן - מדווח 0 טוקנים לתבניות, טוקנים מלאים ל-GPT
-- **Context Router Bot**: ✅ תוקן - מדווח טוקנים מדויקים
-- **EVALUATOR Bot**: ✅ תוקן - מדווח טוקנים מפורטים לניתוח GPT-4
-- **CLARIFY Bot**: ✅ תוקן - מדווח טוקנים נכון עם async patterns
-- **RANKER Bot**: ✅ תוקן - מדווח טוקנים
-
-**תוצאות מבדיקות**:
-```
-=== Token Usage Test Results ===
-✅ REWRITE: 284 tokens (gpt-3.5-turbo)
-✅ SQL_GEN: 0 tokens (template)
-✅ CLARIFY: 276 tokens (gpt-4)
-✅ EVALUATOR: 3818 tokens (gpt-4) - ניתוח מעמיק
-```
-
----
-
-## 🎯 EVAL Bot - ניתוח ישימות החלטות ממשלה (3 ביולי 2025)
-
-### ✅ הושלם במלואו - מערכת ניתוח מקיפה
-**פונקציונליות חדשה**: בוט EVAL מבצע ניתוח ישימות של החלטות ממשלה לפי 13 קריטריונים משוקללים:
-
-**📊 קריטריוני הערכה (13 פרמטרים):**
-1. **לוח זמנים מחייב** (משקל 17%) - תאריכים ודד-ליינים מחייבים
-2. **צוות מתכלל** (משקל 7%) - גוף מוביל וממתכלל  
-3. **גורם מתכלל יחיד** (משקל 5%) - אחריות אישית ברורה
-4. **מנגנון דיווח/בקרה** (משקל 9%) - מערכת מעקב והדרכה
-5. **מנגנון מדידה והערכה** (משקל 6%) - אופן מדידת השפעה
-6. **מנגנון ביקורת חיצונית** (משקל 4%) - גוף ביקורת עצמאי
-7. **משאבים נדרשים** (משקל 19%) - תקציב וכח אדם מוגדרים
-8. **מעורבות מספר דרגים** (משקל 7%) - רמות ביצוע שונות
-9. **מבנה סעיפים וחלוקת עבודה** (משקל 9%) - מבנה ברור ומסודר
-10. **מנגנון יישום בשטח** (משקל 9%) - תוכנית ביצוע מעשית
-11. **גורם מכריע** (משקל 3%) - מנגנון הכרעה במחלוקות
-12. **שותפות בין מגזרית** (משקל 3%) - מעורבות גורמים נוספים
-13. **מדדי תוצאה ומרכיבי הצלחה** (משקל 2%) - יעדים מדידים
-
-### 🧪 תוצאות בדיקות
-**שאילתות EVAL שעובדות מצוין**:
-- "נתח לעומק את החלטה 1 ממשלה 37" → ציון 0.50 (50/100)
-- "אני רוצה ניתוח מעמיק של החלטה 2" → ציון 0.75 (75/100) 
-- "בצע ניתוח ישימות של החלטה 123" → ניתוח מלא
-
-**דוגמה לפלט**:
-```
-ניתוח ישימות החלטה 2 של ממשלה 37:
-
-ההחלטה מציגה תוכנית מפורטת עם לוח זמנים ומשאבים 
-מוקצים, אך חסרה במנגנוני בקרה ומדידה...
-
-ציון סופי: 75/100
-```
-
-### 🎯 זיהוי אוטומטי של Intent EVAL
-המערכת מזהה אוטומטית שאילתות ניתוח:
-- "נתח לעומק את החלטה X"
-- "ניתוח מעמיק של החלטה Y" 
-- "בצע ניתוח ישימות"
-- "הסבר את ההשלכות של החלטה Z"
-
-### 💰 עלויות
-- **ניתוח בסיסי**: ~$0.008 (3,800 טוקנים GPT-4)
-- **השוואה**: שאילתא רגילה ~$0.001
-- **מיטוב**: נתמך במערכת Cache הקיימת
-
-### 🌐 גישה ל-UI
-```
-http://localhost:3001 - Frontend ראשי
-http://localhost:80 - Nginx proxy  
-http://localhost:8080 - Nginx חלופי
-```
-
-**הוראות שימוש**: פתח את הדפדפן, עבור ל-`localhost:3001`, והקלד שאילתת EVAL כמו "נתח לעומק את החלטה 123"
-
----
-
-## 🔧 תיקוני באגים קריטיים (3 ביולי 2025)
-
-### ✅ הושלמו בהצלחה:
-1. **תיקון health check בפרונט** - התאמה למבנה החדש (botChain במקום pandasai)
-2. **תיקון conv_id ב-bot chain** - שינוי מ-null ל-sessionId או `temp_${Date.now()}`
-3. **פתרון בעיית תשובות ריקות** - הצ'אט עובד כעת דרך localhost:80 או localhost:8080
-
-### ✅ בעיות שתוקנו (4 ביולי 2025):
-1. **מערכת URL מתוקנת** - החלטות מקבלות לינקים נכונים מבסיס הנתונים בלבד
-2. **SQL Templates מנוקות** - הוסר רבדיה בתבניות specific_decision
-3. **תמיכה בהחלטות מרובות** - המערכת מציגה נכון החלטות עם מספר זהה
-
-### ⚠️ בעיות פתוחות:
-1. **פורמט תשובות** - תשובות מגיעות בפורמט לא קריא/מכוער  
-2. **דיוק השליפה** - בקשה להחלטה ספציפית (2777) מחזירה 10 החלטות שונות
-3. **איכות התוצאות** - צריך לשפר את הרלוונטיות והדיוק של התשובות
-4. **EVALUATOR timeouts** - ניתוחים ארוכים נכשלים אחרי 30 שניות
-5. **תוכן מלא duplicated** - בקשות לתוכן מלא מציגות הודעות כפולות
-
-### 🔗 Reference Resolution - מוכן ליישום
-**מיקום**: `MAIN_CTX_ROUTER_BOT_2X/REFERENCE_RESOLUTION_INTEGRATION_GUIDE.md`
-**יכולות מרכזיות**:
-- זיהוי הפניות משתמש: "תן לי את זה" → "תן לי את החלטה 2989 של ממשלה 37"
-- החלפת שגיאת context על פני תגובות בוט
-- שאלות הבהרה בעברית טבעית
-- ביצועים: <100ms, >90% הצלחה
-
----
-
-## 📊 Macro Filter View Dashboard - הושלם (6 ביולי 2025)
-
-### ✅ סטטוס: דאשבורד סטטיסטיקות מלא פועל ללא השפעה על מערכת הצ'אט
-
-**יישום מוצלח**:
-1. **שירות סטטיסטיקות מלא** - שאילתות ישירות לDB ללא עלויות GPT
-2. **תיקון באגי frontend** - כל בעיות התרסקות נפתרו
-3. **API endpoints חדשים** - תמיכה מלאה בכל רכיבי הדאשבורד
-4. **ניווט מעודכן** - כפתור "מבט מאקרו" מוביל לדאשבורד
-5. **ייצוא משופר** - "ייצוא דוח" עם תמיכה בתרשימים
-
-### 🐛 תיקונים קריטיים:
-- **נתוני Timeline**: המרת שמות חודשים בעברית ל-Date objects
-- **מבני נתונים**: יישור בין backend ל-frontend (governments/committees/policy)
-- **טיפול ב-NULL**: סינון נתונים לא תקינים בכל ה-endpoints
-- **ולידציית תאריכים**: החרגת החלטות עם תאריכים לפני 1990 או null
-- **מיפוי שדות**: תיקון אי-התאמות (operativeCount→operationalCount, name→area)
-
-### 📈 רכיבי הדאשבורד:
-- **KPI Cards** - סטטיסטיקות בזמן אמת
-- **Timeline Charts** - גרפי זמן עם granularity גמיש
-- **Policy Distribution** - התפלגות לפי תחומי מדיניות
-- **Committee Activity** - ניתוח פעילות ועדות
-- **Government Comparison** - השוואה בין ממשלות
-- **Data Optimizer** - טיפול בנפחי נתונים גדולים
-- **Smart Alerts** - התראות חכמות וחיזויים
-- **Report Export** - ייצוא דוחות עם תרשימים
-
-### 🔧 קבצים שעודכנו:
-- `server/src/services/statisticsService.ts` - לוגיקת סטטיסטיקות
-- `server/src/routes/statistics.ts` - API endpoints
-- `src/macro_filter_view/services/api.ts` - טרנספורמציות frontend
-- `src/components/layout/Layout.tsx` - עדכון ניווט
-- `src/components/chat/ExampleQueries.tsx` - כפתורי מאקרו אופציונליים
-- `src/macro_filter_view/components/shared/ReportSharing.tsx` - ייצוא משופר
-
-### 🔗 גישה: http://localhost/dashboard/statistics
-
-### 🎛️ משתני סביבה חדשים:
-- `VITE_SHOW_MACRO_BUTTON=false` - הצגת/הסתרת כפתורי מאקרו ב-example queries
+Domain for deployment in digital ocean droplet : [https://ceci-ai.ceci.org.il/](https://ceci-ai.ceci.org.il/)

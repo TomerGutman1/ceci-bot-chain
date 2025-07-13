@@ -2,25 +2,30 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy requirements first for better caching
-COPY requirements.txt .
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY LLM_FORMATTER_BOT_4/requirements.txt .
+
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy common module
-COPY common /app/common
+# Copy application code
+COPY . .
 
-# Copy bot code
-COPY LLM_FORMATTER_BOT_4 /app/LLM_FORMATTER_BOT_4
+# Set Python path
+ENV PYTHONPATH=/app
 
-# Set working directory to bot folder
-WORKDIR /app/LLM_FORMATTER_BOT_4
-
-# Set Python path to include parent for common imports
-ENV PYTHONPATH=/app:$PYTHONPATH
+# Expose port
+EXPOSE 8017
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD python -c "import requests; requests.get('http://localhost:8017/health').raise_for_status()"
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8017/health || exit 1
 
-# Run the bot
-CMD ["python", "main.py"]
+# Run the application
+CMD ["python", "LLM_FORMATTER_BOT_4/main.py"]

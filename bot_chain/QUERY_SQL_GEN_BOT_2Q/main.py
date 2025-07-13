@@ -64,6 +64,7 @@ class TokenUsage(BaseModel):
     completion_tokens: int
     total_tokens: int
     model: str
+    cost_usd: float = 0.0
 
 
 class SQLGenResponse(BaseModel):
@@ -148,13 +149,17 @@ async def call_gpt_for_sql(intent: str, entities: Dict[str, Any]) -> Dict[str, A
             total_tokens=usage.total_tokens
         )
         
+        # Calculate cost for GPT-3.5-turbo: $0.50/$1.50 per 1M tokens
+        cost_usd = (usage.prompt_tokens * 0.0005 / 1000) + (usage.completion_tokens * 0.0015 / 1000)
+        
         return {
             "result": result,
             "usage": {
                 "prompt_tokens": usage.prompt_tokens,
                 "completion_tokens": usage.completion_tokens,
                 "total_tokens": usage.total_tokens,
-                "model": config.model
+                "model": config.model,
+                "cost_usd": cost_usd
             }
         }
         
@@ -237,6 +242,38 @@ def clean_topic_entity(topic: str) -> str:
     return cleaned
 
 
+def convert_hebrew_limit(limit_value: Any) -> int:
+    """Convert Hebrew limit words to numeric values."""
+    if isinstance(limit_value, int):
+        return limit_value
+    
+    if isinstance(limit_value, str):
+        # Hebrew limit mappings
+        hebrew_limits = {
+            "אחרונות": 10,
+            "אחרונה": 1,
+            "האחרונות": 10,
+            "האחרונה": 1,
+            "ראשונות": 10,
+            "ראשונה": 1,
+            "הראשונות": 10,
+            "הראשונה": 1
+        }
+        
+        # Check if it's a Hebrew limit word
+        if limit_value in hebrew_limits:
+            return hebrew_limits[limit_value]
+        
+        # Try to parse as number
+        try:
+            return int(limit_value)
+        except ValueError:
+            # Default to 10 for unrecognized limit words
+            return 10
+    
+    # Default limit
+    return 10
+
 def enhance_entities_with_context(
     entities: Dict[str, Any],
     conversation_history: List[ConversationTurn]
@@ -251,6 +288,14 @@ def enhance_entities_with_context(
         if cleaned_topic != enhanced_entities["topic"]:
             logger.info(f"Cleaned topic: '{enhanced_entities['topic']}' -> '{cleaned_topic}'")
             enhanced_entities["topic"] = cleaned_topic
+    
+    # Convert Hebrew limit words to numeric values
+    if enhanced_entities.get("limit"):
+        original_limit = enhanced_entities["limit"]
+        numeric_limit = convert_hebrew_limit(original_limit)
+        if numeric_limit != original_limit:
+            logger.info(f"Converted limit: '{original_limit}' -> {numeric_limit}")
+            enhanced_entities["limit"] = numeric_limit
     
     # Look for missing decision numbers in previous queries
     if not enhanced_entities.get("decision_number"):

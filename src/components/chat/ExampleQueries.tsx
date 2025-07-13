@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Lightbulb, Search, TrendingUp, FileText, BarChart3, History } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lightbulb, Search, TrendingUp, FileText, BarChart3, History, Brain, Scale, Users, Calendar } from "lucide-react";
 
 interface ExampleQuery {
   icon: JSX.Element;
@@ -38,6 +38,36 @@ const ExampleQueries = ({ onQueryClick, onQueryEdit, position }: ExampleQueriesP
       title: "ספירת החלטות",
       query: "כמה החלטות בנושא ביטחון קיבלה ממשלה 37",
       category: "ספירה"
+    },
+    {
+      icon: <Brain className="w-5 h-5" />,
+      title: "ניתוח לעומק",
+      query: "נתח את ההשלכות הכלכליות של החלטה 1500 ממשלה 36",
+      category: "ניתוח"
+    },
+    {
+      icon: <Scale className="w-5 h-5" />,
+      title: "השוואה בין ממשלות",
+      query: "השווה את מדיניות הדיור בין ממשלה 35 לממשלה 36",
+      category: "השוואה"
+    },
+    {
+      icon: <TrendingUp className="w-5 h-5" />,
+      title: "מגמות לאורך זמן",
+      query: "הראה את המגמה בהחלטות תחבורה ב-5 השנים האחרונות",
+      category: "מגמות"
+    },
+    {
+      icon: <Users className="w-5 h-5" />,
+      title: "החלטות משותפות",
+      query: "החלטות משותפות של משרד הבריאות והאוצר",
+      category: "משרדים"
+    },
+    {
+      icon: <Calendar className="w-5 h-5" />,
+      title: "החלטות אחרונות",
+      query: "הראה החלטות אחרונות בנושא סביבה",
+      category: "עדכני"
     }
   ] : [
     {
@@ -57,6 +87,36 @@ const ExampleQueries = ({ onQueryClick, onQueryEdit, position }: ExampleQueriesP
       title: "החלטה ספציפית",
       query: "החלטה 100 של ממשלה 35",
       category: "ספציפי"
+    },
+    {
+      icon: <Brain className="w-5 h-5" />,
+      title: "ניתוח מקיף",
+      query: "נתח את ההשפעה החברתית של החלטות הרווחה בממשלה 37",
+      category: "ניתוח"
+    },
+    {
+      icon: <Scale className="w-5 h-5" />,
+      title: "השוואת תקציבים",
+      query: "השווה את תקציבי הביטחון בין ממשלות 34, 35 ו-36",
+      category: "השוואה"
+    },
+    {
+      icon: <TrendingUp className="w-5 h-5" />,
+      title: "ניתוח מגמות",
+      query: "מהן המגמות בהחלטות כלכלה בעשור האחרון",
+      category: "מגמות"
+    },
+    {
+      icon: <History className="w-5 h-5" />,
+      title: "היסטוריה",
+      query: "החלטות היסטוריות בנושא שלום וביטחון",
+      category: "היסטוריה"
+    },
+    {
+      icon: <BarChart3 className="w-5 h-5" />,
+      title: "סטטיסטיקה מתקדמת",
+      query: "כמה החלטות קיבלה כל ממשלה בנושא תשתיות",
+      category: "סטטיסטיקה"
     }
   ];
 
@@ -76,58 +136,62 @@ const ExampleQueries = ({ onQueryClick, onQueryEdit, position }: ExampleQueriesP
       </div>
 
       {isExpanded && (
-        <div className={`h-full bg-gradient-to-b from-blue-50 to-white rounded-lg shadow-sm border border-gray-200 p-4 ${position === 'left' ? 'mr-4' : 'ml-4'}`}>
-          <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
+        <div className={`max-h-[80vh] bg-gradient-to-b from-blue-50 to-white rounded-lg shadow-sm border border-gray-200 p-4 ${position === 'left' ? 'mr-4' : 'ml-4'} flex flex-col`}>
+          <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2 flex-shrink-0">
             <Lightbulb className="w-5 h-5 text-ceci-blue" />
             דוגמאות לשימוש
           </h3>
           
-          <div className="space-y-3">
-            {examples.map((example, index) => (
-              <div
-                key={index}
-                className="group bg-white rounded-lg p-3 hover:shadow-md transition-all duration-200 border border-transparent hover:border-ceci-blue"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="p-2 bg-blue-100 rounded-lg group-hover:bg-ceci-blue group-hover:text-white transition-colors">
-                    {example.icon}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <h4 className="font-semibold text-sm text-gray-800">{example.title}</h4>
-                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">{example.category}</span>
+          <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400 transition-colors pr-2">
+            <div className="space-y-3">
+              {examples.map((example, index) => (
+                <div
+                  key={index}
+                  className="group bg-white rounded-lg p-3 hover:shadow-md transition-all duration-200 border border-transparent hover:border-ceci-blue"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-blue-100 rounded-lg group-hover:bg-ceci-blue group-hover:text-white transition-colors">
+                      {example.icon}
                     </div>
-                    
-                    <p className="text-sm text-gray-600 leading-relaxed mb-2">
-                      {example.query}
-                    </p>
-                    
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => onQueryClick(example.query)}
-                        className="text-xs bg-ceci-blue text-white px-3 py-1 rounded hover:bg-blue-600 transition-colors"
-                        title="שלח שאלה"
-                      >
-                        📤 שלח
-                      </button>
-                      <button
-                        onClick={() => onQueryEdit(example.query)}
-                        className="text-xs bg-gray-200 text-gray-700 px-3 py-1 rounded hover:bg-gray-300 transition-colors"
-                        title="העתק לעריכה"
-                      >
-                        ✏️ ערוך
-                      </button>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <h4 className="font-semibold text-sm text-gray-800">{example.title}</h4>
+                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">{example.category}</span>
+                      </div>
+                      
+                      <p className="text-sm text-gray-600 leading-relaxed mb-2">
+                        {example.query}
+                      </p>
+                      
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => onQueryClick(example.query)}
+                          className="text-xs bg-ceci-blue text-white px-3 py-1 rounded hover:bg-blue-600 transition-colors"
+                          title="שלח שאלה"
+                        >
+                          📤 שלח
+                        </button>
+                        <button
+                          onClick={() => onQueryEdit(example.query)}
+                          className="text-xs bg-gray-200 text-gray-700 px-3 py-1 rounded hover:bg-gray-300 transition-colors"
+                          title="העתק לעריכה"
+                        >
+                          ✏️ ערוך
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
 
-          <div className="mt-6 p-3 bg-blue-50 rounded-lg">
-            <p className="text-xs text-gray-600 text-center">
-              📤 שלח ישירות | ✏️ העתק לתיבת הצ'אט לעריכה
-            </p>
+          <div className="mt-4 pt-4 border-t border-gray-200 flex-shrink-0">
+            <div className="p-3 bg-blue-50 rounded-lg">
+              <p className="text-xs text-gray-600 text-center">
+                📤 שלח ישירות | ✏️ העתק לתיבת הצ'אט לעריכה
+              </p>
+            </div>
           </div>
           
           {/* Macro View Button - Only show if enabled */}

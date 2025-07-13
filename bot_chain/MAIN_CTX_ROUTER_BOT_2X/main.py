@@ -77,6 +77,8 @@ class RoutingDecision(BaseModel):
     context_summary: Dict[str, Any] = Field(..., description="Updated context summary")
     reasoning: str = Field(..., description="Explanation of routing decision")
     conversation_history: List[Dict[str, Any]] = Field(default_factory=list, description="Conversation history for downstream bots")
+    resolved_entities: Optional[Dict[str, Any]] = Field(None, description="Entities after reference resolution")
+    enriched_query: Optional[str] = Field(None, description="Query after reference resolution enrichment")
 
 class HealthResponse(BaseModel):
     """Health check response."""
@@ -326,7 +328,9 @@ async def make_routing_decision(request: ContextRequest) -> RoutingDecision:
                 "entities_count": len(context.extracted_entities),
                 "reference_resolution": reference_result['reasoning']
             },
-            reasoning=f"Reference resolution needs clarification: {reference_result['clarification_prompt']}"
+            reasoning=f"Reference resolution needs clarification: {reference_result['clarification_prompt']}",
+            resolved_entities=resolved_entities,
+            enriched_query=enriched_query
         )
     
     # Update context with resolved entities and enriched query
@@ -370,7 +374,9 @@ async def make_routing_decision(request: ContextRequest) -> RoutingDecision:
                 "entities_count": len(context.extracted_entities),
                 "context_score": context_score
             },
-            reasoning=f"Clarification needed: {reasoning}"
+            reasoning=f"Clarification needed: {reasoning}",
+            resolved_entities=resolved_entities,
+            enriched_query=enriched_query
         )
     
     # Check if we can go directly to SQL generation
@@ -424,7 +430,9 @@ async def make_routing_decision(request: ContextRequest) -> RoutingDecision:
             "reference_resolution": reference_result['reasoning'],
             "enriched_query": enriched_query != request.current_query
         },
-        reasoning=f"Route to {route} (confidence: {request.confidence_score:.2f}, context_score: {context_score:.2f}, ref_resolved: {reference_result['route']})"
+        reasoning=f"Route to {route} (confidence: {request.confidence_score:.2f}, context_score: {context_score:.2f}, ref_resolved: {reference_result['route']})",
+        resolved_entities=resolved_entities,
+        enriched_query=enriched_query
     )
     
     # Store conversation history in the response for downstream bots

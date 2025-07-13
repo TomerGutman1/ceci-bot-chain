@@ -3,19 +3,13 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Copy requirements first for better caching
-COPY requirements.txt .
+COPY UNIFIED_INTENT_BOT_1/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy common module
-COPY common /app/common
+# Copy all code to working directory
+COPY . .
 
-# Copy bot code
-COPY UNIFIED_INTENT_BOT_1 /app/UNIFIED_INTENT_BOT_1
-
-# Set working directory to bot folder
-WORKDIR /app/UNIFIED_INTENT_BOT_1
-
-# Set Python path to include parent for common imports
+# Set Python path for imports
 ENV PYTHONPATH=/app:$PYTHONPATH
 
 # Health check
@@ -23,4 +17,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD python -c "import requests; requests.get('http://localhost:8011/health').raise_for_status()"
 
 # Run the bot
-CMD ["python", "main.py"]
+CMD ["python", "UNIFIED_INTENT_BOT_1/main.py"]

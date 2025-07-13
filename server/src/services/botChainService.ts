@@ -405,6 +405,9 @@ class BotChainService {
     if (intent === 'RESULT_REF' || intent.includes('reference')) {
       return 'QUERY_CONTEXT';
     }
+    if (intent === 'DECISION_GUIDE') {
+      return 'DECISION_GUIDE';
+    }
     return 'QUERY';
   }
 
@@ -1226,6 +1229,46 @@ class BotChainService {
             processing_time_ms: processingTime,
             service: 'bot-chain-clarification',
             token_usage: this.getCurrentRequestTokenSummary(currentRequestTokens)
+          }
+        };
+      }
+
+      // Handle Decision Guide intent
+      if (intent === 'DECISION_GUIDE') {
+        logger.info('DECISION_GUIDE intent detected - returning guidance response');
+        
+        const guidanceText = `ברוך הבא למדריך ניסוח החלטות הממשלה! 🎯
+
+אני כאן כדי לעזור לך לנסח החלטת ממשלה איכותית וישימה.
+
+כדי להתחיל, לחץ על הכפתור "צריך עזרה בניסוח החלטה" שמופיע בממשק הראשי.
+
+שם תוכל:
+📄 להעלות קובץ PDF של טיוטת ההחלטה
+✏️ או להדביק את הטקסט ישירות
+
+אני אנתח את הטיוטה שלך על פי 13 קריטריונים חשובים:
+• לוחות זמנים מחייבים
+• צוות מתכלל וגורם אחראי
+• מנגנוני דיווח ובקרה
+• משאבים נדרשים
+• ועוד...
+
+תקבל ציון מפורט לכל קריטריון (1-10) יחד עם המלצות ספציפיות לשיפור.
+
+💡 טיפ: ההחלטות הטובות ביותר כוללות יעדים ברורים, לוחות זמנים מוגדרים, ותקציב מפורט.`;
+
+        const processingTime = Date.now() - startTime;
+        return {
+          success: true,
+          response: guidanceText,
+          metadata: {
+            intent,
+            entities,
+            confidence,
+            processing_time_ms: processingTime,
+            service: 'bot-chain-decision-guide',
+            token_usage: this.getCurrentRequestTokenSummary(currentRequestTokens, 'DECISION_GUIDE')
           }
         };
       }

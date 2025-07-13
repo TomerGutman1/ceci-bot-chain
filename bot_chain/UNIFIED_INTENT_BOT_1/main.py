@@ -15,27 +15,27 @@ from enum import Enum
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
-import openai
+from openai import OpenAI
 import uvicorn
 
 # Add parent directory to path for common imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from common import setup_logging, get_config, log_api_call, log_gpt_usage
+from common.logging import setup_logging
 
 # Initialize
 logger = setup_logging('UNIFIED_INTENT_BOT_1')
-config = get_config('UNIFIED_INTENT_BOT_1')
 app = FastAPI(title="UNIFIED_INTENT_BOT_1", version="2.0.0")
 
-# Configure OpenAI
-openai.api_key = config.openai_api_key
+# Configure OpenAI client
+client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 # Intent Enum
 class IntentType(str, Enum):
     DATA_QUERY = "DATA_QUERY"
     ANALYSIS = "ANALYSIS"
     RESULT_REF = "RESULT_REF"
+    DECISION_GUIDE = "DECISION_GUIDE"
     UNCLEAR = "UNCLEAR"
 
 
@@ -67,6 +67,7 @@ class TokenUsage(BaseModel):
     completion_tokens: int
     total_tokens: int
     model: str
+    cost_usd: float = 0.0
 
 
 class UnifiedIntentResponse(BaseModel):
@@ -114,13 +115,14 @@ UNIFIED_PROMPT = """You are an expert Hebrew query processor for the Israeli gov
 
 Your task is to:
 1. Normalize the Hebrew text (fix typos, expand abbreviations, convert numbers)
-2. Classify the intent as one of: DATA_QUERY, ANALYSIS, RESULT_REF, or UNCLEAR
+2. Classify the intent as one of: DATA_QUERY, ANALYSIS, RESULT_REF, DECISION_GUIDE, or UNCLEAR
 3. Extract all relevant parameters/entities
 
 ## Intent Types:
 - DATA_QUERY: Searching for decisions (by topic, date, government, etc.)
 - ANALYSIS: Deep analysis of a specific decision (keywords: נתח, ניתוח, הסבר לעומק)
 - RESULT_REF: Reference to previous results (keywords: הקודם, ששלחת, זה, זו)
+- DECISION_GUIDE: Request for help with decision drafting (keywords: עזרה בניסוח, בדוק טיוטה, ניתוח טיוטה, פידבק על החלטה)
 - UNCLEAR: Ambiguous or incomplete queries
 
 ## Hebrew Number Conversion:
@@ -136,7 +138,7 @@ Your task is to:
 - government_number: ממשלה X (default to 37 if only decision_number given)
 - decision_number: החלטה X
 - topic: בנושא X, על X, בתחום X
-- date_range: {start: "YYYY-MM-DD", end: "YYYY-MM-DD"}
+- date_range: {{start: "YYYY-MM-DD", end: "YYYY-MM-DD"}}
 - limit: X החלטות (extract number)
 - ministries: [list of ministry names]
 - decision_type: "אופרטיבית" if mentioned
@@ -146,80 +148,80 @@ Your task is to:
 - "השנה" → current year range
 - "החודש" → current month range
 - "ינואר 2024" → 2024-01-01 to 2024-01-31
-- "בין 2020 ל-2023" → {start: "2020-01-01", end: "2023-12-31"}
-- "ב-2024" → {start: "2024-01-01", end: "2024-12-31"}
+- "בין 2020 ל-2023" → {{start: "2020-01-01", end: "2023-12-31"}}
+- "ב-2024" → {{start: "2024-01-01", end: "2024-12-31"}}
 
 ## Examples:
 
 Input: "החלתה 2983 ממשלת 37 נתח לעומק"
-Output: {
+Output: {{
   "clean_query": "החלטה 2983 של ממשלה 37 - ניתוח מעמיק",
   "intent": "ANALYSIS",
-  "params": {
+  "params": {{
     "decision_number": 2983,
     "government_number": 37,
     "analysis_type": "deep"
-  },
+  }},
   "confidence": 0.95,
-  "route_flags": {
+  "route_flags": {{
     "needs_context": false,
     "is_statistical": false,
     "is_comparison": false
-  },
+  }},
   "corrections": [
-    {"type": "spelling", "original": "החלתה", "corrected": "החלטה"},
-    {"type": "normalization", "original": "ממשלת", "corrected": "ממשלה"}
+    {{"type": "spelling", "original": "החלתה", "corrected": "החלטה"}},
+    {{"type": "normalization", "original": "ממשלת", "corrected": "ממשלה"}}
   ]
-}
+}}
 
 Input: "כמה החלטות בנושא חינוך היו ב-2024?"
-Output: {
+Output: {{
   "clean_query": "כמה החלטות בנושא חינוך היו ב-2024?",
   "intent": "DATA_QUERY",
-  "params": {
+  "params": {{
     "topic": "חינוך",
-    "date_range": {"start": "2024-01-01", "end": "2024-12-31"},
+    "date_range": {{"start": "2024-01-01", "end": "2024-12-31"}},
     "count_only": true
-  },
+  }},
   "confidence": 0.98,
-  "route_flags": {
+  "route_flags": {{
     "needs_context": false,
     "is_statistical": true,
     "is_comparison": false
-  },
+  }},
   "corrections": []
-}
+}}
 
 Input: "תן לי את ההחלטה השלישית ששלחת"
-Output: {
+Output: {{
   "clean_query": "תן לי את ההחלטה השלישית ששלחת",
   "intent": "RESULT_REF",
-  "params": {
+  "params": {{
     "index_in_previous": 3,
     "reference_type": "sent"
-  },
+  }},
   "confidence": 0.92,
-  "route_flags": {
+  "route_flags": {{
     "needs_context": true,
     "is_statistical": false,
     "is_comparison": false
-  },
+  }},
   "corrections": []
-}
+}}
 
 Input: "מה?"
-Output: {
+Output: {{
   "clean_query": "מה?",
   "intent": "UNCLEAR",
-  "params": {},
+  "params": {{}},
   "confidence": 0.3,
-  "route_flags": {
+  "route_flags": {{
     "needs_context": false,
     "is_statistical": false,
     "is_comparison": false
-  },
+  }},
   "corrections": []
-}
+}}
 
 Now process this Hebrew query and return ONLY valid JSON:
 
@@ -252,11 +254,11 @@ async def call_gpt(query: str, chat_history: List[Dict[str, Any]] = None) -> Dic
         
         # Call OpenAI
         response = await asyncio.to_thread(
-            openai.ChatCompletion.create,
-            model=config.model or "gpt-4o",  # Use gpt-4o-turbo
+            client.chat.completions.create,
+            model=os.getenv('MODEL', 'gpt-4o'),  # Use gpt-4o-turbo
             messages=messages,
-            temperature=config.temperature or 0.3,
-            max_tokens=config.max_tokens or 500,
+            temperature=float(os.getenv('TEMPERATURE', '0.3')),
+            max_tokens=int(os.getenv('MAX_TOKENS', '500')),
             response_format={"type": "json_object"}
         )
         
@@ -265,23 +267,28 @@ async def call_gpt(query: str, chat_history: List[Dict[str, Any]] = None) -> Dic
         result = json.loads(content)
         
         # Log token usage
-        usage = response.usage
-        log_gpt_usage(
-            logger,
-            model=response.model,
-            prompt_tokens=usage.prompt_tokens,
-            completion_tokens=usage.completion_tokens,
-            total_tokens=usage.total_tokens
-        )
+        if hasattr(response, 'usage') and response.usage:
+            usage = response.usage
+            logger.info(f"Token usage - Total: {usage.total_tokens}, Prompt: {usage.prompt_tokens}, Completion: {usage.completion_tokens}")
+        else:
+            usage = None
+        
+        # Calculate cost
+        model_name = response.model if hasattr(response, 'model') else os.getenv('MODEL', 'gpt-4o')
+        cost_usd = 0.0
+        if usage:
+            # GPT-4o pricing: $5/$15 per 1M tokens
+            cost_usd = (usage.prompt_tokens * 0.005 / 1000) + (usage.completion_tokens * 0.015 / 1000)
         
         return {
             "result": result,
             "usage": {
-                "prompt_tokens": usage.prompt_tokens,
-                "completion_tokens": usage.completion_tokens,
-                "total_tokens": usage.total_tokens,
-                "model": response.model
-            }
+                "prompt_tokens": usage.prompt_tokens if usage else 0,
+                "completion_tokens": usage.completion_tokens if usage else 0,
+                "total_tokens": usage.total_tokens if usage else 0,
+                "model": model_name,
+                "cost_usd": cost_usd
+            } if usage else None
         }
         
     except json.JSONDecodeError as e:
@@ -307,7 +314,8 @@ async def call_gpt(query: str, chat_history: List[Dict[str, Any]] = None) -> Dic
         }
         
     except Exception as e:
-        logger.error(f"GPT call failed: {e}", extra={
+        import traceback
+        logger.error(f"GPT call failed: {e}\n{traceback.format_exc()}", extra={
             "error_type": type(e).__name__,
             "error_message": str(e)
         })
@@ -438,7 +446,7 @@ async def health_check() -> HealthResponse:
         status="ok",
         layer="1_UNIFIED_INTENT_BOT",
         version="2.0.0",
-        model=config.model or "gpt-4o",
+        model=os.getenv('MODEL', 'gpt-4o'),
         uptime_seconds=int(uptime),
         timestamp=datetime.utcnow()
     )
@@ -478,11 +486,12 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 
 if __name__ == "__main__":
-    logger.info(f"Starting UNIFIED_INTENT_BOT_1 on port {config.port}")
-    logger.info(f"Using model: {config.model or 'gpt-4o'}")
+    port = int(os.getenv('PORT', '8011'))
+    logger.info(f"Starting UNIFIED_INTENT_BOT_1 on port {port}")
+    logger.info(f"Using model: {os.getenv('MODEL', 'gpt-4o')}")
     uvicorn.run(
         app,
         host="0.0.0.0",
-        port=config.port,
+        port=port,
         log_level="info"
     )

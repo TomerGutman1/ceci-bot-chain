@@ -48,19 +48,12 @@ class BotConfig:
 
 # Bot layer configurations
 BOT_CONFIGS = {
-    "MAIN_REWRITE_BOT_0": BotConfig(
-        layer_name="MAIN_REWRITE_BOT_0",
-        port=8010,
-        model="gpt-3.5-turbo",
-        temperature=0.3,
-        max_tokens=500
-    ),
-    "MAIN_INTENT_BOT_1": BotConfig(
-        layer_name="MAIN_INTENT_BOT_1",
+    "UNIFIED_INTENT_BOT_1": BotConfig(
+        layer_name="UNIFIED_INTENT_BOT_1",
         port=8011,
-        model="gpt-3.5-turbo",
-        temperature=0.2,
-        max_tokens=800
+        model="gpt-4o",
+        temperature=0.3,
+        max_tokens=1000
     ),
     "QUERY_SQL_GEN_BOT_2Q": BotConfig(
         layer_name="QUERY_SQL_GEN_BOT_2Q",
@@ -97,12 +90,12 @@ BOT_CONFIGS = {
         temperature=0.2,
         max_tokens=800
     ),
-    "MAIN_FORMATTER_4": BotConfig(
-        layer_name="MAIN_FORMATTER_4",
+    "LLM_FORMATTER_BOT_4": BotConfig(
+        layer_name="LLM_FORMATTER_BOT_4",
         port=8017,
-        model="",  # No GPT model for formatter
-        temperature=0,
-        max_tokens=0
+        model="gpt-4o-mini",
+        temperature=0.3,
+        max_tokens=1000
     )
 }
 

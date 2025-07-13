@@ -39,6 +39,12 @@ services:
       # Force unbuffered output
       FORCE_COLOR: 1
       DEBUG: '*'
+      # Bot service URLs
+      DECISION_GUIDE_BOT_URL: http://decision-guide-bot:8018
+      USE_UNIFIED_INTENT: 'true'
+      USE_LLM_FORMATTER: 'true'
+      UNIFIED_INTENT_BOT_URL: http://unified-intent-bot:8011
+      LLM_FORMATTER_BOT_URL: http://llm-formatter-bot:8017
     deploy:
       resources:
         limits:
@@ -99,7 +105,8 @@ services:
         max-file: "5"
 
   # Bot services - no external ports in production
-  rewrite-bot:
+  # Unified Intent Bot (replaces rewrite-bot and intent-bot)
+  unified-intent-bot:
     ports: []
     restart: always
     environment:
@@ -107,35 +114,16 @@ services:
     deploy:
       resources:
         limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
           cpus: '0.5'
           memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
     logging:
       driver: "json-file"
       options:
-        max-size: "10m"
-        max-file: "3"
-
-  intent-bot:
-    ports: []
-    restart: always
-    environment:
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-    deploy:
-      resources:
-        limits:
-          cpus: '0.25'
-          memory: 256M
-        reservations:
-          cpus: '0.1'
-          memory: 128M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: "20m"
+        max-file: "5"
 
   sql-gen-bot:
     ports: []
@@ -232,7 +220,8 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  formatter-bot:
+  # LLM Formatter Bot (replaces formatter-bot)
+  llm-formatter-bot:
     ports: []
     restart: always
     environment:
@@ -240,11 +229,31 @@ services:
     deploy:
       resources:
         limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
           cpus: '0.25'
           memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Decision Guide Bot
+  decision-guide-bot:
+    ports: []
+    restart: always
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
         reservations:
-          cpus: '0.1'
-          memory: 128M
+          cpus: '0.5'
+          memory: 512M
     logging:
       driver: "json-file"
       options:

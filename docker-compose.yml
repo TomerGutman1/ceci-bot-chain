@@ -30,25 +30,28 @@ services:
       - SQL_ENGINE_ENABLED=true
       - SQL_ENGINE_PERCENTAGE=100
       - BOT_CHAIN_ENABLED=true
-      - REWRITE_BOT_URL=http://rewrite-bot:8010
-      - INTENT_BOT_URL=http://intent-bot:8011
       - SQL_GEN_BOT_URL=http://sql-gen-bot:8012
       - CONTEXT_ROUTER_BOT_URL=http://context-router-bot:8013
       - EVALUATOR_BOT_URL=http://evaluator-bot:8014
       - CLARIFY_BOT_URL=http://clarify-bot:8015
       - RANKER_BOT_URL=http://ranker-bot:8016
-      - FORMATTER_BOT_URL=http://formatter-bot:8017
+      - FORMATTER_BOT_URL=http://llm-formatter-bot:8017
       - BOT_CHAIN_TIMEOUT=120000
+      - USE_UNIFIED_INTENT=${USE_UNIFIED_INTENT:-true}
+      - USE_LLM_FORMATTER=${USE_LLM_FORMATTER:-true}
+      - UNIFIED_INTENT_ROLLOUT_PERCENTAGE=${UNIFIED_INTENT_ROLLOUT_PERCENTAGE:-10}
+      - UNIFIED_INTENT_BOT_URL=http://unified-intent-bot:8011
+      - LLM_FORMATTER_BOT_URL=http://llm-formatter-bot:8017
+      - DECISION_GUIDE_BOT_URL=http://decision-guide-bot:8018
     depends_on:
       - redis
-      - rewrite-bot
-      - intent-bot
+      - unified-intent-bot
       - sql-gen-bot
       - context-router-bot
       - evaluator-bot
       - clarify-bot
       - ranker-bot
-      - formatter-bot
+      - decision-guide-bot
     networks:
       - ceci-network
     healthcheck:
@@ -119,13 +122,13 @@ services:
       timeout: 5s
       retries: 5
 
-  rewrite-bot:
+  unified-intent-bot:
     build:
       context: ./bot_chain
-      dockerfile: ./MAIN_REWRITE_BOT_0/Dockerfile
+      dockerfile: ./UNIFIED_INTENT_BOT_1/Dockerfile
     restart: unless-stopped
     ports:
-      - "8010:8010"
+      - "8019:8011"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - SUPABASE_URL=${SUPABASE_URL}
@@ -138,33 +141,11 @@ services:
     networks:
       - ceci-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  intent-bot:
-    build:
-      context: ./bot_chain/INTENT_RCGNZR_0
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    ports:
-      - "8011:8011"
-    environment:
-      - PORT=8011
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - ceci-network
-    healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8011/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 40s
 
   sql-gen-bot:
     build:
@@ -295,13 +276,13 @@ services:
       retries: 3
       start_period: 40s
 
-  formatter-bot:
+  llm-formatter-bot:
     build:
       context: ./bot_chain
-      dockerfile: ./MAIN_FORMATTER_4/Dockerfile
+      dockerfile: ./LLM_FORMATTER_BOT_4/Dockerfile
     restart: unless-stopped
     ports:
-      - "8017:8017"
+      - "8018:8017"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - SUPABASE_URL=${SUPABASE_URL}
@@ -315,6 +296,31 @@ services:
       - ceci-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8017/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  decision-guide-bot:
+    build:
+      context: ./bot_chain
+      dockerfile: ./DECISION_GUIDE_BOT/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8020:8020"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - ceci-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8020/health"]
       interval: 30s
       timeout: 10s
       retries: 3

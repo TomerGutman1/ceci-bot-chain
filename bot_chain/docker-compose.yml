@@ -39,38 +39,12 @@ services:
 
   # Bot Chain Services
   
-  # Note: Using workaround for Python module naming issue
-  # These would normally be named with numbers but that causes import issues
-  
-  rewrite-bot:
-    build:
-      context: .
-      dockerfile: ./MAIN_REWRITE_BOT_0/Dockerfile
-    restart: unless-stopped
-    ports:
-      - "8010:8010"
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
-      - REDIS_URL=redis://redis:6379
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - bot-chain-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+  # Note: Using unified architecture - rewrite functionality merged into unified-intent-bot
 
-  intent-bot:
+  unified-intent-bot:
     build:
       context: .
-      dockerfile: ./MAIN_INTENT_BOT_1/Dockerfile
+      dockerfile: ./UNIFIED_INTENT_BOT_1/Dockerfile
     restart: unless-stopped
     ports:
       - "8011:8011"
@@ -227,7 +201,7 @@ services:
   formatter:
     build:
       context: .
-      dockerfile: ./MAIN_FORMATTER_4/Dockerfile
+      dockerfile: ./LLM_FORMATTER_BOT_4/Dockerfile
     restart: unless-stopped
     ports:
       - "8017:8017"
@@ -249,6 +223,32 @@ services:
       retries: 3
       start_period: 40s
 
+  # Decision Guide Bot - Analyze government decision drafts
+  decision-guide-bot:
+    build:
+      context: .
+      dockerfile: ./DECISION_GUIDE_BOT/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8020:8018"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - bot-chain-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8018/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   # Bot Chain Orchestrator (main entry point)
   bot-chain-api:
     image: nginx:alpine
@@ -258,8 +258,7 @@ services:
     volumes:
       - ./nginx-bot-chain.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - rewrite-bot
-      - intent-bot
+      - unified-intent-bot
       - sql-gen-bot
     networks:
       - bot-chain-network

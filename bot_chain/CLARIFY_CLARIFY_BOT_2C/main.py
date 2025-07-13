@@ -42,6 +42,7 @@ class ClarificationType(str, Enum):
     AMBIGUOUS_TOPIC = "ambiguous_topic"
     VAGUE_INTENT = "vague_intent"
     MULTIPLE_INTERPRETATIONS = "multiple_interpretations"
+    UNCLEAR_QUERY = "unclear_query"  # Added to handle UNCLEAR intent from backend
 
 @dataclass
 class ClarificationQuestion:
@@ -98,6 +99,12 @@ CLARIFICATION_TEMPLATES = {
         "איזה נושא ספציפי אתה מחפש?",
         "יש כמה נושאים שיכולים להתאים, איזה מהם:",
         "כדי לחפש בנושא הנכון, תוכל לבחור:"
+    ],
+    
+    ClarificationType.UNCLEAR_QUERY: [
+        "מצטער, לא הבנתי את השאלה. איך אני יכול לעזור לך?",
+        "אשמח לעזור! תוכל לפרט יותר מה אתה מחפש?",
+        "לא ברור לי מה אתה מחפש. אני יכול לעזור לך עם:"
     ],
     
     ClarificationType.VAGUE_INTENT: [

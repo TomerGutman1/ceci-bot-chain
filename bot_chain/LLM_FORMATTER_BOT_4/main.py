@@ -14,21 +14,17 @@ from enum import Enum
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-import openai
 import uvicorn
 
-# Add parent directory to path for common imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from common import setup_logging, get_config, log_api_call, log_gpt_usage
+from logging_setup import setup_logger
 
 # Initialize
-logger = setup_logging('LLM_FORMATTER_BOT_4')
-config = get_config('LLM_FORMATTER_BOT_4')
+logger = setup_logger('LLM_FORMATTER_BOT_4', os.getenv('LOG_LEVEL', 'INFO'))
 app = FastAPI(title="LLM_FORMATTER_BOT_4", version="2.0.0")
 
 # Configure OpenAI
-openai.api_key = config.openai_api_key
+from openai import OpenAI
+client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 
 class DataType(str, Enum):
@@ -72,6 +68,7 @@ class TokenUsage(BaseModel):
     completion_tokens: int
     total_tokens: int
     model: str
+    cost_usd: float = 0.0
 
 
 class FormatterResponse(BaseModel):
@@ -112,7 +109,7 @@ Rules:
 Card Format:
 ## [icon] [number]. [title]
 
-**[government info]**
+**ממשלה [government_number] | החלטה [decision_number]**
 
 🔗 [לינק להחלטה באתר הממשלה](url) (only if decision_url exists)
 
@@ -123,6 +120,15 @@ Card Format:
 
 ---
 
+IMPORTANT: Only if there are MORE than 5 results, add at the end:
+
+### 💡 רוצה לצמצם את התוצאות?
+נסה להיות יותר ספציפי:
+- **תאריכים מדויקים**: "החלטות בנושא X בין ינואר למרץ 2025"
+- **נושא ספציפי**: "החלטות בנושא חינוך יסודי" במקום רק "חינוך"
+- **ממשלה ספציפית**: "החלטות בנושא X בממשלה 37"
+- **משרד מסוים**: "החלטות משרד החינוך בנושא X"
+
 Input data: {content}
 Original query: {query}
 Style: {style}""",
@@ -131,25 +137,49 @@ Style: {style}""",
 Format the analysis results into a comprehensive Hebrew response.
 
 Rules:
-1. Present the analysis clearly with proper Hebrew formatting
-2. Use headers and bullet points for structure
-3. Highlight key findings
-4. Include the feasibility score if available
+1. FIRST show the FULL decision details from the data
+2. THEN present the analysis
+3. Use the EXACT data provided - do NOT make up any information
+4. Include ALL decision metadata before analysis
 5. Be professional but accessible
 
 Format:
-# 🔬 ניתוח החלטה: [decision title]
+# 📄 פרטי ההחלטה המלאים
+
+## החלטה {decision_number} - {title}
+
+**ממשלה:** {government_number}  
+**ראש ממשלה:** {prime_minister}  
+**תאריך:** {decision_date}  
+**ועדה:** {committee}  
+**מצב:** {operativity}  
+
+🔗 [קישור להחלטה](decision_url)
+
+**תחומים:** {tags_policy_area}
+
+### 📝 תקציר:
+{summary}
+
+### 📋 תוכן מלא:
+{content}
+
+---
+
+# 🔬 ניתוח ההחלטה
 
 ## 📊 ציון ישימות: X/100
 
 ### 🎯 ממצאים עיקריים:
-- [key points]
+- [key points from analysis]
 
 ### 📋 ניתוח מפורט:
 [detailed analysis]
 
 ### 💡 המלצות:
 [recommendations if any]
+
+IMPORTANT: Use ONLY the data provided in the input. Do NOT invent or guess any information.
 
 Input data: {content}
 Original query: {query}""",
@@ -201,13 +231,51 @@ async def call_gpt_formatter(
 ) -> Dict[str, Any]:
     """Call GPT-4o-mini for formatting."""
     try:
+        # Truncate content if it has too many results
+        truncated_content = content.copy()
+        if "results" in truncated_content and isinstance(truncated_content["results"], list):
+            # Limit to max_results items
+            truncated_content["results"] = truncated_content["results"][:max_results]
+            # Also truncate large text fields
+            for result in truncated_content["results"]:
+                if isinstance(result, dict):
+                    # Truncate content field if it exists and is too long
+                    if "content" in result and isinstance(result["content"], str) and len(result["content"]) > 1000:
+                        result["content"] = result["content"][:997] + "..."
+                    # Truncate summary field if it's too long
+                    if "summary" in result and isinstance(result["summary"], str) and len(result["summary"]) > 500:
+                        result["summary"] = result["summary"][:497] + "..."
+        
         # Build the prompt
         prompt = prompt_template.format(
-            content=json.dumps(content, ensure_ascii=False, indent=2),
+            content=json.dumps(truncated_content, ensure_ascii=False, indent=2),
             query=query,
             style=style,
             max_results=max_results
         )
+        
+        # Safety check: ensure prompt doesn't exceed reasonable size
+        MAX_PROMPT_LENGTH = 50000  # ~12.5K tokens approximately
+        if len(prompt) > MAX_PROMPT_LENGTH:
+            logger.warning(f"Prompt too long ({len(prompt)} chars), truncating content further")
+            # Reduce results further
+            if "results" in truncated_content:
+                truncated_content["results"] = truncated_content["results"][:3]
+            prompt = prompt_template.format(
+                content=json.dumps(truncated_content, ensure_ascii=False, indent=2),
+                query=query,
+                style=style,
+                max_results=3
+            )
+            # If still too long, use minimal content
+            if len(prompt) > MAX_PROMPT_LENGTH:
+                truncated_content = {"results": [], "message": "התוצאות גדולות מדי לעיבוד"}
+                prompt = prompt_template.format(
+                    content=json.dumps(truncated_content, ensure_ascii=False, indent=2),
+                    query=query,
+                    style=style,
+                    max_results=0
+                )
         
         messages = [
             {"role": "system", "content": "You are an expert Hebrew content formatter. Return formatted markdown text."},
@@ -215,11 +283,11 @@ async def call_gpt_formatter(
         ]
         
         response = await asyncio.to_thread(
-            openai.ChatCompletion.create,
-            model=config.model or "gpt-4o-mini",
+            client.chat.completions.create,
+            model=os.getenv('MODEL', 'gpt-4o-mini'),
             messages=messages,
-            temperature=config.temperature or 0.4,
-            max_tokens=config.max_tokens or 2000
+            temperature=float(os.getenv('TEMPERATURE', '0.4')),
+            max_tokens=int(os.getenv('MAX_TOKENS', '2000'))
         )
         
         # Extract response
@@ -227,13 +295,10 @@ async def call_gpt_formatter(
         
         # Log token usage
         usage = response.usage
-        log_gpt_usage(
-            logger,
-            model=response.model,
-            prompt_tokens=usage.prompt_tokens,
-            completion_tokens=usage.completion_tokens,
-            total_tokens=usage.total_tokens
-        )
+        logger.info(f"Token usage - Total: {usage.total_tokens}, Prompt: {usage.prompt_tokens}, Completion: {usage.completion_tokens}")
+        
+        # Calculate cost for GPT-4o-mini: $0.15/$0.60 per 1M tokens
+        cost_usd = (usage.prompt_tokens * 0.00015 / 1000) + (usage.completion_tokens * 0.0006 / 1000)
         
         return {
             "formatted_text": formatted_text,
@@ -241,7 +306,8 @@ async def call_gpt_formatter(
                 "prompt_tokens": usage.prompt_tokens,
                 "completion_tokens": usage.completion_tokens,
                 "total_tokens": usage.total_tokens,
-                "model": response.model
+                "model": response.model,
+                "cost_usd": cost_usd
             }
         }
         
@@ -414,7 +480,7 @@ async def health_check() -> HealthResponse:
         status="ok",
         layer="4_LLM_FORMATTER_BOT",
         version="2.0.0",
-        model=config.model or "gpt-4o-mini",
+        model=os.getenv('MODEL', 'gpt-4o-mini'),
         uptime_seconds=int(uptime),
         timestamp=datetime.utcnow()
     )
@@ -454,11 +520,12 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 
 if __name__ == "__main__":
-    logger.info(f"Starting LLM_FORMATTER_BOT_4 on port {config.port}")
-    logger.info(f"Using model: {config.model or 'gpt-4o-mini'}")
+    port = int(os.getenv('PORT', '8017'))
+    logger.info(f"Starting LLM_FORMATTER_BOT_4 on port {port}")
+    logger.info(f"Using model: {os.getenv('MODEL', 'gpt-4o-mini')}")
     uvicorn.run(
         app,
         host="0.0.0.0",
-        port=config.port,
+        port=port,
         log_level="info"
     )

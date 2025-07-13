@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send } from "lucide-react";
+import { Send, FileText } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import chatService from "@/services/chat.service";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { DecisionGuideModal } from "@/components/decision-guide/DecisionGuideModal";
 
 interface Message {
   role: "user" | "assistant";
@@ -29,6 +30,7 @@ const ChatInterface = ({ externalMessage, externalEditMessage }: ChatInterfacePr
   
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isDecisionGuideOpen, setIsDecisionGuideOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -301,6 +303,18 @@ const ChatInterface = ({ externalMessage, externalEditMessage }: ChatInterfacePr
         <div ref={messagesEndRef} />
       </div>
       
+      {/* Decision Guide Button */}
+      <div className="px-4 pb-2">
+        <Button
+          onClick={() => setIsDecisionGuideOpen(true)}
+          variant="outline"
+          className="w-full justify-center gap-2 text-primary hover:text-primary"
+        >
+          <FileText className="h-4 w-4" />
+          צריך עזרה בניסוח החלטה
+        </Button>
+      </div>
+      
       <form onSubmit={handleSubmit} className="p-4 border-t border-gray-200 flex gap-2">
         <Input
           value={inputMessage}
@@ -318,6 +332,12 @@ const ChatInterface = ({ externalMessage, externalEditMessage }: ChatInterfacePr
           <Send className="h-4 w-4" />
         </Button>
       </form>
+      
+      {/* Decision Guide Modal */}
+      <DecisionGuideModal
+        isOpen={isDecisionGuideOpen}
+        onClose={() => setIsDecisionGuideOpen(false)}
+      />
     </div>
   );
 };

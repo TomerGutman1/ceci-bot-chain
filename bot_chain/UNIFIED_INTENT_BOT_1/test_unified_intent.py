@@ -15,7 +15,7 @@ from colorama import init, Fore, Style
 init()
 
 # Test configuration
-BOT_URL = "http://localhost:8011"
+BOT_URL = "http://localhost:8019"
 ENDPOINT = "/intent"
 
 # Test cases covering various scenarios
