@@ -639,6 +639,13 @@ async def format_response(request: FormatterRequest) -> FormatterResponse:
         # Calculate metadata
         word_count = len(formatted_response.split())
         
+        # Log the formatted response for debugging
+        logger.info(f"Returning YAML formatted response", extra={
+            "conv_id": request.conv_id,
+            "response_preview": formatted_response[:200] + "..." if len(formatted_response) > 200 else formatted_response,
+            "cards_count": len(yaml_blocks)
+        })
+        
         return FormatterResponse(
             conv_id=request.conv_id,
             formatted_response=formatted_response,
