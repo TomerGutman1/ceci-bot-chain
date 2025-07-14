@@ -7,6 +7,7 @@ import os
 import sys
 import json
 import asyncio
+import re
 from typing import Dict, Any, List, Optional, Union
 from datetime import datetime
 from enum import Enum
@@ -69,6 +70,117 @@ class TokenUsage(BaseModel):
     total_tokens: int
     model: str
     cost_usd: float = 0.0
+
+
+def format_decision_yaml(decision: Dict[str, Any], include_full_content: bool = False) -> str:
+    """Format a single decision as Hebrew YAML block."""
+    yaml_lines = []
+    
+    # Title with emoji
+    title = decision.get('title', decision.get('decision_title', 'ללא כותרת'))
+    yaml_lines.append(f"📌 כותרת: {title}")
+    
+    # Decision and government numbers
+    yaml_lines.append(f"מספר החלטה: {decision.get('decision_number', '')}")
+    yaml_lines.append(f"🏛️ מספר ממשלה: {decision.get('government_number', '')}")
+    
+    # Format date from YYYY-MM-DD to DD/MM/YYYY
+    date_str = decision.get('decision_date', '')
+    if date_str:
+        try:
+            # Handle different date formats
+            if 'T' in date_str:
+                date_str = date_str.split('T')[0]
+            date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+            date_str = date_obj.strftime('%d/%m/%Y')
+        except:
+            pass
+    yaml_lines.append(f"📅 תאריך: {date_str}")
+    
+    # Prime minister
+    yaml_lines.append(f"👤 ראש ממשלה: {decision.get('prime_minister', '')}")
+    
+    # Format policy areas array
+    policy_areas = decision.get('tags_policy_area', decision.get('topics', []))
+    if isinstance(policy_areas, list):
+        yaml_lines.append(f"🏷️ תחומי מדיניות: {json.dumps(policy_areas, ensure_ascii=False)}")
+    else:
+        yaml_lines.append(f"🏷️ תחומי מדיניות: []")
+    
+    # Format involved bodies array
+    bodies = decision.get('involved_bodies', decision.get('ministries', []))
+    if isinstance(bodies, list):
+        yaml_lines.append(f"🏢 גופים מעורבים: {json.dumps(bodies, ensure_ascii=False)}")
+    else:
+        yaml_lines.append(f"🏢 גופים מעורבים: []")
+    
+    # Summary
+    summary = decision.get('summary', '')
+    if summary:
+        # Ensure summary is on one line
+        summary = summary.replace('\n', ' ').strip()
+    yaml_lines.append(f"📝 תקציר: {summary}")
+    
+    # Status mapping with icons
+    status = decision.get('operativity', decision.get('status', ''))
+    if status in ['operative', 'פעיל', 'active']:
+        status = '✅ פעיל'
+    elif status in ['canceled', 'בוטל', 'cancelled']:
+        status = '❌ בוטל'
+    else:
+        status = '❓ לא ידוע'
+    yaml_lines.append(f"סטטוס: {status}")
+    
+    # Only show gov.il URLs
+    url = decision.get('decision_url', '')
+    if url and url.startswith('https://www.gov.il'):
+        yaml_lines.append(f"🔗 קישור: {url}")
+    
+    # Include full content if requested and available
+    if include_full_content:
+        content = decision.get('content', decision.get('decision_content', ''))
+        if content and len(str(content)) > 500:
+            yaml_lines.append("📋 תוכן מלא: |-")
+            # Indent content lines
+            content_lines = str(content).split('\n')
+            for line in content_lines:
+                yaml_lines.append(f"  {line}")
+    
+    return '\n'.join(yaml_lines)
+
+
+def format_count_yaml(count: int, original_query: str) -> str:
+    """Format count result as Hebrew YAML block."""
+    # Extract context from query
+    description = original_query
+    
+    # Try to extract specific details
+    details = ""
+    if "ממשלה" in original_query:
+        import re
+        gov_match = re.search(r'ממשלה\s+(\d+)', original_query)
+        if gov_match:
+            details = f"ממשלה {gov_match.group(1)}"
+    
+    if any(year in original_query for year in ['2020', '2021', '2022', '2023', '2024', '2025']):
+        import re
+        year_match = re.search(r'(20\d{2})', original_query)
+        if year_match:
+            if details:
+                details += f" בשנת {year_match.group(1)}"
+            else:
+                details = f"שנת {year_match.group(1)}"
+    
+    yaml_lines = [
+        "📊 סוג שאילתה: ספירה",
+        f"🔍 תיאור: {description}",
+        f"🎯 תוצאה: {count}"
+    ]
+    
+    if details:
+        yaml_lines.append(f"📋 פירוט: {details}")
+    
+    return '\n'.join(yaml_lines)
 
 
 class FormatterResponse(BaseModel):
@@ -141,53 +253,47 @@ Input data: {content}
 Original query: {query}
 Style: {style}""",
 
-    "analysis": """You are a Hebrew content formatter for deep government decision analysis.
-Format the analysis results into a comprehensive Hebrew response.
+    "analysis": """You are a Hebrew content formatter for government decision analysis.
+Format the analysis results into a Hebrew YAML structure within a single code block.
 
 Rules:
-1. FIRST show the FULL decision details from the data
-2. THEN present the analysis
-3. Use the EXACT data provided - do NOT make up any information
-4. Include ALL decision metadata before analysis
-5. Be professional but accessible
+1. Output ONLY a single markdown code block with YAML-like format
+2. Use Hebrew field names with emojis for visual appeal
+3. Include ALL decision details first, then analysis
+4. Use EXACT data provided - do NOT make up information
+5. Maintain clean, readable structure
 
-Format:
-# 📄 פרטי ההחלטה המלאים
+Format everything as follows:
+```yaml
+📌 כותרת: {title}
+מספר החלטה: {decision_number}
+🏛️ מספר ממשלה: {government_number}
+📅 תאריך: {decision_date}
+👤 ראש ממשלה: {prime_minister}
+🏢 ועדה: {committee}
+🏷️ תחומי מדיניות: {tags_policy_area}
+📝 תקציר: {summary}
+סטטוס: {operativity}
+🔗 קישור: {decision_url}
+📋 תוכן מלא: |-
+  {content}
 
-## החלטה {decision_number} - {title}
+🔬 ניתוח:
+  📊 ציון ישימות: {overall_score}/100
+  🎯 ממצאים עיקריים:
+    - {finding 1}
+    - {finding 2}
+    - {finding 3}
+  💡 המלצות:
+    - {recommendation 1}
+    - {recommendation 2}
+  📋 הסבר מפורט: |-
+    {detailed explanation from evaluation}
+```
 
-**ממשלה:** {government_number}  
-**ראש ממשלה:** {prime_minister}  
-**תאריך:** {decision_date}  
-**ועדה:** {committee}  
-**מצב:** {operativity}  
-
-🔗 [קישור להחלטה](decision_url)
-
-**תחומים:** {tags_policy_area}
-
-### 📝 תקציר:
-{summary}
-
-### 📋 תוכן מלא:
-{content}
-
----
-
-# 🔬 ניתוח ההחלטה
-
-## 📊 ציון ישימות: X/100
-
-### 🎯 ממצאים עיקריים:
-- [key points from analysis]
-
-### 📋 ניתוח מפורט:
-[detailed analysis]
-
-### 💡 המלצות:
-[recommendations if any]
-
-IMPORTANT: Use ONLY the data provided in the input. Do NOT invent or guess any information.
+Map operativity: operative→✅ פעיל, canceled→❌ בוטל
+Only show gov.il URLs
+Format dates as DD/MM/YYYY
 
 Input data: {content}
 Original query: {query}""",
@@ -211,19 +317,41 @@ Input data: {content}
 Original query: {query}""",
 
     "comparison": """You are a Hebrew formatter for comparison queries.
-Format the comparison results into a clear visual presentation.
+Format the comparison results into a Hebrew YAML structure within a single code block.
 
 Rules:
-1. Use tables or side-by-side cards
-2. Highlight differences clearly
-3. Use consistent formatting for both sides
-4. Include totals and percentages
-5. Proper Hebrew plural forms
+1. Output ONLY a single markdown code block with YAML-like format
+2. Use Hebrew field names with emojis
+3. Show clear comparisons between entities
+4. Include totals and percentages where relevant
+5. Use proper Hebrew plural forms
 
-Format suggestions:
-- Comparison table with columns
-- Side-by-side statistics
-- Highlighted differences
+Format as follows:
+```yaml
+📊 השוואה: {description of comparison}
+
+{entity_1_name}:
+  🎯 מספר החלטות: {count}
+  🏛️ ממשלות: [{gov1}, {gov2}, ...]
+  📅 תקופה: {start_date} - {end_date}
+  🏷️ תחומים עיקריים: [{area1}, {area2}, ...]
+  📈 אחוז מהסך הכל: {percentage}%
+
+{entity_2_name}:
+  🎯 מספר החלטות: {count}
+  🏛️ ממשלות: [{gov1}, {gov2}, ...]
+  📅 תקופה: {start_date} - {end_date}
+  🏷️ תחומים עיקריים: [{area1}, {area2}, ...]
+  📈 אחוז מהסך הכל: {percentage}%
+
+📌 סיכום:
+  🔸 הבדל במספר החלטות: {difference}
+  🔸 תחומים משותפים: [{shared1}, {shared2}, ...]
+  🔸 תחומים ייחודיים ל{entity_1}: [{unique1}, ...]
+  🔸 תחומים ייחודיים ל{entity_2}: [{unique1}, ...]
+```
+
+Use the exact data provided. Format dates as DD/MM/YYYY.
 
 Input data: {content}
 Original query: {query}"""
@@ -310,7 +438,7 @@ async def call_gpt_formatter(
                 )
         
         messages = [
-            {"role": "system", "content": "You are an expert Hebrew content formatter. Return formatted markdown text."},
+            {"role": "system", "content": "You are an expert Hebrew content formatter. Return all responses as a single markdown code block in Hebrew YAML-like format. Be visual and approachable for non-technical users. Use emojis where appropriate."},
             {"role": "user", "content": prompt}
         ]
         
@@ -382,66 +510,75 @@ def extract_metadata(formatted_text: str, data_type: DataType, content: Dict) ->
 
 
 def fallback_format(data_type: DataType, content: Dict, query: str) -> str:
-    """Fallback formatting if GPT fails."""
+    """Fallback formatting if GPT fails - uses YAML format."""
     try:
         if data_type == DataType.COUNT:
             count = content.get("count", 0)
-            return f"📊 מספר התוצאות: **{count}**"
+            return "```yaml\n" + format_count_yaml(count, query) + "\n```"
         
         elif data_type == DataType.RANKED_ROWS:
             results = content.get("results", [])
             if not results:
-                return "לא נמצאו תוצאות."
+                return "```yaml\n❌ אין תוצאות: לא נמצאו החלטות התואמות לחיפוש\n```"
             
-            lines = [f"# 🔍 תוצאות חיפוש: {query}", f"\n**נמצאו {len(results)} תוצאות**\n"]
+            # Check if full content is present
+            include_full = any(
+                result.get('content', '') and len(str(result.get('content', ''))) > 500 
+                for result in results
+            )
             
-            for i, result in enumerate(results[:10], 1):
-                title = result.get("title", "ללא כותרת")
-                gov = result.get("government_number", "")
-                dec = result.get("decision_number", "")
-                lines.append(f"\n## {i}. {title}")
-                lines.append(f"ממשלה {gov} | החלטה {dec}")
-                
-                if result.get("decision_url"):
-                    lines.append(f"🔗 [קישור]({result['decision_url']})")
-                
-                lines.append("---")
+            yaml_blocks = []
+            for result in results[:10]:
+                yaml_blocks.append(format_decision_yaml(result, include_full))
             
-            return "\n".join(lines)
+            return "```yaml\n" + "\n\n".join(yaml_blocks) + "\n```"
         
         elif data_type == DataType.ANALYSIS:
-            # Try to format analysis with available data
+            # Try to format analysis with available data in YAML
             decision = content.get("decision", {})
             evaluation = content.get("evaluation", {})
             
             if decision:
-                lines = ["# 📄 פרטי ההחלטה"]
-                lines.append(f"\n## החלטה {decision.get('decision_number', '')} - {decision.get('title', decision.get('decision_title', ''))}")
-                lines.append(f"\n**ממשלה:** {decision.get('government_number', '')}")
-                lines.append(f"**תאריך:** {decision.get('decision_date', '')}")
-                if decision.get('decision_url'):
-                    lines.append(f"\n🔗 [קישור להחלטה]({decision['decision_url']})")
+                yaml_lines = []
+                yaml_lines.append(f"📌 כותרת: {decision.get('title', decision.get('decision_title', ''))}")
+                yaml_lines.append(f"מספר החלטה: {decision.get('decision_number', '')}")
+                yaml_lines.append(f"🏛️ מספר ממשלה: {decision.get('government_number', '')}")
+                yaml_lines.append(f"📅 תאריך: {decision.get('decision_date', '')}")
+                yaml_lines.append(f"👤 ראש ממשלה: {decision.get('prime_minister', '')}")
+                yaml_lines.append(f"📝 תקציר: {decision.get('summary', '')}")
                 
-                if decision.get('summary'):
-                    lines.append(f"\n### 📝 תקציר:\n{decision['summary']}")
+                # Status
+                status = decision.get('operativity', '')
+                if status == 'operative':
+                    status = '✅ פעיל'
+                elif status == 'canceled':
+                    status = '❌ בוטל'
+                else:
+                    status = '❓ לא ידוע'
+                yaml_lines.append(f"סטטוס: {status}")
+                
+                # URL
+                url = decision.get('decision_url', '')
+                if url and url.startswith('https://www.gov.il'):
+                    yaml_lines.append(f"🔗 קישור: {url}")
                 
                 if evaluation:
-                    lines.append("\n---\n# 🔬 ניתוח ההחלטה")
+                    yaml_lines.append("\n🔬 ניתוח:")
                     if evaluation.get('overall_score'):
-                        lines.append(f"\n## 📊 ציון ישימות: {evaluation['overall_score']}/100")
+                        yaml_lines.append(f"  📊 ציון ישימות: {evaluation['overall_score']}/100")
                     if evaluation.get('explanation'):
-                        lines.append(f"\n{evaluation['explanation']}")
+                        yaml_lines.append(f"  📋 הסבר: {evaluation['explanation']}")
                 
-                return "\n".join(lines)
+                return "```yaml\n" + "\n".join(yaml_lines) + "\n```"
             else:
-                return content.get("explanation", "ניתוח לא זמין.")
+                return f"```yaml\n❌ שגיאה: {content.get('explanation', 'ניתוח לא זמין')}\n```"
         
         else:
-            return json.dumps(content, ensure_ascii=False, indent=2)
+            return "```yaml\n" + json.dumps(content, ensure_ascii=False, indent=2) + "\n```"
             
     except Exception as e:
         logger.error(f"Fallback formatting failed: {e}")
-        return "שגיאה בעיצוב התוצאות."
+        return "```yaml\n❌ שגיאה: שגיאה בעיצוב התוצאות\n```"
 
 
 @app.post("/format", response_model=FormatterResponse)
@@ -461,30 +598,75 @@ async def format_response(request: FormatterRequest) -> FormatterResponse:
         print(f"[DEBUG] Decision 2000 request - Full content: {request.content}")
         logger.warning(f"Decision 2000 request - Content: {request.content}")
         
-    # Check if we have actual results
-    if request.data_type == DataType.RANKED_ROWS and request.content:
+    # Use Python formatting for RANKED_ROWS
+    if request.data_type == DataType.RANKED_ROWS:
         results = request.content.get('results', [])
         if not results:
             logger.warning("No results provided but formatter was called")
             return FormatterResponse(
                 conv_id=request.conv_id,
-                formatted_response="לא נמצאו תוצאות עבור השאילתה שלך.",
+                formatted_response="```yaml\n❌ אין תוצאות: לא נמצאו החלטות התואמות לחיפוש\n```",
                 metadata=FormatterMetadata(
                     cards_generated=0,
                     format_type="empty_results",
-                    word_count=6,
+                    word_count=7,
                     truncated=False
                 ),
                 token_usage=None
             )
-            
-        # Validate results have real URLs
+        
+        # Validate and clean URLs
         for result in results:
             if 'decision_url' in result:
                 url = result.get('decision_url', '')
                 if url and not url.startswith('https://www.gov.il'):
                     logger.error(f"Invalid URL found: {url}")
                     result['decision_url'] = None  # Remove invalid URLs
+        
+        # Check if any result has content > 500 chars (indicates full content request)
+        include_full = any(
+            result.get('content', '') and len(str(result.get('content', ''))) > 500 
+            for result in results
+        )
+        
+        # Format using Python
+        yaml_blocks = []
+        for i, result in enumerate(results[:request.max_results]):
+            yaml_blocks.append(format_decision_yaml(result, include_full))
+        
+        formatted_response = "```yaml\n" + "\n\n".join(yaml_blocks) + "\n```"
+        
+        # Calculate metadata
+        word_count = len(formatted_response.split())
+        
+        return FormatterResponse(
+            conv_id=request.conv_id,
+            formatted_response=formatted_response,
+            metadata=FormatterMetadata(
+                cards_generated=len(yaml_blocks),
+                format_type="decision_yaml",
+                word_count=word_count,
+                truncated=len(results) > request.max_results
+            ),
+            token_usage=None  # No GPT usage for Python formatting
+        )
+    
+    # Use Python formatting for COUNT queries
+    if request.data_type == DataType.COUNT:
+        count = request.content.get('count', 0)
+        yaml_response = "```yaml\n" + format_count_yaml(count, request.original_query) + "\n```"
+        
+        return FormatterResponse(
+            conv_id=request.conv_id,
+            formatted_response=yaml_response,
+            metadata=FormatterMetadata(
+                cards_generated=0,
+                format_type="count_yaml",
+                word_count=len(yaml_response.split()),
+                truncated=False
+            ),
+            token_usage=None  # No GPT usage for Python formatting
+        )
     
     # Special handling for analysis data type
     if request.data_type == DataType.ANALYSIS and request.content:
