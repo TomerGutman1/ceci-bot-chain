@@ -1,6 +1,6 @@
 # 🧠 CLAUDE MAIN MEMORY – CECI Bot Chain
 
-<small>Last updated: **13 Jul 2025 (Rev‑5 - Production Deployed)**</small>
+<small>Last updated: **14 Jul 2025 (Rev‑6 - SQL-GEN Enhanced)**</small>
 
 ---
 
@@ -111,7 +111,19 @@ ssh root@178.62.39.248 "cd /root/CECI-W-BOTS && git pull && docker compose -f do
 
 **System is LIVE at**: https://ceci-ai.ceci.org.il
 
-**Latest Fixes (14 Jul 2025)**:
+**Latest Deployment (14 Jul 2025 - 18:32 UTC)** 🆕:
+1. ✅ **SQL-GEN BOT UPGRADED** - Now uses GPT-4o-turbo with enhanced capabilities
+   - Hebrew synonym expansion (חינוך↔השכלה, ביטחון↔בטחון)
+   - Date interpretation ("השנה", "3 השנים האחרונות")
+   - Query type detection (COUNT vs LIST)
+   - Typo correction (חנוך→חינוך)
+   - Feature flag: `USE_ENHANCED_SQL_GEN=true`
+   - Cost: ~$0.006-0.008/query (3-4x increase, acceptable)
+2. ✅ **UNIFIED INTENT BOT** - Added HELP_REQUEST intent
+   - Detects "מה אתה יכול לעשות?" queries
+   - Ready for help/capabilities responses
+
+**Earlier Today (14 Jul 2025)**:
 1. ✓ Fixed full content display - only shows when explicitly requested "תוכן מלא"
 2. ✓ Fixed analysis functionality - now properly formats and displays evaluator results
 3. ✓ Increased LLM formatter MAX_TOKENS to 4000 (prevents cut-off responses)
@@ -127,16 +139,18 @@ ssh root@178.62.39.248 "cd /root/CECI-W-BOTS && git pull && docker compose -f do
 5. ✓ URL validation - only gov.il URLs shown
 
 **Unified Architecture Status**:
-1. ✓ `UNIFIED_INTENT_BOT_1` deployed (GPT-4o-turbo)
-2. ✓ `LLM_FORMATTER_BOT_4` deployed (GPT-4o-mini)
-3. ✓ All services running healthy on production
-4. ✓ SSL certificate active (Let's Encrypt)
-5. ✓ Automated backups configured (3 AM daily)
-6. ✓ Log rotation enabled
+1. ✓ `UNIFIED_INTENT_BOT_1` deployed (GPT-4o-turbo) + HELP_REQUEST intent
+2. ✓ `QUERY_SQL_GEN_BOT_2Q` deployed (GPT-4o-turbo) + enhanced features 🆕
+3. ✓ `LLM_FORMATTER_BOT_4` deployed (GPT-4o-mini)
+4. ✓ All services running healthy on production
+5. ✓ SSL certificate active (Let's Encrypt)
+6. ✓ Automated backups configured (3 AM daily)
+7. ✓ Log rotation enabled
 
 **Feature Flags** (currently enabled):
 - `USE_UNIFIED_INTENT=true` - Enable unified intent bot ✅
 - `USE_LLM_FORMATTER=true` - Enable LLM formatter ✅
+- `USE_ENHANCED_SQL_GEN=true` - Enable enhanced SQL generation ✅ 🆕
 - `UNIFIED_INTENT_ROLLOUT_PERCENTAGE=10` - Gradual rollout control
 
 ### Route Testing Results (10 Jul 2025)
