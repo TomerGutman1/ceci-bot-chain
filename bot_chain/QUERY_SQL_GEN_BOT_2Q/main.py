@@ -147,6 +147,7 @@ government_decisions(
 2. LIST: Return full rows (אילו, מה, תן לי, הצג)
 3. COMPARISON: Compare between entities
 4. ANALYSIS: Deep dive into specific decisions
+5. SPECIFIC: Search for exact decision number in exact government (e.g. "החלטה 100 של ממשלה 35")
 
 Intent: {intent}
 Entities: {entities}
@@ -171,11 +172,13 @@ For topic queries, expand synonyms:
 }}
 
 ### Example 3: Specific Decision Query
+When both government_number and decision_number are specified, search for EXACTLY that decision:
 {{
   "sql": "SELECT * FROM government_decisions WHERE government_number = %(gov)s AND decision_number = %(dec)s",
   "parameters": {{"gov": 35, "dec": 100}},
   "query_type": "specific"
 }}
+IMPORTANT: For specific decision queries, do NOT fallback to searching all decisions of a government if the specific decision is not found.
 
 ## Topic Synonym Mapping:
 {{
@@ -193,6 +196,11 @@ For topic queries, expand synonyms:
 - dates: validate format YYYY-MM-DD
 
 Always return JSON with: sql, parameters, query_type, validation_notes
+
+CRITICAL RULES:
+1. When user asks for a specific decision (e.g. "החלטה X של ממשלה Y"), ALWAYS use WHERE government_number = Y AND decision_number = X
+2. NEVER fallback to listing all decisions of a government when a specific decision is requested
+3. If user asks for "החלטה 100 של ממשלה 35", the SQL must be: WHERE government_number = 35 AND decision_number = 100
 """
 
 
