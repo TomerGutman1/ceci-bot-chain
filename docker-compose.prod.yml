@@ -29,6 +29,8 @@ services:
   backend:
     ports: []
     restart: always
+    networks:
+      - ceci-network
     environment:
       NODE_ENV: production
       PORT: 5173
@@ -59,9 +61,12 @@ services:
         max-size: "20m"
         max-file: "5"
 
+
   # Frontend
   frontend:
     restart: always
+    networks:
+      - ceci-network
     environment:
       NODE_ENV: production
       # API URL should be relative for production
@@ -79,11 +84,15 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+        networks:
+          - ceci-network
 
   # Nginx – production configuration
   nginx:
     image: nginx:latest
     restart: always
+    networks:
+      - ceci-network
     ports:
       - "80:80"
       - "443:443"
@@ -97,31 +106,26 @@ services:
       - sh
       - -c
       - |
-        # Render the template into a writable location
+        # Render template into writable path
         envsubst '$DOMAIN_NAME' \
           < /etc/nginx/templates/default.conf.template \
           > /tmp/nginx.conf
-        # Start nginx using that generated file
+        # Start nginx with custom config
         exec nginx -g 'daemon off;' -c /tmp/nginx.conf
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-        reservations:
-          cpus: '0.25'
-          memory: 128M
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "5"
 
+
   # Bot services - no external ports in production
   # Unified Intent Bot (replaces rewrite-bot and intent-bot)
   unified-intent-bot:
     ports: []
     restart: always
+    networks:
+      - ceci-network
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     deploy:
@@ -141,6 +145,8 @@ services:
   sql-gen-bot:
     ports: []
     restart: always
+    networks:
+      - ceci-network
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     deploy:
@@ -160,6 +166,8 @@ services:
   context-router-bot:
     ports: []
     restart: always
+    networks:
+      - ceci-network
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     deploy:
@@ -179,6 +187,8 @@ services:
   evaluator-bot:
     ports: []
     restart: always
+    networks:
+      - ceci-network
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     deploy:
@@ -198,6 +208,8 @@ services:
   clarify-bot:
     ports: []
     restart: always
+    networks:
+      - ceci-network
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     deploy:
@@ -217,6 +229,8 @@ services:
   ranker-bot:
     ports: []
     restart: always
+    networks:
+      - ceci-network
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     deploy:
@@ -237,6 +251,8 @@ services:
   llm-formatter-bot:
     ports: []
     restart: always
+    networks:
+      - ceci-network
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     deploy:
@@ -257,6 +273,8 @@ services:
   decision-guide-bot:
     ports: []
     restart: always
+    networks:
+      - ceci-network
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     deploy:
@@ -277,6 +295,8 @@ services:
   certbot:
     image: certbot/certbot:latest
     restart: unless-stopped
+    networks:
+      - ceci-network
     volumes:
       - ./certbot/conf:/etc/letsencrypt
       - ./certbot/www:/var/www/certbot
@@ -294,7 +314,7 @@ services:
       options:
         max-size: "5m"
         max-file: "2"
-        
+
 # Production volumes
 volumes:
   postgres_data_prod:
