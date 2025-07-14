@@ -87,7 +87,9 @@ services:
 
   # Nginx – production configuration
   nginx:
-    image: nginx:latest
+    build:
+      context: ./deploy/nginx
+      dockerfile: Dockerfile
     restart: always
     networks:
       - ceci-network
@@ -95,26 +97,13 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./deploy/nginx/nginx.prod.conf:/etc/nginx/templates/default.conf.template:ro
+      # עכשיו ממריאים קובץ סטטי ותקין
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./certbot/conf:/etc/letsencrypt:ro
       - ./certbot/www:/var/www/certbot:ro
-    environment:
-      - DOMAIN_NAME=ceci-ai.ceci.org.il
-    command:
-      - sh
-      - -c
-      - |
-        # Replace only DOMAIN_NAME literally, leave all other $-vars intact
-        sed 's|\${DOMAIN_NAME}|'"$DOMAIN_NAME"'|g' \
-          /etc/nginx/templates/default.conf.template \
-          > /tmp/nginx.conf
-        # Launch nginx using the generated config
-        exec nginx -g 'daemon off;' -c /tmp/nginx.conf
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "5"
+    depends_on:
+      - frontend
+      - backend
 
   # Bot services - no external ports in production
   # Unified Intent Bot (replaces rewrite-bot and intent-bot)
