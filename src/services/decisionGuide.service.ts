@@ -9,6 +9,8 @@ export interface DecisionGuideAnalysis {
     score: number;
     weight: number;
     explanation: string;
+    reference_from_document?: string;
+    specific_improvement?: string;
   }>;
   weightedScore: number;
   feasibilityLevel: 'low' | 'medium' | 'high';
