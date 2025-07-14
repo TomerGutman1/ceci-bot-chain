@@ -72,115 +72,118 @@ class TokenUsage(BaseModel):
     cost_usd: float = 0.0
 
 
-def format_decision_yaml(decision: Dict[str, Any], include_full_content: bool = False) -> str:
-    """Format a single decision as Hebrew YAML block."""
-    yaml_lines = []
+def format_decision_typescript_style(decision: Dict[str, Any], index: int, include_full_content: bool = False) -> str:
+    """Format a single decision in TypeScript-inspired Hebrew style."""
+    lines = []
     
-    # Title with emoji
+    # Title with number
     title = decision.get('title', decision.get('decision_title', 'ללא כותרת'))
-    yaml_lines.append(f"📌 כותרת: {title}")
+    decision_num = decision.get('decision_number', '')
+    lines.append(f"**{index}. החלטה מס' {decision_num}**")
+    lines.append(f"📋 {title}")
     
-    # Decision and government numbers
-    yaml_lines.append(f"מספר החלטה: {decision.get('decision_number', '')}")
-    yaml_lines.append(f"🏛️ מספר ממשלה: {decision.get('government_number', '')}")
+    # Basic details
+    gov_num = decision.get('government_number', '')
+    lines.append(f"🏢 ממשלה מספר: {gov_num}")
     
-    # Format date from YYYY-MM-DD to DD/MM/YYYY
+    # Format date
     date_str = decision.get('decision_date', '')
     if date_str:
         try:
-            # Handle different date formats
             if 'T' in date_str:
                 date_str = date_str.split('T')[0]
             date_obj = datetime.strptime(date_str, '%Y-%m-%d')
-            date_str = date_obj.strftime('%d/%m/%Y')
+            # Hebrew month names
+            hebrew_months = {
+                1: 'ינואר', 2: 'פברואר', 3: 'מרץ', 4: 'אפריל',
+                5: 'מאי', 6: 'יוני', 7: 'יולי', 8: 'אוגוסט',
+                9: 'ספטמבר', 10: 'אוקטובר', 11: 'נובמבר', 12: 'דצמבר'
+            }
+            day = date_obj.day
+            month = hebrew_months[date_obj.month]
+            year = date_obj.year
+            date_str = f"{day} ב{month} {year}"
         except:
             pass
-    yaml_lines.append(f"📅 תאריך: {date_str}")
+    lines.append(f"📅 תאריך: {date_str}")
     
     # Prime minister
-    yaml_lines.append(f"👤 ראש ממשלה: {decision.get('prime_minister', '')}")
+    pm = decision.get('prime_minister', '')
+    if pm:
+        lines.append(f"👤 ראש הממשלה: {pm}")
     
-    # Format policy areas array
-    policy_areas = decision.get('tags_policy_area', decision.get('tags_policy_area', []))
-    if isinstance(policy_areas, list):
-        yaml_lines.append(f"🏷️ תחומי מדיניות: {json.dumps(policy_areas, ensure_ascii=False)}")
-    else:
-        yaml_lines.append(f"🏷️ תחומי מדיניות: []")
-    
-    # Format involved bodies array
-    bodies = decision.get('involved_bodies', decision.get('ministries', []))
-    if isinstance(bodies, list):
-        yaml_lines.append(f"🏢 גופים מעורבים: {json.dumps(bodies, ensure_ascii=False)}")
-    else:
-        yaml_lines.append(f"🏢 גופים מעורבים: []")
+    # Policy areas
+    policy_areas = decision.get('tags_policy_area', decision.get('topics', []))
+    if isinstance(policy_areas, list) and policy_areas:
+        lines.append(f"🏷️ תחומים: {', '.join(policy_areas)}")
+    elif isinstance(policy_areas, str) and policy_areas:
+        lines.append(f"🏷️ תחומים: {policy_areas}")
     
     # Summary
     summary = decision.get('summary', '')
     if summary:
-        # Ensure summary is on one line
         summary = summary.replace('\n', ' ').strip()
-    yaml_lines.append(f"📝 תקציר: {summary}")
+        # Truncate if too long
+        if len(summary) > 150 and not include_full_content:
+            summary = summary[:147] + '...'
+        lines.append(f"📝 תקציר: {summary}")
     
-    # Status mapping with icons
-    status = decision.get('operativity', decision.get('status', ''))
-    if status in ['operative', 'פעיל', 'active']:
-        status = '✅ פעיל'
-    elif status in ['canceled', 'בוטל', 'cancelled']:
-        status = '❌ בוטל'
-    else:
-        status = '❓ לא ידוע'
-    yaml_lines.append(f"סטטוס: {status}")
-    
-    # Only show gov.il URLs
+    # URL
     url = decision.get('decision_url', '')
     if url and url.startswith('https://www.gov.il'):
-        yaml_lines.append(f"🔗 קישור: {url}")
+        lines.append(f"🔗 קישור: {url}")
     
-    # Include full content if requested and available
+    # Status
+    status = decision.get('operativity', decision.get('status', ''))
+    if status in ['operative', 'אופרטיבי', 'active']:
+        lines.append("✅ סטטוס: אופרטיבי")
+    elif status in ['canceled', 'בוטל', 'cancelled']:
+        lines.append("❌ סטטוס: בוטל")
+    
+    # Full content if requested
     if include_full_content:
         content = decision.get('content', decision.get('decision_content', ''))
         if content and len(str(content)) > 500:
-            yaml_lines.append("📋 תוכן מלא: |-")
-            # Indent content lines
-            content_lines = str(content).split('\n')
-            for line in content_lines:
-                yaml_lines.append(f"  {line}")
+            lines.append("\n📄 מתוך ההחלטה:")
+            # Show first 500 chars of content
+            content_preview = str(content)[:500]
+            if len(str(content)) > 500:
+                content_preview += '...'
+            lines.append(content_preview)
     
-    return '\n'.join(yaml_lines)
+    return '\n'.join(lines)
 
 
-def format_count_yaml(count: int, original_query: str) -> str:
-    """Format count result as Hebrew YAML block."""
+def format_count_typescript_style(count: int, original_query: str) -> str:
+    """Format count result in TypeScript-inspired style."""
     # Extract context from query
-    description = original_query
+    gov_match = re.search(r'ממשלה\s+(?:מס(?:פר)?\s*)?(\d+)', original_query)
+    government_number = gov_match.group(1) if gov_match else None
     
-    # Try to extract specific details
-    details = ""
-    if "ממשלה" in original_query:
-        import re
-        gov_match = re.search(r'ממשלה\s+(\d+)', original_query)
-        if gov_match:
-            details = f"ממשלה {gov_match.group(1)}"
+    topic_match = re.search(r'בנושא\s+([\u0590-\u05FF\s]+?)(?:\s|\?|$)', original_query)
+    topic = topic_match.group(1).strip() if topic_match else None
     
-    if any(year in original_query for year in ['2020', '2021', '2022', '2023', '2024', '2025']):
-        import re
-        year_match = re.search(r'(20\d{2})', original_query)
-        if year_match:
-            if details:
-                details += f" בשנת {year_match.group(1)}"
-            else:
-                details = f"שנת {year_match.group(1)}"
+    year_match = re.search(r'(?:ב|מ)?שנת\s+(\d{4})', original_query)
+    year = year_match.group(1) if year_match else None
     
-    yaml_lines = [
-        "📊 סוג שאילתה: ספירה",
-        f"🔍 תיאור: {description}",
-        f"🎯 תוצאה: {count}"
-    ]
+    # Build specific response based on query context
+    if government_number and topic:
+        return f"📊 ממשלה {government_number} קיבלה **{count:,}** החלטות בנושא {topic}"
     
-    if details:
-        yaml_lines.append(f"📋 פירוט: {details}")
+    if government_number and not topic:
+        return f"📊 ממשלה {government_number} קיבלה **{count:,}** החלטות בסך הכל"
     
-    return '\n'.join(yaml_lines)
+    if topic and year:
+        return f"📊 בשנת {year} התקבלו **{count:,}** החלטות בנושא {topic}"
+    
+    if topic and not year and not government_number:
+        return f"📊 נמצאו **{count:,}** החלטות בנושא {topic}"
+    
+    if year and not topic:
+        return f"📊 בשנת {year} התקבלו **{count:,}** החלטות ממשלה"
+    
+    # Default
+    return f"📊 נמצאו **{count:,}** החלטות"
 
 
 class FormatterResponse(BaseModel):
@@ -510,16 +513,16 @@ def extract_metadata(formatted_text: str, data_type: DataType, content: Dict) ->
 
 
 def fallback_format(data_type: DataType, content: Dict, query: str) -> str:
-    """Fallback formatting if GPT fails - uses YAML format."""
+    """Fallback formatting if GPT fails - uses TypeScript style."""
     try:
         if data_type == DataType.COUNT:
             count = content.get("count", 0)
-            return "```yaml\n" + format_count_yaml(count, query) + "\n```"
+            return format_count_typescript_style(count, query)
         
         elif data_type == DataType.RANKED_ROWS:
             results = content.get("results", [])
             if not results:
-                return "```yaml\n❌ אין תוצאות: לא נמצאו החלטות התואמות לחיפוש\n```"
+                return "😔 לא נמצאו החלטות התואמות לבקשה"
             
             # Check if full content is present
             include_full = any(
@@ -527,11 +530,13 @@ def fallback_format(data_type: DataType, content: Dict, query: str) -> str:
                 for result in results
             )
             
-            yaml_blocks = []
-            for result in results[:10]:
-                yaml_blocks.append(format_decision_yaml(result, include_full))
+            response_parts = [f"📊 נמצאו {len(results)} החלטות רלוונטיות:\n"]
             
-            return "```yaml\n" + "\n\n".join(yaml_blocks) + "\n```"
+            for i, result in enumerate(results[:10], 1):
+                response_parts.append(format_decision_typescript_style(result, i, include_full))
+                response_parts.append("\n" + "─" * 50 + "\n")
+            
+            return "\n".join(response_parts)
         
         elif data_type == DataType.ANALYSIS:
             # Try to format analysis with available data in YAML
@@ -629,12 +634,26 @@ async def format_response(request: FormatterRequest) -> FormatterResponse:
             for result in results
         )
         
-        # Format using Python
-        yaml_blocks = []
-        for i, result in enumerate(results[:request.max_results]):
-            yaml_blocks.append(format_decision_yaml(result, include_full))
+        # Format using TypeScript-inspired style
+        response_parts = []
         
-        formatted_response = "```yaml\n" + "\n\n".join(yaml_blocks) + "\n```"
+        # Header
+        response_parts.append(f"📊 נמצאו {len(results)} החלטות רלוונטיות:\n")
+        
+        # Format each decision
+        for i, result in enumerate(results[:request.max_results], 1):
+            response_parts.append(format_decision_typescript_style(result, i, include_full))
+            response_parts.append("\n" + "─" * 50 + "\n")
+        
+        # Add tips if many results
+        if len(results) > 5:
+            response_parts.append("\n💡 רוצה לצמצם את התוצאות?")
+            response_parts.append("נסה להיות יותר ספציפי:")
+            response_parts.append("• **תאריכים מדויקים**: \"החלטות בנושא X בין ינואר למרץ 2025\"")
+            response_parts.append("• **נושא ספציפי**: \"החלטות בנושא חינוך יסודי\" במקום רק \"חינוך\"")
+            response_parts.append("• **ממשלה ספציפית**: \"החלטות בנושא X בממשלה 37\"")
+        
+        formatted_response = "\n".join(response_parts)
         
         # Calculate metadata
         word_count = len(formatted_response.split())
@@ -661,15 +680,15 @@ async def format_response(request: FormatterRequest) -> FormatterResponse:
     # Use Python formatting for COUNT queries
     if request.data_type == DataType.COUNT:
         count = request.content.get('count', 0)
-        yaml_response = "```yaml\n" + format_count_yaml(count, request.original_query) + "\n```"
+        formatted_response = format_count_typescript_style(count, request.original_query)
         
         return FormatterResponse(
             conv_id=request.conv_id,
-            formatted_response=yaml_response,
+            formatted_response=formatted_response,
             metadata=FormatterMetadata(
                 cards_generated=0,
-                format_type="count_yaml",
-                word_count=len(yaml_response.split()),
+                format_type="count",
+                word_count=len(formatted_response.split()),
                 truncated=False
             ),
             token_usage=None  # No GPT usage for Python formatting
