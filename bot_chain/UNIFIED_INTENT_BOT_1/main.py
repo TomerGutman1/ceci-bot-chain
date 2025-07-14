@@ -37,6 +37,7 @@ class IntentType(str, Enum):
     RESULT_REF = "RESULT_REF"
     DECISION_GUIDE = "DECISION_GUIDE"
     UNCLEAR = "UNCLEAR"
+    HELP_REQUEST = "HELP_REQUEST"
 
 
 class UnifiedIntentRequest(BaseModel):
@@ -123,6 +124,7 @@ Your task is to:
 - ANALYSIS: Deep analysis of a specific decision (keywords: נתח, ניתוח, הסבר לעומק)
 - RESULT_REF: Reference to previous results (keywords: הקודם, ששלחת, זה, זו)
 - DECISION_GUIDE: Request for help with decision drafting (keywords: עזרה בניסוח, בדוק טיוטה, ניתוח טיוטה, פידבק על החלטה)
+- HELP_REQUEST: Request for help or capabilities (keywords: מה אתה יכול, איך לנסח, עזור לי, help, תן דוגמאות)
 - UNCLEAR: Ambiguous or incomplete queries
 
 ## Hebrew Number Conversion:
@@ -204,6 +206,22 @@ Output: {{
   "confidence": 0.92,
   "route_flags": {{
     "needs_context": true,
+    "is_statistical": false,
+    "is_comparison": false
+  }},
+  "corrections": []
+}}
+
+Input: "מה אתה יכול לעשות?"
+Output: {{
+  "clean_query": "מה אתה יכול לעשות?",
+  "intent": "HELP_REQUEST",
+  "params": {{
+    "help_type": "capabilities"
+  }},
+  "confidence": 0.99,
+  "route_flags": {{
+    "needs_context": false,
     "is_statistical": false,
     "is_comparison": false
   }},

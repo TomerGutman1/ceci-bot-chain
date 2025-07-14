@@ -58,9 +58,9 @@ BOT_CONFIGS = {
     "QUERY_SQL_GEN_BOT_2Q": BotConfig(
         layer_name="QUERY_SQL_GEN_BOT_2Q",
         port=8012,
-        model="gpt-3.5-turbo",
+        model="gpt-4o-turbo",
         temperature=0.1,
-        max_tokens=1000
+        max_tokens=1500
     ),
     "MAIN_CTX_ROUTER_BOT_2X": BotConfig(
         layer_name="MAIN_CTX_ROUTER_BOT_2X",

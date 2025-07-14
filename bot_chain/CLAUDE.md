@@ -41,19 +41,19 @@ Answer Hebrew questions about Israeli government decisions through **unified GPT
 |---------|------|--------|-------|
 | Backend | 5001 | ✅ | Main API |
 | Unified Intent | 8011 | ✅ | GPT-4o-turbo |
-| SQL Gen | 8012 | ✅ | Templates cover 90%+ |
+| SQL Gen | 8012 | ✅ | **UPGRADED: GPT-4o-turbo + synonyms** |
 | Context Router | 8013 | ✅ | Memory service |
 | Evaluator | 8014 | ✅ | EVAL routes only |
 | Clarify | 8015 | ✅ | Fixed enum issue |
 | Ranker | 8016 | ⚠️ | Disabled (SKIP_RANKER=true) |
 | LLM Formatter | 8017 | ✅ | GPT-4o-mini |
 
-### Today's Fixes (12 Jul)
-1. ✅ **Token Overflow** - Multi-layer truncation (DEFAULT_PARAMS: 20→5, summaries max 500 chars)
-2. ✅ **SQL Templates** - Added 11 new templates (comparisons, joint ministries, budgets, etc.)
-3. ✅ **Unclear Queries** - Added UNCLEAR_QUERY enum to clarify bot
-4. ✅ **Formatter** - Shows "ממשלה X | החלטה Y", suggestions only when >5 results
-5. ✅ **ANALYSIS Intent** - Fixed SQL template selection
+### Today's Fixes (14 Jul)
+1. ✅ **SQL Gen Upgrade** - GPT-4o-turbo with synonym expansion, date interpretation, query type detection
+2. ✅ **Hebrew Synonyms** - Maps חינוך↔השכלה, ביטחון↔בטחון, auto-expands searches
+3. ✅ **Date Understanding** - "השנה", "3 השנים האחרונות", "בין 2020 ל-2023" 
+4. ✅ **Count vs List** - Detects כמה/מספר for COUNT queries vs full results
+5. ✅ **Feature Flag** - USE_ENHANCED_SQL_GEN=true (default on)
 
 ### Known Issues
 - Analysis sometimes uses wrong decision (evaluator fetch logic)

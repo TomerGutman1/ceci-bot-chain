@@ -24,6 +24,14 @@ from sql_templates import (
     get_template_by_intent, build_dynamic_filters, validate_parameters,
     sanitize_parameters, SQL_TEMPLATES, DEFAULT_PARAMS
 )
+from synonym_mapper import (
+    expand_topic_synonyms, expand_ministry_synonyms, correct_typos,
+    get_all_synonyms_for_topic, build_topic_sql_condition
+)
+from date_interpreter import (
+    interpret_hebrew_date, extract_date_from_entities, 
+    normalize_date_format, validate_date_range
+)
 
 # Initialize
 logger = setup_logging('QUERY_SQL_GEN_BOT_2Q')
@@ -79,6 +87,14 @@ class SQLGenResponse(BaseModel):
     token_usage: Optional[TokenUsage] = None
     context_used: bool = False
     enhanced_entities: Dict[str, Any] = Field(default_factory=dict)
+    
+    # New enhanced fields
+    query_type: str = Field(default="list", description="Type of query: count, list, comparison, analysis, specific")
+    synonym_expansions: Dict[str, List[str]] = Field(default_factory=dict, description="Topics expanded with synonyms")
+    date_interpretations: Dict[str, str] = Field(default_factory=dict, description="How dates were interpreted")
+    validation_warnings: List[str] = Field(default_factory=list, description="Non-fatal validation warnings")
+    fallback_applied: bool = Field(default=False, description="Whether fallback logic was used")
+    confidence_score: float = Field(default=1.0, ge=0, le=1, description="Confidence in the generated query")
 
 
 class HealthResponse(BaseModel):
@@ -93,28 +109,133 @@ class HealthResponse(BaseModel):
 # Global variables
 start_time = datetime.utcnow()
 
-SQL_GENERATION_PROMPT = """Generate PostgreSQL query for Israeli government decisions.
+SQL_GENERATION_PROMPT = """You are an expert SQL query generator for the Israeli government decisions database.
 
-Schema: israeli_government_decisions(id, government_number, decision_number, decision_date, title, content, summary, topics[], ministries[], status)
+## Your Core Task:
+Transform Hebrew natural language queries into precise PostgreSQL queries while understanding:
+- Synonyms and related terms (חינוך = השכלה = חנוך)
+- Date/time expressions (השנה, החודש, ב-3 השנים האחרונות)
+- Numeric ranges (בין 100 ל-500 מיליון)
+- Boolean flags (רק אופרטיביות, ללא ביטולים)
+- Statistical vs. List queries (כמה vs. אילו)
+
+## Database Schema:
+israeli_government_decisions(
+  id BIGINT PRIMARY KEY,
+  decision_date DATE NOT NULL,
+  decision_number TEXT NOT NULL,
+  government_number TEXT NOT NULL,
+  prime_minister TEXT NOT NULL,
+  committee TEXT,
+  decision_title TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  decision_content TEXT NOT NULL,
+  operativity TEXT NOT NULL, -- 'אופרטיבית' or 'דקלרטיבית'
+  tags_policy_area TEXT,
+  tags_government_body TEXT,
+  tags_location TEXT,
+  all_tags TEXT NOT NULL,
+  decision_url TEXT NOT NULL,
+  decision_key TEXT UNIQUE NOT NULL,
+  embedding VECTOR(768),
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+)
+
+## Query Types:
+1. COUNT: Return count only (כמה, מספר, סך הכל)
+2. LIST: Return full rows (אילו, מה, תן לי, הצג)
+3. COMPARISON: Compare between entities
+4. ANALYSIS: Deep dive into specific decisions
 
 Intent: {intent}
 Entities: {entities}
 
-Rules:
-1. Use %(param)s format
-2. Always AND status = 'active'
-3. Array: 'value' = ANY(topics)
-4. ORDER BY decision_date DESC
-5. Default LIMIT 20
+## Examples:
 
-Return JSON: {{"sql": "...", "parameters": {{}}, "explanation": "..."}}
+### Example 1: Statistical/Count Query
+If entities contain "count_only": true or intent suggests counting:
+{{
+  "sql": "SELECT COUNT(*) as count FROM israeli_government_decisions WHERE tags_policy_area ILIKE '%%חינוך%%' AND decision_date BETWEEN %(start_date)s AND %(end_date)s",
+  "parameters": {{"start_date": "2020-01-01", "end_date": "2024-12-31"}},
+  "query_type": "count"
+}}
 
-Example: {{"sql": "SELECT * FROM government_decisions WHERE government_number = %(gov)s AND %(topic)s = ANY(topics) AND status = 'active' ORDER BY decision_date DESC LIMIT 20", "parameters": {{"gov": 37, "topic": "חינוך"}}, "explanation": "Gov 37 education decisions"}}
+### Example 2: Fetch/List Query with Synonyms
+For topic queries, expand synonyms:
+{{
+  "sql": "SELECT id, government_number, decision_number, decision_date, decision_title, summary, tags_policy_area, tags_government_body, decision_url FROM israeli_government_decisions WHERE (tags_policy_area ILIKE '%%חינוך%%' OR tags_policy_area ILIKE '%%השכלה%%' OR all_tags ILIKE '%%חינוך%%' OR all_tags ILIKE '%%השכלה%%') ORDER BY decision_date DESC LIMIT %(limit)s",
+  "parameters": {{"limit": 5}},
+  "query_type": "list",
+  "synonym_expansion": {{"השכלה": ["חינוך", "השכלה"]}}
+}}
+
+### Example 3: Specific Decision Query
+{{
+  "sql": "SELECT * FROM israeli_government_decisions WHERE government_number = %(gov)s AND decision_number = %(dec)s",
+  "parameters": {{"gov": "37", "dec": "2080"}},
+  "query_type": "specific"
+}}
+
+## Topic Synonym Mapping:
+{{
+  "חינוך": ["חינוך", "השכלה", "חנוך", "מערכת החינוך", "חינוך פורמלי"],
+  "ביטחון": ["ביטחון", "בטחון", "ביטחון לאומי", "הגנה", "צבא"],
+  "בריאות": ["בריאות", "רפואה", "בראות", "שירותי בריאות"],
+  "כלכלה": ["כלכלה", "כלכלי", "מסחר", "תעשייה", "עסקים"],
+  "תחבורה": ["תחבורה", "תיחבורה", "כבישים", "תחבורה ציבורית"]
+}}
+
+## Parameter Validation:
+- government_number: convert to TEXT
+- decision_number: convert to TEXT
+- limit: 1-100 (default 20)
+- dates: validate format YYYY-MM-DD
+
+Always return JSON with: sql, parameters, query_type, validation_notes
 """
 
 
+def detect_query_type(intent: str, entities: Dict[str, Any]) -> str:
+    """
+    Detect the type of query based on intent and entities.
+    
+    Returns: 'count', 'list', 'comparison', 'analysis', or 'specific'
+    """
+    # Check for explicit count_only flag
+    if entities.get("count_only"):
+        return "count"
+    
+    # Check for count operation
+    if entities.get("operation") == "count":
+        return "count"
+    
+    # Check intent types
+    if intent == "count":
+        return "count"
+    
+    if intent == "comparison" or entities.get("comparison_target"):
+        return "comparison"
+    
+    if intent in ["ANALYSIS", "EVAL"]:
+        return "analysis"
+    
+    if intent == "specific_decision" or (entities.get("government_number") and entities.get("decision_number")):
+        return "specific"
+    
+    # Check for count keywords in topic or original query
+    count_keywords = ["כמה", "מספר", "סך הכל", "סה\"כ", "ספירה"]
+    topic = entities.get("topic", "").lower()
+    for keyword in count_keywords:
+        if keyword in topic:
+            return "count"
+    
+    # Default to list query
+    return "list"
+
+
 async def call_gpt_for_sql(intent: str, entities: Dict[str, Any]) -> Dict[str, Any]:
-    """Call GPT-4 for SQL generation."""
+    """Call GPT-4o for SQL generation."""
     try:
         prompt = SQL_GENERATION_PROMPT.format(
             intent=intent,
@@ -149,8 +270,8 @@ async def call_gpt_for_sql(intent: str, entities: Dict[str, Any]) -> Dict[str, A
             total_tokens=usage.total_tokens
         )
         
-        # Calculate cost for GPT-3.5-turbo: $0.50/$1.50 per 1M tokens
-        cost_usd = (usage.prompt_tokens * 0.0005 / 1000) + (usage.completion_tokens * 0.0015 / 1000)
+        # Calculate cost for GPT-4o-turbo: $0.01/$0.03 per 1K tokens  
+        cost_usd = (usage.prompt_tokens * 0.01 / 1000) + (usage.completion_tokens * 0.03 / 1000)
         
         return {
             "result": result,
@@ -176,6 +297,107 @@ async def call_gpt_for_sql(intent: str, entities: Dict[str, Any]) -> Dict[str, A
             "error_message": str(e)
         })
         raise HTTPException(status_code=500, detail=f"GPT call failed: {str(e)}")
+
+
+async def generate_enhanced_sql(intent: str, entities: Dict[str, Any], use_enhanced: bool = True) -> Dict[str, Any]:
+    """
+    Generate SQL using enhanced GPT-4o capabilities with all new features.
+    
+    Returns dict with sql, parameters, and all enhanced metadata
+    """
+    validation_warnings = []
+    synonym_expansions = {}
+    date_interpretations = {}
+    confidence_score = 1.0
+    
+    # Step 1: Correct typos in entities
+    if entities.get("topic"):
+        original_topic = entities["topic"]
+        corrected_topic = correct_typos(original_topic)
+        if corrected_topic != original_topic:
+            entities["topic"] = corrected_topic
+            validation_warnings.append(f"תוקן: '{original_topic}' → '{corrected_topic}'")
+    
+    # Step 2: Extract and interpret dates
+    date_range = extract_date_from_entities(entities)
+    if date_range:
+        # Validate date range
+        is_valid, error_msg = validate_date_range(date_range["start"], date_range["end"])
+        if not is_valid:
+            validation_warnings.append(f"בעיה בתאריכים: {error_msg}")
+            confidence_score *= 0.8
+        else:
+            entities["date_range"] = date_range
+            date_interpretations["extracted"] = f"{date_range['start']} עד {date_range['end']}"
+    
+    # Step 3: Expand synonyms for topics
+    if entities.get("topic"):
+        topic = entities["topic"]
+        synonyms = list(get_all_synonyms_for_topic(topic))
+        if len(synonyms) > 1:
+            synonym_expansions[topic] = synonyms
+            entities["expanded_topics"] = synonyms
+    
+    # Step 4: Expand ministry synonyms
+    if entities.get("ministries"):
+        for i, ministry in enumerate(entities["ministries"]):
+            ministry_synonyms = expand_ministry_synonyms(ministry)
+            if len(ministry_synonyms) > 1:
+                synonym_expansions[ministry] = ministry_synonyms
+                entities["ministries"][i] = ministry_synonyms[0]  # Use canonical form
+    
+    # Step 5: Detect query type
+    query_type = detect_query_type(intent, entities)
+    entities["query_type"] = query_type
+    
+    # Step 6: Add boolean flag detection
+    if entities.get("decision_type") == "אופרטיבית":
+        entities["operativity_filter"] = "אופרטיבית"
+    
+    # Step 7: Call GPT with enhanced prompt
+    if use_enhanced:
+        gpt_response = await call_gpt_for_sql(intent, entities)
+        result = gpt_response["result"]
+        
+        # Extract enhanced metadata from GPT response
+        if "query_type" in result:
+            query_type = result["query_type"]
+        
+        if "synonym_expansion" in result:
+            synonym_expansions.update(result["synonym_expansion"])
+        
+        if "validation_notes" in result:
+            validation_warnings.extend(result["validation_notes"])
+        
+        return {
+            "sql": result["sql"],
+            "parameters": result.get("parameters", {}),
+            "query_type": query_type,
+            "synonym_expansions": synonym_expansions,
+            "date_interpretations": date_interpretations,
+            "validation_warnings": validation_warnings,
+            "confidence_score": confidence_score,
+            "token_usage": gpt_response["usage"],
+            "method": "enhanced_gpt"
+        }
+    else:
+        # Fallback to template system
+        template_result = generate_sql_from_template(intent, entities)
+        if template_result:
+            return {
+                "sql": template_result["sql"],
+                "parameters": template_result["parameters"],
+                "query_type": query_type,
+                "synonym_expansions": synonym_expansions,
+                "date_interpretations": date_interpretations,
+                "validation_warnings": validation_warnings,
+                "confidence_score": confidence_score * 0.9,  # Slightly lower confidence for templates
+                "template_used": template_result["template_used"],
+                "method": "template"
+            }
+        else:
+            validation_warnings.append("לא נמצאה תבנית מתאימה, משתמש ב-GPT")
+            return await generate_enhanced_sql(intent, entities, use_enhanced=True)
 
 
 def clean_topic_entity(topic: str) -> str:
@@ -432,60 +654,28 @@ async def generate_sql(request: SQLGenRequest) -> SQLGenResponse:
     })
     
     try:
+        # Check feature flag
+        use_enhanced = os.getenv("USE_ENHANCED_SQL_GEN", "true").lower() == "true"
+        
         # Enhance entities with conversation context
         enhanced_entities = enhance_entities_with_context(
             request.entities,
             request.conversation_history
         )
         
-        # Try template-based generation first with enhanced entities
-        template_result = generate_sql_from_template(request.intent, enhanced_entities)
-        
-        sql_query = None
-        parameters = []
-        template_used = None
-        token_usage = None
-        
-        if template_result:
-            # Template generation successful
-            sql_query = template_result["sql"]
-            params = template_result["parameters"]
-            template_used = template_result["template_used"]
-            
-            # Convert parameters to response format
-            for name, value in params.items():
-                parameters.append(SQLParameter(
-                    name=name,
-                    value=value,
-                    type=type(value).__name__
-                ))
-            
-            # Create token usage for template (0 tokens)
-            token_usage = TokenUsage(
-                prompt_tokens=0,
-                completion_tokens=0,
-                total_tokens=0,
-                model="template"
-            )
-            
-            logger.info(f"SQL generated using template: {template_used}", extra={
-                "conv_id": request.conv_id,
-                "template": template_used
-            })
-        
-        else:
-            # Fallback to GPT generation
-            logger.info("Falling back to GPT SQL generation", extra={
+        if use_enhanced:
+            # Use new enhanced SQL generation
+            logger.info("Using enhanced SQL generation", extra={
                 "conv_id": request.conv_id
             })
             
-            gpt_response = await call_gpt_for_sql(request.intent, enhanced_entities)
-            result = gpt_response["result"]
+            result = await generate_enhanced_sql(request.intent, enhanced_entities)
             
             sql_query = result["sql"]
-            params = result.get("parameters", {})
+            params = result["parameters"]
             
             # Convert parameters to response format
+            parameters = []
             for name, value in params.items():
                 parameters.append(SQLParameter(
                     name=name,
@@ -493,38 +683,125 @@ async def generate_sql(request: SQLGenRequest) -> SQLGenResponse:
                     type=type(value).__name__
                 ))
             
-            token_usage = TokenUsage(**gpt_response["usage"])
-        
-        # Validate SQL syntax
-        validation_passed = validate_sql_syntax(sql_query)
-        
-        if not validation_passed:
-            logger.error(f"Generated SQL failed validation", extra={
-                "conv_id": request.conv_id,
-                "sql": sql_query
-            })
-            raise HTTPException(status_code=500, detail="Generated SQL failed validation")
-        
-        # Create response
-        response = SQLGenResponse(
-            conv_id=request.conv_id,
-            sql_query=sql_query,
-            parameters=parameters,
-            template_used=template_used,
-            validation_passed=validation_passed,
-            timestamp=datetime.utcnow(),
-            token_usage=token_usage,
-            context_used=len(request.conversation_history) > 0,
-            enhanced_entities=enhanced_entities
-        )
+            # Validate SQL syntax
+            validation_passed = validate_sql_syntax(sql_query)
+            
+            if not validation_passed:
+                logger.error(f"Generated SQL failed validation", extra={
+                    "conv_id": request.conv_id,
+                    "sql": sql_query
+                })
+                result["validation_warnings"].append("SQL syntax validation failed")
+                result["confidence_score"] *= 0.5
+            
+            # Create enhanced response
+            response = SQLGenResponse(
+                conv_id=request.conv_id,
+                sql_query=sql_query,
+                parameters=parameters,
+                template_used=result.get("template_used"),
+                validation_passed=validation_passed,
+                timestamp=datetime.utcnow(),
+                token_usage=result.get("token_usage") and TokenUsage(**result["token_usage"]),
+                context_used=len(request.conversation_history) > 0,
+                enhanced_entities=enhanced_entities,
+                # New enhanced fields
+                query_type=result.get("query_type", "list"),
+                synonym_expansions=result.get("synonym_expansions", {}),
+                date_interpretations=result.get("date_interpretations", {}),
+                validation_warnings=result.get("validation_warnings", []),
+                fallback_applied=result.get("method") == "template",
+                confidence_score=result.get("confidence_score", 1.0)
+            )
+        else:
+            # Use legacy template-based approach
+            template_result = generate_sql_from_template(request.intent, enhanced_entities)
+            
+            sql_query = None
+            parameters = []
+            template_used = None
+            token_usage = None
+            
+            if template_result:
+                # Template generation successful
+                sql_query = template_result["sql"]
+                params = template_result["parameters"]
+                template_used = template_result["template_used"]
+                
+                # Convert parameters to response format
+                for name, value in params.items():
+                    parameters.append(SQLParameter(
+                        name=name,
+                        value=value,
+                        type=type(value).__name__
+                    ))
+                
+                # Create token usage for template (0 tokens)
+                token_usage = TokenUsage(
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    total_tokens=0,
+                    model="template"
+                )
+                
+                logger.info(f"SQL generated using template: {template_used}", extra={
+                    "conv_id": request.conv_id,
+                    "template": template_used
+                })
+            
+            else:
+                # Fallback to GPT generation
+                logger.info("Falling back to GPT SQL generation", extra={
+                    "conv_id": request.conv_id
+                })
+                
+                gpt_response = await call_gpt_for_sql(request.intent, enhanced_entities)
+                result = gpt_response["result"]
+                
+                sql_query = result["sql"]
+                params = result.get("parameters", {})
+                
+                # Convert parameters to response format
+                for name, value in params.items():
+                    parameters.append(SQLParameter(
+                        name=name,
+                        value=value,
+                        type=type(value).__name__
+                    ))
+                
+                token_usage = TokenUsage(**gpt_response["usage"])
+            
+            # Validate SQL syntax
+            validation_passed = validate_sql_syntax(sql_query)
+            
+            if not validation_passed:
+                logger.error(f"Generated SQL failed validation", extra={
+                    "conv_id": request.conv_id,
+                    "sql": sql_query
+                })
+                raise HTTPException(status_code=500, detail="Generated SQL failed validation")
+            
+            # Create legacy response
+            response = SQLGenResponse(
+                conv_id=request.conv_id,
+                sql_query=sql_query,
+                parameters=parameters,
+                template_used=template_used,
+                validation_passed=validation_passed,
+                timestamp=datetime.utcnow(),
+                token_usage=token_usage,
+                context_used=len(request.conversation_history) > 0,
+                enhanced_entities=enhanced_entities
+            )
         
         # Log success
         duration_ms = (datetime.utcnow() - start).total_seconds() * 1000
         logger.info(f"SQL generation completed", extra={
             "conv_id": request.conv_id,
             "duration_ms": duration_ms,
-            "method": "template" if template_used else "gpt",
-            "parameter_count": len(parameters)
+            "method": "enhanced" if use_enhanced else ("template" if template_used else "gpt"),
+            "parameter_count": len(parameters),
+            "query_type": response.query_type if use_enhanced else "unknown"
         })
         
         return response
