@@ -120,22 +120,22 @@ Transform Hebrew natural language queries into precise PostgreSQL queries while 
 - Statistical vs. List queries (כמה vs. אילו)
 
 ## Database Schema:
-israeli_government_decisions(
+government_decisions(
   id BIGINT PRIMARY KEY,
   decision_date DATE NOT NULL,
-  decision_number TEXT NOT NULL,
-  government_number TEXT NOT NULL,
+  decision_number INTEGER NOT NULL,
+  government_number INTEGER NOT NULL,
   prime_minister TEXT NOT NULL,
   committee TEXT,
-  decision_title TEXT NOT NULL,
+  title TEXT NOT NULL,
   summary TEXT NOT NULL,
-  decision_content TEXT NOT NULL,
+  content TEXT NOT NULL,
   operativity TEXT NOT NULL, -- 'אופרטיבית' or 'דקלרטיבית'
-  tags_policy_area TEXT,
-  tags_government_body TEXT,
-  tags_location TEXT,
-  all_tags TEXT NOT NULL,
-  decision_url TEXT NOT NULL,
+  policy_area TEXT,
+  government_body TEXT,
+  location TEXT,
+  tags TEXT NOT NULL,
+  url TEXT NOT NULL,
   decision_key TEXT UNIQUE NOT NULL,
   embedding VECTOR(768),
   created_at TIMESTAMPTZ NOT NULL,
@@ -156,7 +156,7 @@ Entities: {entities}
 ### Example 1: Statistical/Count Query
 If entities contain "count_only": true or intent suggests counting:
 {{
-  "sql": "SELECT COUNT(*) as count FROM israeli_government_decisions WHERE tags_policy_area ILIKE '%%חינוך%%' AND decision_date BETWEEN %(start_date)s AND %(end_date)s",
+  "sql": "SELECT COUNT(*) as count FROM government_decisions WHERE policy_area ILIKE '%%חינוך%%' AND decision_date BETWEEN %(start_date)s AND %(end_date)s",
   "parameters": {{"start_date": "2020-01-01", "end_date": "2024-12-31"}},
   "query_type": "count"
 }}
@@ -164,7 +164,7 @@ If entities contain "count_only": true or intent suggests counting:
 ### Example 2: Fetch/List Query with Synonyms
 For topic queries, expand synonyms:
 {{
-  "sql": "SELECT id, government_number, decision_number, decision_date, decision_title, summary, tags_policy_area, tags_government_body, decision_url FROM israeli_government_decisions WHERE (tags_policy_area ILIKE '%%חינוך%%' OR tags_policy_area ILIKE '%%השכלה%%' OR all_tags ILIKE '%%חינוך%%' OR all_tags ILIKE '%%השכלה%%') ORDER BY decision_date DESC LIMIT %(limit)s",
+  "sql": "SELECT id, government_number, decision_number, decision_date, title, summary, policy_area, government_body, url FROM government_decisions WHERE (policy_area ILIKE '%%חינוך%%' OR policy_area ILIKE '%%השכלה%%' OR tags ILIKE '%%חינוך%%' OR tags ILIKE '%%השכלה%%') ORDER BY decision_date DESC LIMIT %(limit)s",
   "parameters": {{"limit": 5}},
   "query_type": "list",
   "synonym_expansion": {{"השכלה": ["חינוך", "השכלה"]}}
@@ -172,8 +172,8 @@ For topic queries, expand synonyms:
 
 ### Example 3: Specific Decision Query
 {{
-  "sql": "SELECT * FROM israeli_government_decisions WHERE government_number = %(gov)s AND decision_number = %(dec)s",
-  "parameters": {{"gov": "37", "dec": "2080"}},
+  "sql": "SELECT * FROM government_decisions WHERE government_number = %(gov)s AND decision_number = %(dec)s",
+  "parameters": {{"gov": 35, "dec": 100}},
   "query_type": "specific"
 }}
 
@@ -187,8 +187,8 @@ For topic queries, expand synonyms:
 }}
 
 ## Parameter Validation:
-- government_number: convert to TEXT
-- decision_number: convert to TEXT
+- government_number: convert to INTEGER
+- decision_number: convert to INTEGER  
 - limit: 1-100 (default 20)
 - dates: validate format YYYY-MM-DD
 
