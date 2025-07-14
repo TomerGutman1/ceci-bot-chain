@@ -39,6 +39,16 @@ When querying "החלטה 100 של ממשלה 35", the system should now:
 ## Review
 The fix addresses the incorrect SQL generation that was causing unrelated decisions to be returned. The SQL generator now properly handles specific decision queries and will only return exact matches.
 
+## Update: Supabase Schema Discovery
+
+After further investigation, discovered that:
+1. The system uses Supabase (not local PostgreSQL) for decision data
+2. The Supabase schema matches the documentation file: `israeli_government_decisions` table with columns like `decision_title`, `tags_policy_area`, etc.
+3. `decision_number` and `government_number` are TEXT fields in Supabase
+4. Reverted the schema changes to match the actual Supabase database
+5. Added stronger instructions to enforce exact matching for specific decision queries
+6. Added example for queries like "החלטה 2989" to use exact match, not similarity search
+
 ---
 
 # SQL-GEN BOT Upgrade - Task Summary

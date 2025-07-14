@@ -174,16 +174,16 @@ For topic queries, expand synonyms:
 ### Example 3: Specific Decision Query with Government
 When both government_number and decision_number are specified, search for EXACTLY that decision:
 {{
-  "sql": "SELECT * FROM israeli_government_decisions WHERE government_number = %(gov)s AND decision_number = %(dec)s",
-  "parameters": {{"gov": "35", "dec": "100"}},
+  "sql": "SELECT * FROM israeli_government_decisions WHERE government_number = %(government_number)s AND decision_number = %(decision_number)s",
+  "parameters": {{"government_number": "35", "decision_number": "100"}},
   "query_type": "specific"
 }}
 
 ### Example 4: Specific Decision Query without Government
 When only decision_number is specified (e.g. "החלטה 2989"), search for EXACTLY that decision:
 {{
-  "sql": "SELECT * FROM israeli_government_decisions WHERE decision_number = %(dec)s ORDER BY decision_date DESC",
-  "parameters": {{"dec": "2989"}},
+  "sql": "SELECT * FROM israeli_government_decisions WHERE decision_number = %(decision_number)s ORDER BY decision_date DESC",
+  "parameters": {{"decision_number": "2989"}},
   "query_type": "specific"
 }}
 IMPORTANT: For specific decision queries, use EXACT match (=) not similarity or LIKE. Do NOT return similar numbers.

@@ -1596,7 +1596,10 @@ class BotChainService {
         // Decision number filter
         if (sqlParams.decision_number) {
           query = query.eq('decision_number', sqlParams.decision_number.toString());
-          logger.debug('Added decision number filter', { decision_number: sqlParams.decision_number });
+          logger.debug('Added decision number filter from SQL params', { decision_number: sqlParams.decision_number });
+        } else if (entities.decision_number) {
+          query = query.eq('decision_number', entities.decision_number.toString());
+          logger.debug('Added decision number filter from entities', { decision_number: entities.decision_number });
         }
         
         // Date range filter
