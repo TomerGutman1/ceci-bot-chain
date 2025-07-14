@@ -34,14 +34,10 @@ services:
     environment:
       NODE_ENV: production
       PORT: 5173
-      # Use production Redis URL
       REDIS_URL: redis://redis:6379
-      # Production API URLs
       FRONTEND_URL: https://ceci-ai.ceci.org.il
-      # Force unbuffered output
       FORCE_COLOR: 1
       DEBUG: '*'
-      # Bot service URLs
       DECISION_GUIDE_BOT_URL: http://decision-guide-bot:8018
       USE_UNIFIED_INTENT: 'true'
       USE_LLM_FORMATTER: 'true'
@@ -61,15 +57,15 @@ services:
         max-size: "20m"
         max-file: "5"
 
-
   # Frontend
   frontend:
     restart: always
     networks:
       - ceci-network
+    env_file:
+      - .env.prod
     environment:
       NODE_ENV: production
-      # API URL should be relative for production
       VITE_API_URL: /api
     deploy:
       resources:
@@ -85,7 +81,7 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Nginx – production configuration
+  # Nginx – production configuration (static, pre-rendered)
   nginx:
     build:
       context: ./deploy/nginx
@@ -97,21 +93,27 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      # עכשיו ממריאים קובץ סטטי ותקין
+      # This is the file you pre-built with envsubst on the host
       - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./certbot/conf:/etc/letsencrypt:ro
       - ./certbot/www:/var/www/certbot:ro
     depends_on:
       - frontend
       - backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
 
-  # Bot services - no external ports in production
-  # Unified Intent Bot (replaces rewrite-bot and intent-bot)
+  # Unified Intent Bot
   unified-intent-bot:
     ports: []
     restart: always
     networks:
       - ceci-network
+    env_file:
+      - .env.prod
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     deploy:
@@ -128,11 +130,14 @@ services:
         max-size: "20m"
         max-file: "5"
 
+  # SQL Generation Bot
   sql-gen-bot:
     ports: []
     restart: always
     networks:
       - ceci-network
+    env_file:
+      - .env.prod
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     deploy:
@@ -149,11 +154,14 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Context Router Bot
   context-router-bot:
     ports: []
     restart: always
     networks:
       - ceci-network
+    env_file:
+      - .env.prod
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     deploy:
@@ -170,11 +178,14 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Evaluator Bot
   evaluator-bot:
     ports: []
     restart: always
     networks:
       - ceci-network
+    env_file:
+      - .env.prod
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     deploy:
@@ -191,11 +202,14 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Clarify Bot
   clarify-bot:
     ports: []
     restart: always
     networks:
       - ceci-network
+    env_file:
+      - .env.prod
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     deploy:
@@ -212,11 +226,14 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Ranker Bot
   ranker-bot:
     ports: []
     restart: always
     networks:
       - ceci-network
+    env_file:
+      - .env.prod
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     deploy:
@@ -233,12 +250,14 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # LLM Formatter Bot (replaces formatter-bot)
+  # LLM Formatter Bot
   llm-formatter-bot:
     ports: []
     restart: always
     networks:
       - ceci-network
+    env_file:
+      - .env.prod
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     deploy:
@@ -261,6 +280,8 @@ services:
     restart: always
     networks:
       - ceci-network
+    env_file:
+      - .env.prod
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     deploy:
@@ -277,7 +298,7 @@ services:
         max-size: "10m"
         max-file: "3"
 
-   # Certbot – automatic renewal loop
+  # Certbot – automatic renewal loop
   certbot:
     image: certbot/certbot:latest
     restart: unless-stopped
@@ -301,12 +322,10 @@ services:
         max-size: "5m"
         max-file: "2"
 
-# Production volumes
 volumes:
   postgres_data_prod:
     driver: local
 
-# Use the same network from base compose
 networks:
   ceci-network:
     external: true
