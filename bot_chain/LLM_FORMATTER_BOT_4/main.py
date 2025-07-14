@@ -81,6 +81,7 @@ def format_decision_typescript_style(decision: Dict[str, Any], index: int, inclu
     decision_num = decision.get('decision_number', '')
     lines.append(f"**{index}. החלטה מס' {decision_num}**")
     lines.append(f"📋 {title}")
+    lines.append("")  # Add blank line
     
     # Basic details
     gov_num = decision.get('government_number', '')
@@ -111,6 +112,7 @@ def format_decision_typescript_style(decision: Dict[str, Any], index: int, inclu
     pm = decision.get('prime_minister', '')
     if pm:
         lines.append(f"👤 ראש הממשלה: {pm}")
+    lines.append("")  # Add blank line
     
     # Policy areas
     policy_areas = decision.get('tags_policy_area', decision.get('topics', []))
@@ -127,6 +129,7 @@ def format_decision_typescript_style(decision: Dict[str, Any], index: int, inclu
         if len(summary) > 150 and not include_full_content:
             summary = summary[:147] + '...'
         lines.append(f"📝 תקציר: {summary}")
+    lines.append("")  # Add blank line
     
     # URL
     url = decision.get('decision_url', '')
@@ -144,7 +147,8 @@ def format_decision_typescript_style(decision: Dict[str, Any], index: int, inclu
     if include_full_content:
         content = decision.get('content', decision.get('decision_content', ''))
         if content and len(str(content)) > 500:
-            lines.append("\n📄 מתוך ההחלטה:")
+            lines.append("")  # Add blank line before content
+            lines.append("📄 מתוך ההחלטה:")
             # Show first 500 chars of content
             content_preview = str(content)[:500]
             if len(str(content)) > 500:
@@ -534,7 +538,8 @@ def fallback_format(data_type: DataType, content: Dict, query: str) -> str:
             
             for i, result in enumerate(results[:10], 1):
                 response_parts.append(format_decision_typescript_style(result, i, include_full))
-                response_parts.append("\n" + "─" * 50 + "\n")
+                if i < min(len(results), 10):
+                    response_parts.append("\n")  # Add space between decisions
             
             return "\n".join(response_parts)
         
@@ -643,7 +648,8 @@ async def format_response(request: FormatterRequest) -> FormatterResponse:
         # Format each decision
         for i, result in enumerate(results[:request.max_results], 1):
             response_parts.append(format_decision_typescript_style(result, i, include_full))
-            response_parts.append("\n" + "─" * 50 + "\n")
+            if i < min(len(results), request.max_results):
+                response_parts.append("\n")  # Add space between decisions
         
         # Add tips if many results
         if len(results) > 5:
