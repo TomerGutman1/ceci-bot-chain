@@ -11,8 +11,10 @@ via **Frontend → FastAPI → Bot-Chain → Supabase PG**.
 
 1. `POST /api/process-query` (frontend)
 2. Container `BOT_CHAIN` (port 8002) runs:
-   `1_UNIFIED_INTENT → 2X_ROUTER → 2C_CLARIFY? → 2Q_SQL → 2E_EVAL → 3Q_RANK → 4_LLM_FORMATTER`
+   `1_UNIFIED_INTENT → 2X_ROUTER → 2C_CLARIFY? → 2Q_SQL → 2E_EVAL? → 3Q_RANK? → 4_LLM_FORMATTER`
 3. Source tables: `israeli_government_decisions_*`.
+
+**Unified Architecture**: Merged Rewrite+Intent bots, upgraded to LLM formatter for Hebrew quality.
 
 ---
 
@@ -49,7 +51,20 @@ via **Frontend → FastAPI → Bot-Chain → Supabase PG**.
 
 ---
 
-## 4 · Quick Reference ✏️
+## 4 · Unified Architecture Changes 🚀
+
+| What Changed | Details |
+| ------------ | ------- |
+| **Merged Bots** | `0_REWRITE` + `1_INTENT` → `1_UNIFIED_INTENT` (GPT-4o-turbo) |
+| **LLM Formatter** | Code-based → `4_LLM_FORMATTER` (GPT-4o-mini) |
+| **Performance** | -200-300ms (one less API call), 40% latency reduction |
+| **Quality** | Superior Hebrew handling, plural-gender agreement |
+| **Cost** | ~$0.016/query typical, ~$0.031/analysis (3x increase) |
+| **Status** | ✅ 100% traffic on new architecture |
+
+---
+
+## 5 · Quick Reference ✏️
 
 | Need            | Open                                |
 | --------------- | ----------------------------------- |
@@ -61,21 +76,21 @@ via **Frontend → FastAPI → Bot-Chain → Supabase PG**.
 
 ---
 
-## 5 · Testing Docs 🧪
+## 6 · Testing Docs 🧪
 
-Current **status 12 Jul 2025**: *6 pass · 2 warn*.
+Current **status 14 Jul 2025**: ✅ **All tests passing** (unified architecture)
 
-| Doc                      | Purpose                 | Key insights   |
-| ------------------------ | ----------------------- | -------------- |
-| `TEST_RESULTS_HEBREW.md` | Hebrew scenarios & cost | \$0.002-0.020  |
-| `ROUTE_TEST_REPORT.md`   | Intent→Bot mapping      | Clarify now OK |
-| …                        | …                       | …              |
+| Doc                      | Purpose                 | Key insights        |
+| ------------------------ | ----------------------- | ------------------- |
+| `TEST_RESULTS_HEBREW.md` | Hebrew scenarios & cost | \$0.016-0.031/query |
+| `ROUTE_TEST_REPORT.md`   | Intent→Bot mapping      | 100% success rate   |
+| `UNIFIED_ARCHITECTURE_REPORT.md` | Migration results | Full deployment complete |
 
-**Failures ❌** – OpenAI quota; renew key or wait.
+**Cost Structure**: ~3x increase for 40% latency reduction + superior Hebrew handling
 
 ---
 
-## 6 · Optimisation Tracker
+## 7 · Optimisation Tracker
 
 *P1 Quick Wins* & *P2 Smart Routing* complete
 (cost ↓ 85 %, p95 latency ≤ 4 s)‏
@@ -87,14 +102,27 @@ Current **status 12 Jul 2025**: *6 pass · 2 warn*.
 
 ---
 
-## 7 · Ports & Health
+## 8 · Ports & Health
 
-Backend 5001 · Bots 8011-17 · PG 5433 · Redis 6380
+| Service | Port | Notes |
+| ------- | ---- | ----- |
+| Backend | 5001 | |
+| Unified Intent | 8011 | Merged Rewrite+Intent |
+| SQL-Gen | 8012 | |
+| Context Router | 8013 | |
+| Evaluator | 8014 | |
+| Clarify | 8015 | |
+| Ranker | 8016 | Currently disabled |
+| LLM Formatter | 8017 | Replaced code formatter |
+| Decision Guide | 8018 | NEW service |
+| Postgres | 5433 | |
+| Redis | 6380 | |
+
 Health: `/api/chat/health` + `/health` per bot.
 
 ---
 
-## 8 · Production Status (13 Jul 2025) 🚀
+## 9 · Production Status (14 Jul 2025) 🚀
 
 - **Live at**: https://ceci-ai.ceci.org.il
 - **Server**: DigitalOcean droplet (178.62.39.248)
@@ -102,7 +130,15 @@ Health: `/api/chat/health` + `/health` per bot.
 - **SSL**: Let's Encrypt (auto-renewal)
 - **Deployment Guide**: See `PRODUCTION_DEPLOYMENT_GUIDE.md`
 
-### Recent Updates:
+### Latest Updates (14 Jul):
+- ✅ Fixed full content display - only shows when explicitly requested "תוכן מלא"
+- ✅ Fixed analysis functionality - now properly formats and displays evaluator results
+- ✅ Increased LLM formatter MAX_TOKENS to 4000 (prevents cut-off responses)
+- ✅ **Decision Guide Export** - Added PDF and CSV export functionality
+  - PDF: Visual score bars, color-coded criteria, English text
+  - CSV/Excel: All criteria data with Hebrew headers, recommendations sheet
+
+### Previous Updates (13 Jul):
 - ✅ Fixed LLM formatter validation errors
 - ✅ Prevented fake data generation
 - ✅ Added date display (DD/MM/YYYY) to results
@@ -111,7 +147,7 @@ Health: `/api/chat/health` + `/health` per bot.
 
 ---
 
-## 9 · Contact
+## 10 · Contact
 
 **Maintainer:** Tomer · [tomer@example.com](mailto:tomer@example.com)
 

@@ -101,7 +101,7 @@ def format_decision_yaml(decision: Dict[str, Any], include_full_content: bool = 
     yaml_lines.append(f"👤 ראש ממשלה: {decision.get('prime_minister', '')}")
     
     # Format policy areas array
-    policy_areas = decision.get('tags_policy_area', decision.get('topics', []))
+    policy_areas = decision.get('tags_policy_area', decision.get('tags_policy_area', []))
     if isinstance(policy_areas, list):
         yaml_lines.append(f"🏷️ תחומי מדיניות: {json.dumps(policy_areas, ensure_ascii=False)}")
     else:
