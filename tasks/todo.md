@@ -1,3 +1,46 @@
+# SQL Generation Fix for Specific Decision Queries
+
+## Problem
+When querying for a specific decision that doesn't exist (e.g., "החלטה 100 של ממשלה 35"), the system was returning unrelated decisions from government 35 instead of returning no results or an appropriate message.
+
+## Root Cause
+1. The SQL generation prompt had incorrect table schema - it referenced `israeli_government_decisions` but the actual table is `government_decisions`
+2. The column names were incorrect (e.g., `decision_title` vs `title`, `tags_policy_area` vs `policy_area`)
+3. The data types were wrong - `decision_number` and `government_number` should be INTEGER not TEXT
+4. The SQL generator was likely falling back to searching all decisions from a government when a specific decision wasn't found
+
+## Solution
+1. Updated the SQL generation prompt with the correct table name and schema
+2. Fixed all column names to match the actual database structure
+3. Changed parameter types from TEXT to INTEGER for decision_number and government_number
+4. Added explicit instructions to NEVER fallback to listing all decisions when a specific decision is requested
+5. Added a new query type "SPECIFIC" with clear examples
+6. Added critical rules emphasizing exact matching for specific decision queries
+
+## Changes Made
+- Updated `bot_chain/QUERY_SQL_GEN_BOT_2Q/main.py`:
+  - Fixed database schema in the prompt
+  - Updated example queries with correct table/column names
+  - Added SPECIFIC query type
+  - Added critical rules for handling specific decision queries
+  - Changed parameter validation from TEXT to INTEGER
+
+## Deployment
+- Changes committed and pushed to production-deploy branch
+- SQL generation bot rebuilt and redeployed to production
+- Service is now running with the fixes
+
+## Expected Behavior
+When querying "החלטה 100 של ממשלה 35", the system should now:
+- Generate SQL: `SELECT * FROM government_decisions WHERE government_number = 35 AND decision_number = 100`
+- Return no results if the decision doesn't exist (which is the case)
+- NOT return other decisions from government 35
+
+## Review
+The fix addresses the incorrect SQL generation that was causing unrelated decisions to be returned. The SQL generator now properly handles specific decision queries and will only return exact matches.
+
+---
+
 # SQL-GEN BOT Upgrade - Task Summary
 
 ## Completed Tasks

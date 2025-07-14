@@ -120,22 +120,22 @@ Transform Hebrew natural language queries into precise PostgreSQL queries while 
 - Statistical vs. List queries (כמה vs. אילו)
 
 ## Database Schema:
-government_decisions(
+israeli_government_decisions(
   id BIGINT PRIMARY KEY,
   decision_date DATE NOT NULL,
-  decision_number INTEGER NOT NULL,
-  government_number INTEGER NOT NULL,
+  decision_number TEXT NOT NULL,
+  government_number TEXT NOT NULL,
   prime_minister TEXT NOT NULL,
   committee TEXT,
-  title TEXT NOT NULL,
+  decision_title TEXT NOT NULL,
   summary TEXT NOT NULL,
-  content TEXT NOT NULL,
+  decision_content TEXT NOT NULL,
   operativity TEXT NOT NULL, -- 'אופרטיבית' or 'דקלרטיבית'
-  policy_area TEXT,
-  government_body TEXT,
-  location TEXT,
-  tags TEXT NOT NULL,
-  url TEXT NOT NULL,
+  tags_policy_area TEXT,
+  tags_government_body TEXT,
+  tags_location TEXT,
+  all_tags TEXT NOT NULL,
+  decision_url TEXT NOT NULL,
   decision_key TEXT UNIQUE NOT NULL,
   embedding VECTOR(768),
   created_at TIMESTAMPTZ NOT NULL,
@@ -157,7 +157,7 @@ Entities: {entities}
 ### Example 1: Statistical/Count Query
 If entities contain "count_only": true or intent suggests counting:
 {{
-  "sql": "SELECT COUNT(*) as count FROM government_decisions WHERE policy_area ILIKE '%%חינוך%%' AND decision_date BETWEEN %(start_date)s AND %(end_date)s",
+  "sql": "SELECT COUNT(*) as count FROM israeli_government_decisions WHERE tags_policy_area ILIKE '%%חינוך%%' AND decision_date BETWEEN %(start_date)s AND %(end_date)s",
   "parameters": {{"start_date": "2020-01-01", "end_date": "2024-12-31"}},
   "query_type": "count"
 }}
@@ -165,20 +165,28 @@ If entities contain "count_only": true or intent suggests counting:
 ### Example 2: Fetch/List Query with Synonyms
 For topic queries, expand synonyms:
 {{
-  "sql": "SELECT id, government_number, decision_number, decision_date, title, summary, policy_area, government_body, url FROM government_decisions WHERE (policy_area ILIKE '%%חינוך%%' OR policy_area ILIKE '%%השכלה%%' OR tags ILIKE '%%חינוך%%' OR tags ILIKE '%%השכלה%%') ORDER BY decision_date DESC LIMIT %(limit)s",
+  "sql": "SELECT id, government_number, decision_number, decision_date, decision_title, summary, tags_policy_area, tags_government_body, decision_url FROM israeli_government_decisions WHERE (tags_policy_area ILIKE '%%חינוך%%' OR tags_policy_area ILIKE '%%השכלה%%' OR all_tags ILIKE '%%חינוך%%' OR all_tags ILIKE '%%השכלה%%') ORDER BY decision_date DESC LIMIT %(limit)s",
   "parameters": {{"limit": 5}},
   "query_type": "list",
   "synonym_expansion": {{"השכלה": ["חינוך", "השכלה"]}}
 }}
 
-### Example 3: Specific Decision Query
+### Example 3: Specific Decision Query with Government
 When both government_number and decision_number are specified, search for EXACTLY that decision:
 {{
-  "sql": "SELECT * FROM government_decisions WHERE government_number = %(gov)s AND decision_number = %(dec)s",
-  "parameters": {{"gov": 35, "dec": 100}},
+  "sql": "SELECT * FROM israeli_government_decisions WHERE government_number = %(gov)s AND decision_number = %(dec)s",
+  "parameters": {{"gov": "35", "dec": "100"}},
   "query_type": "specific"
 }}
-IMPORTANT: For specific decision queries, do NOT fallback to searching all decisions of a government if the specific decision is not found.
+
+### Example 4: Specific Decision Query without Government
+When only decision_number is specified (e.g. "החלטה 2989"), search for EXACTLY that decision:
+{{
+  "sql": "SELECT * FROM israeli_government_decisions WHERE decision_number = %(dec)s ORDER BY decision_date DESC",
+  "parameters": {{"dec": "2989"}},
+  "query_type": "specific"
+}}
+IMPORTANT: For specific decision queries, use EXACT match (=) not similarity or LIKE. Do NOT return similar numbers.
 
 ## Topic Synonym Mapping:
 {{
@@ -190,8 +198,8 @@ IMPORTANT: For specific decision queries, do NOT fallback to searching all decis
 }}
 
 ## Parameter Validation:
-- government_number: convert to INTEGER
-- decision_number: convert to INTEGER  
+- government_number: convert to TEXT
+- decision_number: convert to TEXT
 - limit: 1-100 (default 20)
 - dates: validate format YYYY-MM-DD
 
@@ -199,8 +207,11 @@ Always return JSON with: sql, parameters, query_type, validation_notes
 
 CRITICAL RULES:
 1. When user asks for a specific decision (e.g. "החלטה X של ממשלה Y"), ALWAYS use WHERE government_number = Y AND decision_number = X
-2. NEVER fallback to listing all decisions of a government when a specific decision is requested
-3. If user asks for "החלטה 100 של ממשלה 35", the SQL must be: WHERE government_number = 35 AND decision_number = 100
+2. When user asks for just "החלטה X" without government, search WHERE decision_number = X (exact match)
+3. NEVER fallback to listing all decisions of a government when a specific decision is requested
+4. NEVER use similarity search, LIKE, or approximate matching for decision numbers - use exact equality (=)
+5. If user asks for "החלטה 2989", the SQL must be: WHERE decision_number = '2989' (exact match)
+6. Do NOT return decisions with similar numbers (2998, 2996, etc.) when an exact number is requested
 """
 
 
