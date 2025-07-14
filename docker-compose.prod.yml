@@ -104,11 +104,11 @@ services:
       - sh
       - -c
       - |
-        # Replace only DOMAIN_NAME in the template
-        sed "s/\${DOMAIN_NAME}/$DOMAIN_NAME/g" \
+        # החלפת רק DOMAIN_NAME בתבנית
+        sed "s|\${DOMAIN_NAME}|${DOMAIN_NAME}|g" \
           /etc/nginx/templates/default.conf.template \
           > /tmp/nginx.conf
-        # Launch nginx using the generated config
+        # השקת nginx עם הקובץ שנוצר
         exec nginx -g 'daemon off;' -c /tmp/nginx.conf
     logging:
       driver: "json-file"
