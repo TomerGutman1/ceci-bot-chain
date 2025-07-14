@@ -85,6 +85,7 @@ def format_decision_typescript_style(decision: Dict[str, Any], index: int, inclu
     
     # Basic details
     gov_num = decision.get('government_number', '')
+    lines.append("")  # Add blank line before government number
     lines.append(f"🏢 ממשלה מספר: {gov_num}")
     
     # Format date
@@ -106,20 +107,23 @@ def format_decision_typescript_style(decision: Dict[str, Any], index: int, inclu
             date_str = f"{day} ב{month} {year}"
         except:
             pass
+    lines.append("")  # Add blank line before date
     lines.append(f"📅 תאריך: {date_str}")
     
     # Prime minister
     pm = decision.get('prime_minister', '')
     if pm:
+        lines.append("")  # Add blank line before prime minister
         lines.append(f"👤 ראש הממשלה: {pm}")
-    lines.append("")  # Add blank line
     
     # Policy areas
     policy_areas = decision.get('tags_policy_area', decision.get('topics', []))
-    if isinstance(policy_areas, list) and policy_areas:
-        lines.append(f"🏷️ תחומים: {', '.join(policy_areas)}")
-    elif isinstance(policy_areas, str) and policy_areas:
-        lines.append(f"🏷️ תחומים: {policy_areas}")
+    if policy_areas:
+        lines.append("")  # Add blank line before policy areas
+        if isinstance(policy_areas, list) and policy_areas:
+            lines.append(f"🏷️ תחומים: {', '.join(policy_areas)}")
+        elif isinstance(policy_areas, str) and policy_areas:
+            lines.append(f"🏷️ תחומים: {policy_areas}")
     
     # Summary
     summary = decision.get('summary', '')
@@ -128,12 +132,13 @@ def format_decision_typescript_style(decision: Dict[str, Any], index: int, inclu
         # Truncate if too long
         if len(summary) > 150 and not include_full_content:
             summary = summary[:147] + '...'
+        lines.append("")  # Add blank line before summary
         lines.append(f"📝 תקציר: {summary}")
-    lines.append("")  # Add blank line
     
     # URL
     url = decision.get('decision_url', '')
     if url and url.startswith('https://www.gov.il'):
+        lines.append("")  # Add blank line before URL
         lines.append(f"🔗 קישור: {url}")
     
     # Status
