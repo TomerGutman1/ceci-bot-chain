@@ -105,13 +105,21 @@ ssh root@178.62.39.248 "cd /root/CECI-W-BOTS && git pull && docker compose -f do
 
 ---
 
-## 7 · Current Project Status (13 Jul 2025)
+## 7 · Current Project Status (14 Jul 2025)
 
-### 🚀 Production Deployment Complete (13 Jul 2025)
+### 🚀 Production Deployment Complete (14 Jul 2025)
 
 **System is LIVE at**: https://ceci-ai.ceci.org.il
 
-**Today's Fixes**:
+**Latest Fixes (14 Jul 2025)**:
+1. ✓ Fixed full content display - only shows when explicitly requested "תוכן מלא"
+2. ✓ Fixed analysis functionality - now properly formats and displays evaluator results
+3. ✓ Increased LLM formatter MAX_TOKENS to 4000 (prevents cut-off responses)
+4. ✓ **Decision Guide Export** - Added PDF and CSV export functionality
+   - PDF: Visual score bars, color-coded criteria, English text
+   - CSV/Excel: All criteria data with Hebrew headers, recommendations sheet
+
+**Previous Fixes (13 Jul)**:
 1. ✓ Fixed LLM formatter DataType enum error (500 errors)
 2. ✓ Fixed FormatterResponse validation errors 
 3. ✓ Prevented LLM from generating fake data
@@ -160,33 +168,20 @@ ssh root@178.62.39.248 "cd /root/CECI-W-BOTS && git pull && docker compose -f do
 * `storeInCache()` - server/src/services/botChainService.ts:~550-600
 * `generateCacheKey()` - server/src/services/botChainService.ts:~600-650
 
-### 🚨 UPDATED STATUS (4 Jul 2025) - CRITICAL PRODUCTION ISSUES
+### ✅ RESOLVED ISSUES (14 Jul 2025)
 
-**EVALUATOR Bot Timeout Crisis**:
-- Analysis requests (`נתח את התוכן`) fail with 30-second timeouts
-- Backend logs show: `timeout of 30000ms exceeded`
-- User increased max_tokens to 20,000 but issue persists
-- **Result**: Empty responses for analysis requests
+**Previously Critical Issues - NOW FIXED**:
+1. ✓ **Analysis Functionality** - Fixed empty responses, proper formatting
+2. ✓ **Full Content Display** - Only shows when explicitly requested
+3. ✓ **Token Limits** - Increased to 4000 for complete responses
+4. ✓ **URL Generation** - Uses only database URLs
+5. ✓ **Multiple Decisions** - Correctly handles same decision numbers
 
-**Full Content Bug**:
-- Requests for `תוכן מלא` show unclear repeated messages
-- Users report confusing duplicate responses
-- **Status**: Root cause unknown, needs formatter investigation
-
-**Fixes Applied**:
-1. ✓ Intent detection fixed - EVAL path now triggered correctly
-2. ✓ EVALUATOR bot field mapping fixed (original_query, decision_number)
-3. ✓ Token limits increased to 20,000
-4. ✓ Memory context features disabled to prevent entity persistence
-5. ✓ **URL Generation Fix** - Decision URLs now come ONLY from database `decision_url` field
-6. ✓ **SQL Template Cleanup** - Removed duplicate `specific_decision` templates
-7. ✓ **Multiple Decision Support** - System correctly shows all decisions when multiple exist for same number
-
-**URGENT TODO**:
-1. Fix EVALUATOR timeout issue (Priority 1)
-2. Debug full content response duplication (Priority 2)
-3. Restore cache systems safely (Priority 3)
-4. Implement Reference Resolution integration (Priority 2)
+**Remaining TODO**:
+1. Restore cache systems safely (Priority 3)
+2. Implement Reference Resolution integration (Priority 2)
+3. Fix UNCLEAR routes (don't trigger Clarify bot)
+4. Fix RESULT_REF routes (context retrieval)
 
 ### Service Ports (reference)
 
@@ -196,6 +191,7 @@ ssh root@178.62.39.248 "cd /root/CECI-W-BOTS && git pull && docker compose -f do
 | ~~Rewrite~~ |  ~~8010~~ | **Unified Intent** 8011 | SQL‑Gen 8012  | Ctx 8013       |
 | Evaluator   |  8014 | Clarify 8015      | Ranker 8016   | **LLM Formatter** 8017 |
 | Frontend    |  3001 | Nginx 80/443/8080 | Postgres 5433 | Redis 6380     |
+| **Decision Guide** | 8018 |             |               |                |
 
 **Note**: Rewrite Bot (8010) deprecated - functionality merged into Unified Intent Bot (8011)
 
@@ -230,25 +226,6 @@ ssh root@178.62.39.248 "cd /root/CECI-W-BOTS && git pull && docker compose -f do
 3. Monitor quality metrics and token usage
 4. Gradually increase traffic percentage
 
-### 🎯 URL Generation Fix - COMPLETED (4 Jul 2025)
-
-**Problem**: System was generating decision URLs instead of using actual URLs from database.
-
-**Solution Implemented**:
-- **MAIN_FORMATTER_4**: Modified to use ONLY `decision_url` from database field
-- **SQL Templates**: Cleaned up duplicate `specific_decision` templates that caused conflicts
-- **Database Integration**: All URLs now come from `government_decisions.decision_url` column
-- **Multiple Results**: System correctly handles cases where government publishes multiple decisions with same number
-
-**Files Modified**:
-- `bot_chain/QUERY_SQL_GEN_BOT_2Q/sql_templates.py` - Removed duplicate template (lines 300-320)
-- `bot_chain/MAIN_FORMATTER_4/main.py` - Line 308-312: URL from DB only, no fallback generation
-
-**Validation**:
-- ✓ URLs come exclusively from database `decision_url` field
-- ✓ No URL generation or format assumptions
-- ✓ Multiple decisions with same number display correctly
-- ✓ Container rebuilt to apply SQL template changes
 
 ### 🔗 Reference Resolution Integration - READY FOR IMPLEMENTATION
 
