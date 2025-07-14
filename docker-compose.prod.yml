@@ -104,18 +104,17 @@ services:
       - sh
       - -c
       - |
-        # Render template into writable path, substituting all variables
-        envsubst \
-          < /etc/nginx/templates/default.conf.template \
+        # Replace only DOMAIN_NAME in the template
+        sed "s/\${DOMAIN_NAME}/$DOMAIN_NAME/g" \
+          /etc/nginx/templates/default.conf.template \
           > /tmp/nginx.conf
-        # Start nginx with the generated config
+        # Launch nginx using the generated config
         exec nginx -g 'daemon off;' -c /tmp/nginx.conf
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "5"
-
 
   # Bot services - no external ports in production
   # Unified Intent Bot (replaces rewrite-bot and intent-bot)
