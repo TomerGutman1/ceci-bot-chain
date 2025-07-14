@@ -85,7 +85,6 @@ services:
         max-size: "10m"
         max-file: "3"
 
-
   # Nginx – production configuration
   nginx:
     image: nginx:latest
@@ -105,11 +104,11 @@ services:
       - sh
       - -c
       - |
-        # Render template into writable path
-        envsubst '$DOMAIN_NAME' \
+        # Render template into writable path, substituting all variables
+        envsubst \
           < /etc/nginx/templates/default.conf.template \
           > /tmp/nginx.conf
-        # Start nginx with custom config
+        # Start nginx with the generated config
         exec nginx -g 'daemon off;' -c /tmp/nginx.conf
     logging:
       driver: "json-file"
