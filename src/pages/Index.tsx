@@ -54,6 +54,8 @@ const Index = () => {
                 externalEditMessage={chatEditMessage}
               />
             </div>
+            
+            {/* Right Examples - REMOVED - keeping only left sidebar */}
           </div>
         </div>
       </div>
