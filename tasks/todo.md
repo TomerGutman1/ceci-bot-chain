@@ -339,3 +339,61 @@ Remove all possibilities of using mock data in the system. Ensure that all links
 - The test data includes decisions like 2989, 2000, 1999 which might be contaminating production responses
 - All URLs must come from the database decision_url field
 - No placeholder or generated URLs are acceptable
+
+---
+
+# Analysis Display Improvements - Review (15 Jul 2025)
+
+## Completed Tasks
+
+### 1. Improved Analysis Display Format
+- Replaced table format with card-style blocks for each criterion
+- Each criterion now shows:
+  - Name and weight percentage
+  - Visual score bar (█░░░░ style)
+  - Explanation in italics
+  - Text citation on a separate line with quote icon
+- This format fits better in the narrow chat window
+
+### 2. Added Conclusions and Recommendations
+- Added "מסקנות מרכזיות" section for main findings
+- Enhanced recommendations section with:
+  - Auto-generated recommendations based on low-scoring criteria
+  - Specific action items for improvement
+  - Fallback to extract recommendations from explanation text
+
+### 3. Visual Score Representation
+- Added visual progress bars for individual criteria (0-5 scale)
+- Added overall score bar (0-100 scale)
+- Clear categorization: גבוהה/בינונית/נמוכה
+
+### 4. Consistent Scoring (Temperature Fix)
+- Reduced evaluator bot temperature from 0.3 to 0.0
+- This ensures identical decisions always get the same scores
+- Eliminates randomness in analysis results
+
+## Changes Made
+
+1. **bot_chain/LLM_FORMATTER_BOT_4/main.py**:
+   - Rewrote `format_analysis_results()` function
+   - Changed from table to card-based layout
+   - Added visual score bars
+   - Improved recommendations extraction
+   - Added conclusions section
+
+2. **bot_chain/EVAL_EVALUATOR_BOT_2E/main.py**:
+   - Added specific recommendation generation based on low scores
+   - Updated response to include recommendations list
+   - Improved explanation formatting
+
+3. **bot_chain/common/config.py**:
+   - Set EVAL_EVALUATOR_BOT_2E temperature to 0.0
+   - Ensures consistent scoring across repeated analyses
+
+## Result
+The analysis display now:
+- Fits properly in the chat window width
+- Shows all information clearly with proper hierarchy
+- Includes conclusions and actionable recommendations
+- Provides consistent scores for the same decision
+- Uses visual elements for better readability

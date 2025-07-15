@@ -841,6 +841,24 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
                 table_header = "| קריטריון | משקל | ציון (0–5) | נימוק |\n|---|---|---|---|"
                 criteria_table_str = table_header + "\n" + "\n".join(criteria_table)
                 
+                # Generate specific recommendations based on low-scoring criteria
+                specific_recommendations = []
+                for criterion in criteria:
+                    if criterion.get('score', 0) <= 2:
+                        name = criterion.get('name', '')
+                        if name == "לוח זמנים מחייב":
+                            specific_recommendations.append("הוספת לוח זמנים מפורט עם אבני דרך ותאריכי יעד ברורים")
+                        elif name == "צוות מתכלל":
+                            specific_recommendations.append("מינוי צוות מתכלל עם הגדרת תפקידים וסמכויות ברורות")
+                        elif name == "משאבים נדרשים":
+                            specific_recommendations.append("פירוט התקציב הנדרש ומקורות המימון הספציפיים")
+                        elif name == "מנגנון דיווח/בקרה":
+                            specific_recommendations.append("הגדרת מנגנון דיווח תקופתי עם תדירות ופורמט מוגדרים")
+                        elif name == "מדדי תוצאה ומרכיבי הצלחה":
+                            specific_recommendations.append("קביעת מדדי הצלחה כמותיים וברי מדידה")
+                        elif name == "מנגנון יישום בשטח":
+                            specific_recommendations.append("פירוט תהליכי היישום והגורמים האחראיים בשטח")
+                
                 # Create detailed explanation in the required format
                 formatted_explanation = f"""🔍 ניתוח החלטת ממשלה {decision_num} לפי קריטריוני היישום
 
@@ -855,8 +873,9 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
 📝 **סיכום ניתוח ואבחנות עיקריות**
 {summary}
 
-🔧 **המלצות לשיפור**
-בהתבסס על הניתוח, ניתן לשפר את רמת הישימות על ידי התמקדות בקריטריונים שקיבלו ציון נמוך."""
+🔧 **המלצות לשיפור רמת הישימות**
+בהתבסס על הקריטריונים שקיבלו ציון נמוך, מומלץ:
+""" + "\n".join([f"• {rec}" for rec in specific_recommendations]) if specific_recommendations else "בהתבסס על הניתוח, ניתן לשפר את רמת הישימות על ידי התמקדות בקריטריונים שקיבלו ציון נמוך."
                 
                 processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
                 
@@ -864,8 +883,17 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
                     overall_score=overall_score,
                     relevance_level=relevance_level,
                     quality_metrics=quality_metrics,
-                    content_analysis={"feasibility_analysis": summary, "decision_title": decision_title, "criteria_breakdown": criteria},
-                    recommendations=[f"ציון ישימות כולל: {final_score}/100"],
+                    content_analysis={
+                        "feasibility_analysis": summary, 
+                        "decision_title": decision_title, 
+                        "criteria_breakdown": criteria,
+                        "final_score": final_score
+                    },
+                    recommendations=specific_recommendations if specific_recommendations else [
+                        "בהתבסס על הניתוח, מומלץ להתמקד בשיפור הקריטריונים שקיבלו ציון נמוך",
+                        "הוספת פרטים ספציפיים יותר בתחומים החסרים",
+                        "הגדרת מנגנוני בקרה ומעקב ברורים"
+                    ],
                     confidence=0.9,
                     explanation=formatted_explanation,
                     processing_time_ms=processing_time,

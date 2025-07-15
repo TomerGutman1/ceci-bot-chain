@@ -101,9 +101,8 @@ def format_analysis_results(content: Dict[str, Any]) -> str:
     if criteria_breakdown:
         lines.append("### 📊 ניתוח מפורט לפי קריטריונים")
         lines.append("")
-        lines.append("| קריטריון | משקל | ציון (0-5) | הסבר | ציטוט מהטקסט |")
-        lines.append("|----------|------|------------|-------|---------------|")
         
+        # Format each criterion as a separate block for better readability
         for criterion in criteria_breakdown:
             name = criterion.get('name', '')
             weight = criterion.get('weight', 0)
@@ -111,18 +110,28 @@ def format_analysis_results(content: Dict[str, Any]) -> str:
             explanation = criterion.get('explanation', '')
             reference = criterion.get('reference_from_document', 'לא נמצא ציטוט')
             
-            # Truncate long references
-            if len(reference) > 100:
-                reference = reference[:97] + "..."
+            # Create a visual score bar
+            score_bar = "█" * score + "░" * (5 - score)
             
-            lines.append(f"| {name} | {weight}% | {score} | {explanation} | {reference} |")
+            lines.append(f"**{name}** (משקל: {weight}%)")
+            lines.append(f"ציון: {score}/5 [{score_bar}]")
+            lines.append(f"*{explanation}*")
+            if reference and reference != 'לא נמצא ציטוט':
+                lines.append(f"💬 ציטוט: \"{reference}\"")
+            lines.append("")  # Empty line between criteria
         
-        lines.append("")
-        
-        # Overall score
+        # Overall score section
         final_score = evaluation.get('content_analysis', {}).get('final_score', 0)
         if final_score > 0:
+            lines.append("---")  # Separator
+            lines.append("")
             lines.append(f"### 🎯 ציון ישימות כולל: {final_score}/100")
+            
+            # Visual score representation
+            score_percentage = int(final_score / 10)
+            overall_bar = "█" * score_percentage + "░" * (10 - score_percentage)
+            lines.append(f"[{overall_bar}]")
+            lines.append("")
             
             if final_score >= 75:
                 lines.append("✅ **רמת ישימות: גבוהה**")
@@ -132,19 +141,56 @@ def format_analysis_results(content: Dict[str, Any]) -> str:
                 lines.append("❌ **רמת ישימות: נמוכה**")
             lines.append("")
     
-    # Add summary if available
+    # Add summary/conclusions if available
     summary = evaluation.get('content_analysis', {}).get('feasibility_analysis', '')
     if summary:
-        lines.append("### 📝 סיכום הניתוח")
+        lines.append("### 📝 מסקנות מרכזיות")
         lines.append(summary)
         lines.append("")
     
-    # Add recommendations
+    # Extract recommendations from the explanation text if not in structured data
     recommendations = evaluation.get('recommendations', [])
-    if recommendations:
-        lines.append("### 💡 המלצות")
+    
+    # If we only have the default recommendation (score), try to extract from explanation
+    if len(recommendations) == 1 and "ציון ישימות כולל:" in recommendations[0]:
+        # Look for recommendations in the explanation text
+        if "המלצות לשיפור" in explanation:
+            # Extract the recommendations section
+            rec_start = explanation.find("המלצות לשיפור")
+            if rec_start > -1:
+                rec_text = explanation[rec_start:]
+                # Split by common patterns
+                rec_lines = rec_text.split('\n')
+                extracted_recs = []
+                for line in rec_lines[1:]:  # Skip the header line
+                    line = line.strip()
+                    if line and not line.startswith('🔧') and not line.startswith('###'):
+                        # Clean up the line
+                        if line.startswith('- '):
+                            line = line[2:]
+                        if line:
+                            extracted_recs.append(line)
+                if extracted_recs:
+                    recommendations = extracted_recs
+    
+    # Add recommendations section
+    if recommendations and not (len(recommendations) == 1 and "ציון ישימות כולל:" in recommendations[0]):
+        lines.append("### 💡 המלצות לשיפור היישום")
+        
+        # Focus on low-scoring criteria for recommendations
+        if criteria_breakdown:
+            low_score_criteria = [c for c in criteria_breakdown if c.get('score', 0) <= 2]
+            if low_score_criteria:
+                lines.append("*בהתבסס על הקריטריונים שקיבלו ציון נמוך:*")
+                lines.append("")
+                for criterion in sorted(low_score_criteria, key=lambda x: x.get('score', 0)):
+                    name = criterion.get('name', '')
+                    lines.append(f"• **{name}** - מומלץ להוסיף הגדרות ברורות יותר")
+        
+        # Add any additional recommendations
         for rec in recommendations:
-            lines.append(f"- {rec}")
+            if "ציון ישימות כולל:" not in rec:  # Skip the score recommendation
+                lines.append(f"• {rec}")
         lines.append("")
     
     return "\n".join(lines)
