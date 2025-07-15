@@ -490,13 +490,8 @@ def validate_decision_for_analysis(decision_content: Dict[str, Any]) -> Tuple[bo
     operativity = decision_content.get("operativity", "").strip()
     decision_number = decision_content.get("decision_number", "זו")
     
-    # Check 1: Content length - less than 250 characters is too short
-    if len(decision_text.strip()) < 250:
-        return (
-            False,
-            f"תוכן ההחלטה קצר מדי לניתוח מעמיק ({len(decision_text)} תווים, נדרשים לפחות 250)",
-            f"אתה יכול לבקש את התוכן המלא של החלטה {decision_number} או לחפש החלטות דומות בנושא."
-        )
+    # Check 1: Content length - we'll analyze all decisions but note if they're short
+    # Removed rejection of short decisions - will be handled in analysis instead
     
     # Check 2: Operativity field - use the authoritative database field
     if operativity == "דקלרטיבית":
@@ -580,9 +575,14 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
 """
     
     # Create the analysis prompt with the full decision content and detailed criteria
+    # Add note if decision is short
+    length_note = ""
+    if len(full_decision_text.strip()) < 500:
+        length_note = "\n\n⚠️ שים לב: החלטה זו מנוסחת בתמציתיות רבה. בצע את הניתוח על בסיס המידע הקיים, אך ציין בסיכום שהחלטה קצרה מאתגרת ניתוח מעמיק.\n"
+    
     prompt = f"""נתח את החלטת הממשלה הבאה לפי 13 הקריטריונים לניתוח ישימות:
 
-{full_decision_text}
+{full_decision_text}{length_note}
 
 בצע ניתוח ישימות מפורט לפי הקריטריונים הבאים. על כל קריטריון תן ציון מ-0 עד 5 לפי ההנחיות המפורטות:
 
@@ -737,7 +737,7 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
             openai.ChatCompletion.create,
             model=selected_model,
             messages=[
-                {"role": "system", "content": "אתה מנתח מומחה לישימות החלטות ממשלה. התפקיד שלך לנתח החלטות לפי 13 קריטריונים מוגדרים ולהחזיר תוצאה בפורמט JSON מדויק. עליך לקרוא בזהירות את תוכן ההחלטה ולהעריך כל קריטריון לפי הסקאלה המוגדרת (0-5). חשב את final_score כך: סכום של [(ציון כל קריטריון / 5) * משקל הקריטריון] עבור כל 13 הקריטריונים. התוצאה צריכה להיות בין 0-100. החזר רק JSON תקין ללא טקסט נוסף. אל תשתמש בעיצוב Bold או סימנים מיוחדים בתוך ה-JSON."},
+                {"role": "system", "content": "אתה מנתח מומחה לישימות החלטות ממשלה. התפקיד שלך לנתח החלטות לפי 13 קריטריונים מוגדרים ולהחזיר תוצאה בפורמט JSON מדויק. עליך לקרוא בזהירות את תוכן ההחלטה ולהעריך כל קריטריון לפי הסקאלה המוגדרת (0-5). היה עקבי ומדויק - החלטה זהה חייבת לקבל אותם ציונים בכל ניתוח. בסס את הציונים רק על מה שכתוב בהחלטה, לא על הנחות. חשב את final_score כך: סכום של [(ציון כל קריטריון / 5) * משקל הקריטריון] עבור כל 13 הקריטריונים. התוצאה צריכה להיות בין 0-100. החזר רק JSON תקין ללא טקסט נוסף. אל תשתמש בעיצוב Bold או סימנים מיוחדים בתוך ה-JSON."},
                 {"role": "user", "content": prompt}
             ],
             temperature=config.temperature,

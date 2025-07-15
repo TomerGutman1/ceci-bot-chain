@@ -227,6 +227,42 @@ Analysis responses were showing as empty ("לא התקבלה תשובה מהשר
 
 ---
 
+# Analysis Consistency and Citations Fix - Review
+
+## Issues Fixed
+
+### 1. Inconsistent Scoring
+**Problem**: Decision 549 received different scores (24%, 33%, 11%) on repeated analysis
+**Solution**: 
+- Added explicit instruction in system prompt to be consistent
+- Emphasized basing scores only on what's written in the decision
+
+### 2. Missing Text Citations
+**Problem**: Analysis results didn't show the "ציטוט מהטקסט" column with actual quotes
+**Solution**:
+- Fixed formatter to always use structured data when available
+- Only use pre-formatted explanation as fallback
+- This ensures citations from `reference_from_document` field are displayed
+
+### 3. Short Decision Rejection
+**Problem**: Short decisions were rejected without analysis
+**Solution**:
+- Removed the 250 character minimum requirement
+- All decisions are now analyzed regardless of length
+- Added note for decisions under 500 chars: "החלטה זו מנוסחת בתמציתיות רבה"
+
+## Changes Made
+
+1. `bot_chain/LLM_FORMATTER_BOT_4/main.py`:
+   - Line 86-88: Check for structured data first, only use explanation as fallback
+
+2. `bot_chain/EVAL_EVALUATOR_BOT_2E/main.py`:
+   - Line 493-494: Removed short decision rejection
+   - Line 579-581: Add note for short decisions in prompt
+   - Line 740: Added consistency instruction to system prompt
+
+---
+
 # Analysis and UI Fixes - Review
 
 ## Completed Tasks (15 Jul 2025)

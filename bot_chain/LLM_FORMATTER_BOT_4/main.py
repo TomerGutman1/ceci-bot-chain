@@ -81,8 +81,10 @@ def format_analysis_results(content: Dict[str, Any]) -> str:
     evaluation = content.get('evaluation', {})
     explanation = content.get('explanation', '')
     
-    # If we have the formatted explanation from evaluator, use it
-    if explanation and "ניתוח החלטת ממשלה" in explanation:
+    # Always use structured data if available for consistency and citations
+    # Only use explanation as fallback if no structured data exists
+    criteria_breakdown = evaluation.get('content_analysis', {}).get('criteria_breakdown', [])
+    if not criteria_breakdown and explanation and "ניתוח החלטת ממשלה" in explanation:
         return explanation
     
     # Otherwise, build our own formatting
