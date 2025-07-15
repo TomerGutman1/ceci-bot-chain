@@ -57,6 +57,9 @@ export class ChatService {
   }
 
   async sendMessage(message: string, history: ChatMessage[] = []): Promise<string> {
+    console.log('Sending message:', message);
+    console.log('API URL:', `${API_BASE_URL}/chat`);
+    
     try {
       const response = await fetch(`${API_BASE_URL}/chat`, {
         method: 'POST',
@@ -70,12 +73,15 @@ export class ChatService {
         }),
       });
 
+      console.log('Response status:', response.status, response.ok);
+      
       if (!response.ok) {
         throw new Error(`Chat API error: ${response.statusText}`);
       }
 
       // Read SSE stream
       const reader = response.body?.getReader();
+      console.log('Reader created:', !!reader);
       const decoder = new TextDecoder();
       let result = '';
 
@@ -85,12 +91,15 @@ export class ChatService {
           if (done) break;
 
           const chunk = decoder.decode(value);
+          console.log('Raw chunk received:', chunk);
           const lines = chunk.split('\n');
 
           for (const line of lines) {
+            console.log('Processing line:', line);
             if (line.startsWith('data: ')) {
               try {
                 const data = JSON.parse(line.slice(6)) as ChatResponse;
+                console.log('Parsed data:', data);
                 
                 if (data.type === 'response' && data.content) {
                   result = data.content;
@@ -106,7 +115,7 @@ export class ChatService {
                   console.log('Stream completed, total result:', result.length, 'chars');
                 }
               } catch (e) {
-                // Skip invalid JSON
+                console.error('Error parsing JSON:', e, 'Line:', line);
               }
             }
           }
