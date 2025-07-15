@@ -81,6 +81,26 @@ After further investigation, discovered that:
 
 ---
 
+# Sidebar RTL Fix - Review
+
+## Issue
+The user wanted to keep only the LEFT visual sidebar and remove the RIGHT one. However, due to RTL (right-to-left) layout in Hebrew interfaces, there was confusion about which position corresponds to which visual side.
+
+## Root Cause
+- The entire app has `direction: rtl` set on the body (index.css:88)
+- In RTL mode, positions are inverted:
+  - `position="left"` appears on the visual RIGHT
+  - `position="right"` appears on the visual LEFT
+
+## Solution
+Changed the ExampleQueries component position from "left" to "right" in Index.tsx, which displays the sidebar on the visual LEFT side in RTL mode.
+
+## Changes Made
+- Updated `src/pages/Index.tsx` line 44: `position="right"` (was "left")
+- Added clarifying comments about RTL positioning
+
+---
+
 ## Review Summary
 
 ### What Changed
