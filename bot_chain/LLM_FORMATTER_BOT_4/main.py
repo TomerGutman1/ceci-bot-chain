@@ -96,27 +96,41 @@ def format_analysis_results(content: Dict[str, Any]) -> str:
     lines.append(f"**כותרת ההחלטה:** {title}")
     lines.append("")
     
+    # Collect citations separately
+    citations = []
+    
     # Check if we have criteria breakdown
     criteria_breakdown = evaluation.get('content_analysis', {}).get('criteria_breakdown', [])
     if criteria_breakdown:
         lines.append("### 📊 ניתוח מפורט לפי קריטריונים")
         lines.append("")
         
-        # Format each criterion as a separate block for better readability
+        # Create table with proper formatting
+        lines.append("| קריטריון | משקל | ציון |")
+        lines.append("|----------|-------|------|")
+        
         for criterion in criteria_breakdown:
             name = criterion.get('name', '')
             weight = criterion.get('weight', 0)
             score = criterion.get('score', 0)
-            explanation = criterion.get('explanation', '')
             reference = criterion.get('reference_from_document', 'לא נמצא ציטוט')
             
-            lines.append(f"**{name}** (משקל: {weight}%)")
-            lines.append(f"ציון: {score}/5")
-            lines.append(f"*{explanation}*")
+            # Shorten name if too long to fit table
+            if len(name) > 25:
+                display_name = name[:22] + "..."
+            else:
+                display_name = name
+                
+            lines.append(f"| {display_name} | {weight}% | {score}/5 |")
+            
+            # Collect citation if exists
             if reference and reference != 'לא נמצא ציטוט':
-                lines.append(f"💬 ציטוט: \"{reference}\"")
-            lines.append("")  # Empty line
-            lines.append("")  # Extra empty line for more spacing
+                citations.append({
+                    'name': name,
+                    'reference': reference
+                })
+        
+        lines.append("")  # Empty line after table
         
         # Overall score section
         final_score = evaluation.get('content_analysis', {}).get('final_score', 0)
@@ -192,6 +206,15 @@ def format_analysis_results(content: Dict[str, Any]) -> str:
                 lines.append(f"• {rec}")
                 lines.append("")  # Line break after each recommendation
         lines.append("")  # Extra spacing at the end
+    
+    # Add citations section at the end
+    if citations:
+        lines.append("### 📋 ציטוטים מהטקסט")
+        lines.append("")
+        for citation in citations:
+            lines.append(f"**{citation['name']}:**")
+            lines.append(f"_{citation['reference']}_")
+            lines.append("")
     
     return "\n".join(lines)
 
