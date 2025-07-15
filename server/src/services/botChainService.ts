@@ -1376,13 +1376,13 @@ class BotChainService {
         console.log('  - template_used includes count_:', template_used && template_used.includes('count_'));
         console.log('  - entities.operation:', entities.operation);
         console.log('  - intent:', intent);
-        console.log('  - sqlGenResult.query_type:', sqlGenResult && sqlGenResult.query_type);
+        console.log('  - sqlResponse.query_type:', sqlResponse && sqlResponse.query_type);
         
         const isCountQuery = template_used && (
           template_used.includes('count_') ||
           template_used === 'compare_governments'
         ) || (entities.operation === 'count' || intent === 'count') || 
-        (sqlGenResult && sqlGenResult.query_type === 'count');
+        (sqlResponse && sqlResponse.query_type === 'count');
         
         console.log('  - isCountQuery result:', isCountQuery);
         
