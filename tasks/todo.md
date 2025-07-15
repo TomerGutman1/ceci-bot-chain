@@ -200,6 +200,33 @@ When analyzing decision 550, the system was displaying "החלטת ממשלה 37
 
 ---
 
+# SSE Streaming Fix for Large Responses - Review
+
+## Issue
+Analysis responses were showing as empty ("לא התקבלה תשובה מהשרת") even though the backend was sending the data correctly.
+
+## Root Cause
+1. Large JSON responses (>5KB) were being split across multiple SSE chunks
+2. The first chunk contained incomplete JSON (truncated at position 4995)
+3. JSON.parse() failed with "Unterminated string" error
+4. The error prevented the response from being displayed
+
+## Solution
+1. Added a buffer to accumulate incomplete lines across chunks
+2. Only parse complete lines (ending with newline)
+3. Keep incomplete lines in buffer for next chunk
+4. Process any remaining buffer after stream ends
+5. Use `decoder.decode(value, { stream: true })` for proper streaming
+
+## Changes Made
+- `src/services/chat.service.ts`:
+  - Added `buffer` variable to store incomplete lines
+  - Split chunks by newline but keep last incomplete line
+  - Process buffer after stream completes
+  - Better error handling for JSON parsing
+
+---
+
 # Analysis and UI Fixes - Review
 
 ## Completed Tasks (15 Jul 2025)

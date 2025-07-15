@@ -84,15 +84,24 @@ export class ChatService {
       console.log('Reader created:', !!reader);
       const decoder = new TextDecoder();
       let result = '';
+      let buffer = ''; // Buffer for incomplete lines
 
       if (reader) {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          const chunk = decoder.decode(value);
+          const chunk = decoder.decode(value, { stream: true });
           console.log('Raw chunk received:', chunk);
-          const lines = chunk.split('\n');
+          
+          // Append to buffer
+          buffer += chunk;
+          
+          // Split by newlines but keep the last potentially incomplete line
+          const lines = buffer.split('\n');
+          
+          // Keep the last line in buffer if it's incomplete
+          buffer = lines.pop() || '';
 
           for (const line of lines) {
             console.log('Processing line:', line);
@@ -118,6 +127,18 @@ export class ChatService {
                 console.error('Error parsing JSON:', e, 'Line:', line);
               }
             }
+          }
+        }
+        
+        // Process any remaining data in buffer
+        if (buffer.trim() && buffer.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(buffer.slice(6)) as ChatResponse;
+            if (data.type === 'response' && data.content) {
+              result = data.content;
+            }
+          } catch (e) {
+            console.error('Error parsing final buffer:', e, 'Buffer:', buffer);
           }
         }
       }
