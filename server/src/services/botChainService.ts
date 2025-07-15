@@ -1385,6 +1385,7 @@ class BotChainService {
         (sqlResponse && sqlResponse.query_type === 'count');
         
         console.log('  - isCountQuery result:', isCountQuery);
+        console.log('  - Full sqlResponse:', JSON.stringify(sqlResponse, null, 2));
         
         if (isCountQuery) {
           logger.info('Processing COUNT query with special handling', { template_used, intent });
@@ -1574,6 +1575,7 @@ class BotChainService {
                 decision_count: count || 0
               }];
               logger.info('Generic count query completed', { count, sqlParams });
+              console.log('🔵 COUNT QUERY RESULTS:', JSON.stringify(results, null, 2));
             }
           }
         } else {
