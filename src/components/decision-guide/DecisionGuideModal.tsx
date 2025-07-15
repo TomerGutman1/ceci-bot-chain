@@ -107,7 +107,7 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
         {!analysisResults ? (
           <>
             <DialogHeader>
-              <DialogTitle className="text-2xl text-center">ניתוח טיוטת החלטת ממשלה</DialogTitle>
+              <DialogTitle className="text-2xl text-center">שיפור ניסוח ישימות החלטת ממשלה</DialogTitle>
               <DialogDescription className="text-center text-lg">
                 העלה קובץ PDF של החלטת ממשלה או הדבק נוסח – וקבל פידבק מיידי לשיפור
               </DialogDescription>

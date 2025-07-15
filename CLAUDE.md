@@ -107,11 +107,24 @@ ssh root@178.62.39.248 "cd /root/CECI-W-BOTS && git pull && docker compose -f do
 
 ## 7 · Current Project Status (14 Jul 2025)
 
-### 🚀 Production Deployment Complete (14 Jul 2025)
+### 🚀 Production Deployment Complete (15 Jul 2025)
 
 **System is LIVE at**: https://ceci-ai.ceci.org.il
 
-**Latest Deployment (14 Jul 2025 - 18:32 UTC)** 🆕:
+**Latest Deployment (15 Jul 2025)** 🆕:
+1. ✅ **Analysis Display Fixed** - Evaluator now shows scores and text examples for each criterion
+   - Added `reference_from_document` field to show text citations
+   - Created narrative formatting instead of YAML output
+   - Python formatter for analysis results with criteria table
+2. ✅ **Topic Search Enhanced** - SQL queries now search in content fields
+   - Added content search for topics like "ענן הממשלתי"
+   - Always searches in title, summary, and decision_content fields
+3. ✅ **UI Text Updates**
+   - Welcome message: "לנתח את רמת היישום של ההחלטות"
+   - Decision Guide title: "שיפור ניסוח ישימות החלטת ממשלה"
+   - Example queries: Filtered to show only 6 basic queries
+
+**Earlier Deployment (14 Jul 2025 - 18:32 UTC)**:
 1. ✅ **SQL-GEN BOT UPGRADED** - Now uses GPT-4o-turbo with enhanced capabilities
    - Hebrew synonym expansion (חינוך↔השכלה, ביטחון↔בטחון)
    - Date interpretation ("השנה", "3 השנים האחרונות")

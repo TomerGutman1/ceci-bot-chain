@@ -163,9 +163,9 @@ If entities contain "count_only": true or intent suggests counting:
 }}
 
 ### Example 2: Fetch/List Query with Synonyms
-For topic queries, expand synonyms:
+For topic queries, expand synonyms AND search in multiple fields:
 {{
-  "sql": "SELECT id, government_number, decision_number, decision_date, decision_title, summary, tags_policy_area, tags_government_body, decision_url FROM israeli_government_decisions WHERE (tags_policy_area ILIKE '%%חינוך%%' OR tags_policy_area ILIKE '%%השכלה%%' OR all_tags ILIKE '%%חינוך%%' OR all_tags ILIKE '%%השכלה%%') ORDER BY decision_date DESC LIMIT %(limit)s",
+  "sql": "SELECT id, government_number, decision_number, decision_date, decision_title, summary, tags_policy_area, tags_government_body, decision_url FROM israeli_government_decisions WHERE (tags_policy_area ILIKE '%%חינוך%%' OR tags_policy_area ILIKE '%%השכלה%%' OR all_tags ILIKE '%%חינוך%%' OR all_tags ILIKE '%%השכלה%%' OR decision_title ILIKE '%%חינוך%%' OR decision_title ILIKE '%%השכלה%%' OR summary ILIKE '%%חינוך%%' OR summary ILIKE '%%השכלה%%' OR decision_content ILIKE '%%חינוך%%' OR decision_content ILIKE '%%השכלה%%') ORDER BY decision_date DESC LIMIT %(limit)s",
   "parameters": {{"limit": 5}},
   "query_type": "list",
   "synonym_expansion": {{"השכלה": ["חינוך", "השכלה"]}}
@@ -187,6 +187,15 @@ When only decision_number is specified (e.g. "החלטה 2989"), search for EXAC
   "query_type": "specific"
 }}
 IMPORTANT: For specific decision queries, use EXACT match (=) not similarity or LIKE. Do NOT return similar numbers.
+
+### Example 5: Topic Search in Content (not in standard tags)
+For topics like "ענן הממשלתי", "מחשוב ענן", "תשתיות דיגיטליות" that might not be in tags:
+{{
+  "sql": "SELECT id, government_number, decision_number, decision_date, decision_title, summary, tags_policy_area, tags_government_body, decision_url FROM israeli_government_decisions WHERE (decision_title ILIKE '%%ענן%%' OR summary ILIKE '%%ענן%%' OR decision_content ILIKE '%%ענן%%' OR all_tags ILIKE '%%ענן%%') ORDER BY decision_date DESC LIMIT %(limit)s",
+  "parameters": {{"limit": 20}},
+  "query_type": "list",
+  "search_note": "Searching in title, summary and content since 'ענן' is not a standard policy tag"
+}}
 
 ## Topic Synonym Mapping:
 {{
@@ -212,6 +221,8 @@ CRITICAL RULES:
 4. NEVER use similarity search, LIKE, or approximate matching for decision numbers - use exact equality (=)
 5. If user asks for "החלטה 2989", the SQL must be: WHERE decision_number = '2989' (exact match)
 6. Do NOT return decisions with similar numbers (2998, 2996, etc.) when an exact number is requested
+7. For topic searches: ALWAYS search in multiple fields (tags_policy_area, all_tags, decision_title, summary, decision_content)
+8. If a topic is not in the standard synonym mapping, still search for it in title, summary and content fields
 """
 
 

@@ -158,6 +158,43 @@ After further investigation, discovered that:
 
 ---
 
+# Analysis and UI Fixes - Review
+
+## Completed Tasks (15 Jul 2025)
+
+### א. ניתוח החלטה - הצגת ציונים ודוגמאות טקסט
+**Fixed**: The evaluator bot now includes text examples for each criterion
+- Updated EVAL_EVALUATOR_BOT_2E prompt to request `reference_from_document` for each criterion
+- Added explicit instructions to cite direct text from the decision
+- Created Python formatter function `format_analysis_results()` to display criteria table with scores and text examples
+- Updated LLM formatter prompt for analysis to create narrative reports instead of YAML format
+
+**Changes Made**:
+1. `bot_chain/EVAL_EVALUATOR_BOT_2E/main.py` - Added reference_from_document field to criteria JSON
+2. `bot_chain/LLM_FORMATTER_BOT_4/main.py` - Added format_analysis_results() function and updated analysis prompt
+
+### ב. תיקון חיפוש לפי נושא שאינו בתגית
+**Fixed**: SQL generation now searches in content fields for topics not in tags
+- Updated SQL generation examples to include content search
+- Added Example 5 specifically for topics like "ענן הממשלתי" 
+- Added critical rules to always search in multiple fields
+
+**Changes Made**:
+1. `bot_chain/QUERY_SQL_GEN_BOT_2Q/main.py` - Updated SQL examples and added rules for content search
+
+### ג. עדכוני טקסט בממשק
+**Completed**: All UI text updates
+1. Welcome message updated to: "שלום! אני העוזר החכם של CECI. אני יכול לעזור לך למצוא החלטות ממשלה, לנתח את רמת היישום של ההחלטות, או לענות על שאלות לגבי פעילות הממשלה. במה אוכל לעזור?"
+2. Decision Guide modal title changed to: "שיפור ניסוח ישימות החלטת ממשלה"
+3. Example queries filtered to show only 6 basic queries in sidebar
+
+**Changes Made**:
+1. `src/components/chat/ChatInterface.tsx` - Updated welcome message
+2. `src/components/decision-guide/DecisionGuideModal.tsx` - Updated modal title
+3. `src/components/chat/ExampleQueries.tsx` - Filtered to basic queries only
+
+---
+
 # Previous Task: Remove All Mock Data and Test Data Usage
 
 ## Objective

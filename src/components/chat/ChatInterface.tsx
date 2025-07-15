@@ -23,7 +23,7 @@ const ChatInterface = ({ externalMessage, externalEditMessage }: ChatInterfacePr
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      content: "שלום! אני העוזר החכם של CECI. אני יכול לעזור לך למצוא החלטות ממשלה, לנתח אותן, או לענות על שאלות לגבי פעילות הממשלה. במה אוכל לעזור?",
+      content: "שלום! אני העוזר החכם של CECI. אני יכול לעזור לך למצוא החלטות ממשלה, לנתח את רמת היישום של ההחלטות, או לענות על שאלות לגבי פעילות הממשלה. במה אוכל לעזור?",
       timestamp: new Date(),
     },
   ]);

@@ -72,6 +72,82 @@ class TokenUsage(BaseModel):
     cost_usd: float = 0.0
 
 
+def format_analysis_results(content: Dict[str, Any]) -> str:
+    """Format analysis results with scores and text examples."""
+    lines = []
+    
+    # Extract data
+    decision = content.get('decision', {})
+    evaluation = content.get('evaluation', {})
+    explanation = content.get('explanation', '')
+    
+    # If we have the formatted explanation from evaluator, use it
+    if explanation and "ניתוח החלטת ממשלה" in explanation:
+        return explanation
+    
+    # Otherwise, build our own formatting
+    decision_num = decision.get('decision_number', '')
+    title = decision.get('title', decision.get('decision_title', 'ללא כותרת'))
+    
+    lines.append(f"## 🔍 ניתוח החלטת ממשלה {decision_num}")
+    lines.append("")
+    lines.append(f"**כותרת ההחלטה:** {title}")
+    lines.append("")
+    
+    # Check if we have criteria breakdown
+    criteria_breakdown = evaluation.get('content_analysis', {}).get('criteria_breakdown', [])
+    if criteria_breakdown:
+        lines.append("### 📊 ניתוח מפורט לפי קריטריונים")
+        lines.append("")
+        lines.append("| קריטריון | משקל | ציון (0-5) | הסבר | ציטוט מהטקסט |")
+        lines.append("|----------|------|------------|-------|---------------|")
+        
+        for criterion in criteria_breakdown:
+            name = criterion.get('name', '')
+            weight = criterion.get('weight', 0)
+            score = criterion.get('score', 0)
+            explanation = criterion.get('explanation', '')
+            reference = criterion.get('reference_from_document', 'לא נמצא ציטוט')
+            
+            # Truncate long references
+            if len(reference) > 100:
+                reference = reference[:97] + "..."
+            
+            lines.append(f"| {name} | {weight}% | {score} | {explanation} | {reference} |")
+        
+        lines.append("")
+        
+        # Overall score
+        final_score = evaluation.get('content_analysis', {}).get('final_score', 0)
+        if final_score > 0:
+            lines.append(f"### 🎯 ציון ישימות כולל: {final_score}/100")
+            
+            if final_score >= 75:
+                lines.append("✅ **רמת ישימות: גבוהה**")
+            elif final_score >= 50:
+                lines.append("⚠️ **רמת ישימות: בינונית**")
+            else:
+                lines.append("❌ **רמת ישימות: נמוכה**")
+            lines.append("")
+    
+    # Add summary if available
+    summary = evaluation.get('content_analysis', {}).get('feasibility_analysis', '')
+    if summary:
+        lines.append("### 📝 סיכום הניתוח")
+        lines.append(summary)
+        lines.append("")
+    
+    # Add recommendations
+    recommendations = evaluation.get('recommendations', [])
+    if recommendations:
+        lines.append("### 💡 המלצות")
+        for rec in recommendations:
+            lines.append(f"- {rec}")
+        lines.append("")
+    
+    return "\n".join(lines)
+
+
 def format_decision_typescript_style(decision: Dict[str, Any], index: int, include_full_content: bool = False) -> str:
     """Format a single decision in TypeScript-inspired Hebrew style."""
     lines = []
@@ -266,49 +342,60 @@ Original query: {query}
 Style: {style}""",
 
     "analysis": """You are a Hebrew content formatter for government decision analysis.
-Format the analysis results into a Hebrew YAML structure within a single code block.
+Format the analysis results into a clear, readable Hebrew report - NOT as code or YAML.
 
-Rules:
-1. Output ONLY a single markdown code block with YAML-like format
-2. Use Hebrew field names with emojis for visual appeal
-3. Include ALL decision details first, then analysis
-4. Use EXACT data provided - do NOT make up information
-5. Maintain clean, readable structure
+CRITICAL: Create a professional analysis report in markdown format with:
+1. Clear section headers with emojis for visual appeal
+2. Narrative text, NOT technical formats
+3. Tables only for criteria scores
+4. NO code blocks or YAML - write in normal Hebrew prose
+5. Focus on insights and readability
 
-Format everything as follows:
-```yaml
-📌 כותרת: {title}
-מספר החלטה: {decision_number}
-🏛️ מספר ממשלה: {government_number}
-📅 תאריך: {decision_date}
-👤 ראש ממשלה: {prime_minister}
-🏢 ועדה: {committee}
-🏷️ תחומי מדיניות: {tags_policy_area}
-📝 תקציר: {summary}
-סטטוס: {operativity}
-🔗 קישור: {decision_url}
-📋 תוכן מלא: |-
-  {content}
+Available data:
+- Decision details: {decision_number}, {title}, {government_number}, {decision_date}, {prime_minister}, {committee}, {tags_policy_area}, {summary}, {operativity}, {decision_url}
+- Evaluation object with: overall_score, relevance_level, quality_metrics, content_analysis (includes criteria_breakdown), recommendations, confidence, explanation
+- Full decision content in {content}
 
-🔬 ניתוח:
-  📊 ציון ישימות: {overall_score}/100
-  🎯 ממצאים עיקריים:
-    - {finding 1}
-    - {finding 2}
-    - {finding 3}
-  💡 המלצות:
-    - {recommendation 1}
-    - {recommendation 2}
-  📋 הסבר מפורט: |-
-    {detailed explanation from evaluation}
-```
+Format as follows:
 
-Map operativity: operative→✅ פעיל, canceled→❌ בוטל
-Only show gov.il URLs
-Format dates as DD/MM/YYYY
+## 🔍 ניתוח ישימות - החלטת ממשלה {decision_number}
+
+### 📋 פרטי ההחלטה
+כותרת: **{title}**
+ממשלה {government_number} בראשות {prime_minister} | תאריך: {decision_date}
+תחומי מדיניות: {tags_policy_area}
+
+{IF committee exists: ועדה: {committee}}
+{IF decision_url exists and starts with https://www.gov.il: 🔗 [קישור להחלטה המלאה]({decision_url})}
+
+### 📊 ניתוח מפורט לפי קריטריונים
+
+{IF evaluation.content_analysis.criteria_breakdown exists, create a markdown table:}
+| קריטריון | משקל | ציון (0-5) | הסבר | ציטוט מהטקסט |
+|----------|------|------------|-------|---------------|
+{For each criterion: | {name} | {weight}% | {score} | {explanation} | {reference_from_document} |}
+
+### 🎯 ציון ישימות כולל: {evaluation.overall_score או evaluation.content_analysis.final_score}/100
+
+{Based on score: 
+- 75+: ✅ רמת ישימות גבוהה - ההחלטה כוללת את רוב המרכיבים הנדרשים ליישום מוצלח
+- 50-74: ⚠️ רמת ישימות בינונית - ההחלטה דורשת חיזוק במספר תחומים
+- <50: ❌ רמת ישימות נמוכה - חסרים מרכיבים קריטיים ליישום אפקטיבי}
+
+### 📝 ממצאים עיקריים
+{Write 2-3 paragraphs summarizing the key findings from the analysis, focusing on strengths and weaknesses}
+
+### 💡 המלצות לשיפור הישימות
+{List specific recommendations based on low-scoring criteria, written as actionable items}
+
+### 📌 סיכום
+{Brief concluding paragraph summarizing the overall assessment}
+
+REMEMBER: Write in flowing Hebrew prose, not technical format!
 
 Input data: {content}
-Original query: {query}""",
+Original query: {query}
+Style: {style}""",
 
     "count": """You are a Hebrew formatter for statistical queries about government decisions.
 Format the count result into a clear, concise Hebrew response.
@@ -710,6 +797,26 @@ async def format_response(request: FormatterRequest) -> FormatterResponse:
     if request.data_type == DataType.ANALYSIS and request.content:
         # Log the content structure for debugging
         logger.info(f"Analysis content structure: {list(request.content.keys())}")
+        
+        # Try Python formatting first for analysis
+        try:
+            formatted_response = format_analysis_results(request.content)
+            
+            if formatted_response:
+                logger.info("Successfully formatted analysis results with Python formatter")
+                return FormatterResponse(
+                    conv_id=request.conv_id,
+                    formatted_response=formatted_response,
+                    metadata=FormatterMetadata(
+                        cards_generated=1,
+                        format_type="analysis",
+                        word_count=len(formatted_response.split()),
+                        truncated=False
+                    ),
+                    token_usage=None  # No GPT usage
+                )
+        except Exception as e:
+            logger.warning(f"Python analysis formatting failed: {e}, falling back to GPT")
         
         # Extract decision data from content
         decision = request.content.get('decision', {})

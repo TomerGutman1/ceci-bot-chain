@@ -20,7 +20,8 @@ const ExampleQueries = ({ onQueryClick, onQueryEdit, position }: ExampleQueriesP
   // Check if macro button should be shown (default to false)
   const showMacroButton = import.meta.env.VITE_SHOW_MACRO_BUTTON === 'true';
 
-  const examples: ExampleQuery[] = position === "left" ? [
+  // Filter to show only basic queries
+  const basicQueries: ExampleQuery[] = [
     {
       icon: <Search className="w-5 h-5" />,
       title: "חיפוש פשוט",
@@ -40,41 +41,10 @@ const ExampleQueries = ({ onQueryClick, onQueryEdit, position }: ExampleQueriesP
       category: "ספירה"
     },
     {
-      icon: <Brain className="w-5 h-5" />,
-      title: "ניתוח לעומק",
-      query: "נתח את ההשלכות הכלכליות של החלטה 1500 ממשלה 36",
-      category: "ניתוח"
-    },
-    {
-      icon: <Scale className="w-5 h-5" />,
-      title: "השוואה בין ממשלות",
-      query: "השווה את מדיניות הדיור בין ממשלה 35 לממשלה 36",
-      category: "השוואה"
-    },
-    {
-      icon: <TrendingUp className="w-5 h-5" />,
-      title: "מגמות לאורך זמן",
-      query: "הראה את המגמה בהחלטות תחבורה ב-5 השנים האחרונות",
-      category: "מגמות"
-    },
-    {
-      icon: <Users className="w-5 h-5" />,
-      title: "החלטות משותפות",
-      query: "החלטות משותפות של משרד הבריאות והאוצר",
-      category: "משרדים"
-    },
-    {
       icon: <Calendar className="w-5 h-5" />,
       title: "החלטות אחרונות",
       query: "הראה החלטות אחרונות בנושא סביבה",
       category: "עדכני"
-    }
-  ] : [
-    {
-      icon: <Search className="w-5 h-5" />,
-      title: "חיפוש לפי תאריך",
-      query: "החלטות ממשלה ב2024 בנושא בריאות",
-      category: "תאריכים"
     },
     {
       icon: <FileText className="w-5 h-5" />,
@@ -83,42 +53,15 @@ const ExampleQueries = ({ onQueryClick, onQueryEdit, position }: ExampleQueriesP
       category: "משרדים"
     },
     {
-      icon: <FileText className="w-5 h-5" />,
-      title: "החלטה ספציפית",
-      query: "החלטה 100 של ממשלה 35",
-      category: "ספציפי"
-    },
-    {
-      icon: <Brain className="w-5 h-5" />,
-      title: "ניתוח מקיף",
-      query: "נתח את ההשפעה החברתית של החלטות הרווחה בממשלה 37",
-      category: "ניתוח"
-    },
-    {
-      icon: <Scale className="w-5 h-5" />,
-      title: "השוואת תקציבים",
-      query: "השווה את תקציבי הביטחון בין ממשלות 34, 35 ו-36",
-      category: "השוואה"
-    },
-    {
-      icon: <TrendingUp className="w-5 h-5" />,
-      title: "ניתוח מגמות",
-      query: "מהן המגמות בהחלטות כלכלה בעשור האחרון",
-      category: "מגמות"
-    },
-    {
-      icon: <History className="w-5 h-5" />,
-      title: "היסטוריה",
-      query: "החלטות היסטוריות בנושא שלום וביטחון",
-      category: "היסטוריה"
-    },
-    {
-      icon: <BarChart3 className="w-5 h-5" />,
-      title: "סטטיסטיקה מתקדמת",
-      query: "כמה החלטות קיבלה כל ממשלה בנושא תשתיות",
-      category: "סטטיסטיקה"
+      icon: <Search className="w-5 h-5" />,
+      title: "חיפוש לפי תאריך",
+      query: "החלטות ממשלה ב2024 בנושא בריאות",
+      category: "תאריכים"
     }
   ];
+
+  // Use the same basic queries for both sides
+  const examples: ExampleQuery[] = basicQueries;
 
   return (
     <div className={`relative transition-all duration-300 ${isExpanded ? 'w-80' : 'w-12'}`}>
