@@ -110,27 +110,21 @@ def format_analysis_results(content: Dict[str, Any]) -> str:
             explanation = criterion.get('explanation', '')
             reference = criterion.get('reference_from_document', 'לא נמצא ציטוט')
             
-            # Create a visual score bar
-            score_bar = "█" * score + "░" * (5 - score)
-            
             lines.append(f"**{name}** (משקל: {weight}%)")
-            lines.append(f"ציון: {score}/5 [{score_bar}]")
+            lines.append(f"ציון: {score}/5")
             lines.append(f"*{explanation}*")
             if reference and reference != 'לא נמצא ציטוט':
                 lines.append(f"💬 ציטוט: \"{reference}\"")
-            lines.append("")  # Empty line between criteria
+            lines.append("")  # Empty line
+            lines.append("")  # Extra empty line for more spacing
         
         # Overall score section
         final_score = evaluation.get('content_analysis', {}).get('final_score', 0)
         if final_score > 0:
             lines.append("---")  # Separator
             lines.append("")
+            lines.append("")  # Extra spacing
             lines.append(f"### 🎯 ציון ישימות כולל: {final_score}/100")
-            
-            # Visual score representation
-            score_percentage = int(final_score / 10)
-            overall_bar = "█" * score_percentage + "░" * (10 - score_percentage)
-            lines.append(f"[{overall_bar}]")
             lines.append("")
             
             if final_score >= 75:
@@ -140,13 +134,16 @@ def format_analysis_results(content: Dict[str, Any]) -> str:
             else:
                 lines.append("❌ **רמת ישימות: נמוכה**")
             lines.append("")
+            lines.append("")  # Extra spacing
     
     # Add summary/conclusions if available
     summary = evaluation.get('content_analysis', {}).get('feasibility_analysis', '')
     if summary:
         lines.append("### 📝 מסקנות מרכזיות")
+        lines.append("")
         lines.append(summary)
         lines.append("")
+        lines.append("")  # Extra spacing
     
     # Extract recommendations from the explanation text if not in structured data
     recommendations = evaluation.get('recommendations', [])
@@ -176,6 +173,7 @@ def format_analysis_results(content: Dict[str, Any]) -> str:
     # Add recommendations section
     if recommendations and not (len(recommendations) == 1 and "ציון ישימות כולל:" in recommendations[0]):
         lines.append("### 💡 המלצות לשיפור היישום")
+        lines.append("")
         
         # Focus on low-scoring criteria for recommendations
         if criteria_breakdown:
@@ -186,12 +184,14 @@ def format_analysis_results(content: Dict[str, Any]) -> str:
                 for criterion in sorted(low_score_criteria, key=lambda x: x.get('score', 0)):
                     name = criterion.get('name', '')
                     lines.append(f"• **{name}** - מומלץ להוסיף הגדרות ברורות יותר")
+                    lines.append("")  # Line break after each recommendation
         
         # Add any additional recommendations
         for rec in recommendations:
             if "ציון ישימות כולל:" not in rec:  # Skip the score recommendation
                 lines.append(f"• {rec}")
-        lines.append("")
+                lines.append("")  # Line break after each recommendation
+        lines.append("")  # Extra spacing at the end
     
     return "\n".join(lines)
 
