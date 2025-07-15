@@ -54,15 +54,6 @@ const Index = () => {
                 externalEditMessage={chatEditMessage}
               />
             </div>
-            
-            {/* Right Examples */}
-            {showExamples && (
-              <ExampleQueries 
-                position="right" 
-                onQueryClick={(query) => setChatTriggerMessage({ text: query, timestamp: Date.now() })}
-                onQueryEdit={(query) => setChatEditMessage({ text: query, timestamp: Date.now() })}
-              />
-            )}
           </div>
         </div>
       </div>
