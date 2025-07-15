@@ -1,6 +1,6 @@
 # 🧠 CLAUDE MAIN MEMORY – CECI Bot Chain
 
-<small>Last updated: **14 Jul 2025 (Rev‑6 - SQL-GEN Enhanced)**</small>
+<small>Last updated: **15 Jul 2025 (Rev‑7 - Analysis Display Enhanced)**</small>
 
 ---
 
@@ -105,13 +105,22 @@ ssh root@178.62.39.248 "cd /root/CECI-W-BOTS && git pull && docker compose -f do
 
 ---
 
-## 7 · Current Project Status (14 Jul 2025)
+## 7 · Current Project Status (15 Jul 2025)
 
 ### 🚀 Production Deployment Complete (15 Jul 2025)
 
 **System is LIVE at**: https://ceci-ai.ceci.org.il
 
-**Latest Deployment (15 Jul 2025)** 🆕:
+**Latest Deployment (15 Jul 2025 - 09:26 UTC)** 🆕:
+1. ✅ **Analysis Display Redesigned** - Improved formatting for better readability
+   - Changed from wide table to compact 3-column table (קריטריון | משקל | ציון)
+   - Moved text citations to separate section at the end
+   - Added extra line spacing between sections
+   - Removed visual score bars for cleaner look
+   - Set evaluator temperature to 0.0 for consistent scoring
+   - Ensures analysis fits within chat window width
+
+**Earlier Today (15 Jul 2025)** 🆕:
 1. ✅ **Analysis Display Fixed** - Evaluator now shows scores and text examples for each criterion
    - Added `reference_from_document` field to show text citations
    - Created narrative formatting instead of YAML output

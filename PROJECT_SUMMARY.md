@@ -78,7 +78,7 @@ via **Frontend → FastAPI → Bot-Chain → Supabase PG**.
 
 ## 6 · Testing Docs 🧪
 
-Current **status 14 Jul 2025**: ✅ **All tests passing** (unified architecture)
+Current **status 15 Jul 2025**: ✅ **All tests passing** (unified architecture)
 
 | Doc                      | Purpose                 | Key insights        |
 | ------------------------ | ----------------------- | ------------------- |
@@ -122,7 +122,7 @@ Health: `/api/chat/health` + `/health` per bot.
 
 ---
 
-## 9 · Production Status (14 Jul 2025) 🚀
+## 9 · Production Status (15 Jul 2025) 🚀
 
 - **Live at**: https://ceci-ai.ceci.org.il
 - **Server**: DigitalOcean droplet (178.62.39.248)
@@ -130,20 +130,28 @@ Health: `/api/chat/health` + `/health` per bot.
 - **SSL**: Let's Encrypt (auto-renewal)
 - **Deployment Guide**: See `PRODUCTION_DEPLOYMENT_GUIDE.md`
 
-### Latest Updates (14 Jul):
+### Latest Updates (15 Jul):
+- ✅ **Analysis Display Redesigned** - Improved formatting for better readability
+  - Compact 3-column table (קריטריון | משקל | ציון) that fits chat window
+  - Text citations moved to separate section at end
+  - Added extra line spacing throughout
+  - Removed visual score bars for cleaner look
+  - Set evaluator temperature to 0.0 for consistent scoring
+- ✅ Enhanced SQL search to include content fields for topics like "ענן הממשלתי"
+- ✅ Updated UI text (welcome message, decision guide title, example queries)
+
+### Previous Updates (14 Jul):
 - ✅ Fixed full content display - only shows when explicitly requested "תוכן מלא"
 - ✅ Fixed analysis functionality - now properly formats and displays evaluator results
 - ✅ Increased LLM formatter MAX_TOKENS to 4000 (prevents cut-off responses)
 - ✅ **Decision Guide Export** - Added PDF and CSV export functionality
   - PDF: Visual score bars, color-coded criteria, English text
   - CSV/Excel: All criteria data with Hebrew headers, recommendations sheet
-
-### Previous Updates (13 Jul):
-- ✅ Fixed LLM formatter validation errors
-- ✅ Prevented fake data generation
-- ✅ Added date display (DD/MM/YYYY) to results
-- ✅ Configured automated backups
-- ✅ Created comprehensive deployment guide
+- ✅ **SQL-GEN BOT UPGRADED** - Now uses GPT-4o-turbo with enhanced capabilities
+  - Hebrew synonym expansion (חינוך↔השכלה, ביטחון↔בטחון)
+  - Date interpretation ("השנה", "3 השנים האחרונות")
+  - Query type detection (COUNT vs LIST)
+  - Typo correction (חנוך→חינוך)
 
 ---
 
