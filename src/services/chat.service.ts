@@ -94,6 +94,7 @@ export class ChatService {
                 
                 if (data.type === 'response' && data.content) {
                   result = data.content;
+                  console.log('Received response chunk:', data.content.length, 'chars');
                   
                   // Update session ID if received
                   if (data.metadata?.session_id) {
@@ -101,6 +102,8 @@ export class ChatService {
                   }
                 } else if (data.type === 'error') {
                   throw new Error(data.error || 'Unknown error');
+                } else if (data.type === 'done') {
+                  console.log('Stream completed, total result:', result.length, 'chars');
                 }
               } catch (e) {
                 // Skip invalid JSON

@@ -178,6 +178,28 @@ Changed the ExampleQueries component position from "left" to "right" in Index.ts
 
 ---
 
+# Analysis Decision Number Fix - Review
+
+## Issue
+When analyzing decision 550, the system was displaying "החלטת ממשלה 3790" instead of "החלטה 550". 
+
+## Root Cause
+1. Decision 550's content mentions "החלטה 3790" as a reference to a previous decision
+2. The evaluator bot was using GPT-extracted decision numbers from the analysis JSON
+3. GPT mistakenly extracted "3790" from the content text and included it in the JSON response
+
+## Solution
+1. Updated evaluator bot to always use `request.decision_number` instead of GPT-extracted numbers
+2. Removed `decision_number` and `government_number` fields from the JSON example format
+3. This ensures the actual requested decision number is always shown, not references found in content
+
+## Changes Made
+- `bot_chain/EVAL_EVALUATOR_BOT_2E/main.py`:
+  - Line 809: Changed from `analysis_result.get("decision_number", request.decision_number)` to `request.decision_number`
+  - Line 707: Removed decision_number and government_number from JSON format example
+
+---
+
 # Analysis and UI Fixes - Review
 
 ## Completed Tasks (15 Jul 2025)
