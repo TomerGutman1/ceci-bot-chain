@@ -121,6 +121,19 @@ interface IntentPatternCache {
   usage_count: number;
 }
 
+// Helper function to add timeout to promises
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => 
+      setTimeout(() => reject(new Error(`${operation} timed out after ${timeoutMs}ms`)), timeoutMs)
+    )
+  ]);
+}
+
+// Query timeout constant - 30 seconds
+const QUERY_TIMEOUT_MS = 30000;
+
 class BotChainService {
   private config: BotChainConfig;
   private responseCache: Map<string, CacheEntry> = new Map();
@@ -1329,22 +1342,22 @@ class BotChainService {
       }
       
       // FORCE ERROR TO TEST IF CODE IS RUNNING
-      console.log('🔥🔥🔥 CODE IS RUNNING - ABOUT TO PROCESS SQL RESPONSE 🔥🔥🔥');
+      logger.info('🔥🔥🔥 CODE IS RUNNING - ABOUT TO PROCESS SQL RESPONSE 🔥🔥🔥');
 
       const sql = sqlResponse.sql_query;
       const template_used = sqlResponse.template_used;
       const parameters = sqlResponse.parameters || [];
       
       // Log the SQL query for debugging
-      console.log('🔵 SQL QUERY GENERATED:', sql);
-      console.log('🔵 SQL TEMPLATE USED:', template_used);
+      logger.info('🔵 SQL QUERY GENERATED:', { sql });
+      logger.info('🔵 SQL TEMPLATE USED:', { template_used });
       
       // Execute the SQL query
       let results: any[] = [];
       // Check for requested limit in entities
       const requestedLimit = entities.limit || 10;
       try {
-        console.log('🚨 ENTERING SQL EXECUTION BLOCK - THIS SHOULD ALWAYS SHOW!');
+        logger.info('🚨 ENTERING SQL EXECUTION BLOCK');
         // Convert parameters from array to object for easier access
         const sqlParams: Record<string, any> = {};
         parameters.forEach((param: any) => {
@@ -1365,23 +1378,25 @@ class BotChainService {
         });
         
         // EXPLICIT DEBUG FOR GOVERNMENT PARAMETER
-        console.log('🔥 SQLPARAMS DETAILED DEBUG:');
-        console.log('  - sqlParams =', JSON.stringify(sqlParams, null, 2));
-        console.log('  - sqlParams.government_number =', sqlParams.government_number);
-        console.log('  - typeof sqlParams.government_number =', typeof sqlParams.government_number);
-        console.log('  - Boolean(sqlParams.government_number) =', Boolean(sqlParams.government_number));
-        console.log('  - Original parameters array =', JSON.stringify(parameters, null, 2));
-        console.log('  - Template used =', template_used);
-        console.log('  - Intent =', intent);
+        logger.debug('🔥 SQLPARAMS DETAILED DEBUG:', {
+          sqlParams,
+          government_number: sqlParams.government_number,
+          government_number_type: typeof sqlParams.government_number,
+          government_number_boolean: Boolean(sqlParams.government_number),
+          original_parameters: parameters,
+          template_used,
+          intent
+        });
         
         // SPECIAL HANDLING FOR COUNT QUERIES
-        console.log('🔴 COUNT QUERY DETECTION DEBUG:');
-        console.log('  - template_used:', template_used);
-        console.log('  - template_used includes count_:', template_used && template_used.includes('count_'));
-        console.log('  - entities.operation:', entities.operation);
-        console.log('  - entities.count_only:', entities.count_only);
-        console.log('  - intent:', intent);
-        console.log('  - sqlResponse.query_type:', sqlResponse && sqlResponse.query_type);
+        logger.debug('🔴 COUNT QUERY DETECTION DEBUG:', {
+          template_used,
+          template_includes_count: template_used && template_used.includes('count_'),
+          entities_operation: entities.operation,
+          entities_count_only: entities.count_only,
+          intent,
+          sql_query_type: sqlResponse && sqlResponse.query_type
+        });
         
         const isCountQuery = template_used && (
           template_used.includes('count_') ||
@@ -1390,12 +1405,14 @@ class BotChainService {
         (sqlResponse && sqlResponse.query_type === 'count') ||
         (entities.count_only === true);
         
-        console.log('  - isCountQuery result:', isCountQuery);
-        console.log('  - Full sqlResponse:', JSON.stringify(sqlResponse, null, 2));
+        logger.debug('🔴 COUNT QUERY DETECTION RESULT:', { 
+          isCountQuery,
+          sqlResponse
+        });
         
         if (isCountQuery) {
           logger.info('Processing COUNT query with special handling', { template_used, intent });
-          console.log('✅ ENTERING COUNT QUERY HANDLING BLOCK');
+          logger.info('✅ ENTERING COUNT QUERY HANDLING BLOCK');
           
           // For count queries, we need to execute actual counting logic
           if (template_used === 'count_decisions_by_topic') {
@@ -1414,7 +1431,7 @@ class BotChainService {
               countQuery = countQuery.eq('government_number', sqlParams.government_number.toString());
             }
             
-            const { count, error } = await countQuery;
+            const { count, error } = await withTimeout(countQuery, QUERY_TIMEOUT_MS, 'Count query');
             
             if (error) {
               logger.error('Count query error', { error, sqlParams });
@@ -1439,7 +1456,7 @@ class BotChainService {
               countQuery = countQuery.eq('government_number', sqlParams.government_number.toString());
             }
             
-            const { count, error } = await countQuery;
+            const { count, error } = await withTimeout(countQuery, QUERY_TIMEOUT_MS, 'Count query');
             
             if (error) {
               logger.error('Count query error', { error, sqlParams });
@@ -1467,7 +1484,7 @@ class BotChainService {
               countQuery = countQuery.gte('decision_date', yearStart).lte('decision_date', yearEnd);
             }
             
-            const { count, error } = await countQuery;
+            const { count, error } = await withTimeout(countQuery, QUERY_TIMEOUT_MS, 'Count query');
             
             if (error) {
               logger.error('Count by topic and year error', { error, sqlParams });
@@ -1493,7 +1510,7 @@ class BotChainService {
               countQuery = countQuery.gte('decision_date', sqlParams.start_date).lte('decision_date', sqlParams.end_date);
             }
             
-            const { count, error } = await countQuery;
+            const { count, error } = await withTimeout(countQuery, QUERY_TIMEOUT_MS, 'Count query');
             
             if (error) {
               logger.error('Count by topic date range error', { error, sqlParams });
@@ -1519,7 +1536,7 @@ class BotChainService {
               countQuery = countQuery.gte('decision_date', yearStart).lte('decision_date', yearEnd);
             }
             
-            const { count, error } = await countQuery;
+            const { count, error } = await withTimeout(countQuery, QUERY_TIMEOUT_MS, 'Count query');
             
             if (error) {
               logger.error('Count by year error', { error, sqlParams });
@@ -1543,7 +1560,7 @@ class BotChainService {
             // Add operational filter
             countQuery = countQuery.eq('operativity', 'אופרטיבית');
             
-            const { count, error } = await countQuery;
+            const { count, error } = await withTimeout(countQuery, QUERY_TIMEOUT_MS, 'Count query');
             
             if (error) {
               logger.error('Count operational by topic error', { error, sqlParams });
@@ -1570,7 +1587,7 @@ class BotChainService {
               countQuery = countQuery.ilike('tags_policy_area', `%${sqlParams.topic}%`);
             }
             
-            const { count, error } = await countQuery;
+            const { count, error } = await withTimeout(countQuery, QUERY_TIMEOUT_MS, 'Count query');
             
             if (error) {
               logger.error('Count query error', { error, sqlParams });
@@ -1581,12 +1598,12 @@ class BotChainService {
                 decision_count: count || 0
               }];
               logger.info('Generic count query completed', { count, sqlParams });
-              console.log('🔵 COUNT QUERY RESULTS:', JSON.stringify(results, null, 2));
+              logger.info('🔵 COUNT QUERY RESULTS:', { results });
             }
           }
         } else {
           // REGULAR SEARCH QUERIES - existing logic
-          console.log('❌ NOT A COUNT QUERY - ENTERING REGULAR SEARCH BLOCK');
+          logger.info('❌ NOT A COUNT QUERY - ENTERING REGULAR SEARCH BLOCK');
           logger.info('Processing regular search query');
           
           // Build Supabase query based on SQL parameters (not entities)
@@ -1658,8 +1675,8 @@ class BotChainService {
           .order('decision_number', { ascending: false })
           .limit(requestedLimit);
         
-          // Execute query
-          const { data, error } = await query;
+          // Execute query with timeout
+          const { data, error } = await withTimeout(query, QUERY_TIMEOUT_MS, 'Search query');
           
           if (error) {
             logger.error('Supabase query error', { error, entities });
@@ -1706,9 +1723,20 @@ class BotChainService {
             });
           }
         }
-      } catch (error) {
-        logger.error('SQL execution failed', { error });
-        // Continue with empty results
+      } catch (error: any) {
+        if (error.message && error.message.includes('timed out')) {
+          logger.error('Query timeout error', { 
+            error: error.message, 
+            entities,
+            template_used,
+            timeout_ms: QUERY_TIMEOUT_MS
+          });
+          // Return a user-friendly error for timeout
+          throw new Error('The query took too long to execute. Please try a more specific search.');
+        } else {
+          logger.error('SQL execution failed', { error });
+          // Continue with empty results
+        }
       }
       logger.debug('SQL generation completed', { 
         resultCount: results?.length || 0, 
@@ -1957,7 +1985,14 @@ class BotChainService {
         
         if (isCountQuery) {
           dataType = 'count';
-          content = mappedResults[0] || { count: 0 };
+          // Extract count from the first result, ensuring proper format
+          const countResult = mappedResults[0] || {};
+          content = { 
+            count: countResult.count || countResult.decision_count || 0,
+            topic: countResult.topic,
+            government_number: countResult.government_number,
+            year: countResult.year
+          };
         } else if (intent === 'EVAL' || intent === 'ANALYSIS') {
           dataType = 'analysis';
           content = {
