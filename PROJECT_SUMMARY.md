@@ -130,7 +130,24 @@ Health: `/api/chat/health` + `/health` per bot.
 - **SSL**: Let's Encrypt (auto-renewal)
 - **Deployment Guide**: See `PRODUCTION_DEPLOYMENT_GUIDE.md`
 
-### Latest Updates (15 Jul):
+### Latest Updates (16 Jul) 🆕:
+- ⚠️ **Example Queries Testing** - Found critical issues
+  - ✅ Basic search working (10 results for "חינוך ממשלה 37")
+  - ❌ Count queries broken - returns "נמצאו 1 החלטות" with empty result instead of count
+  - ❌ Specific decision lookup timing out ("החלטה 2989")
+  - ❌ Recent decisions query timing out
+  - ❌ Ministry-based searches timing out
+- 🔧 **Attempted Fixes**:
+  - Added `entities.count_only` check to count detection
+  - Added SQL query logging for debugging
+  - Fixed environment variables (USE_UNIFIED_INTENT=true, USE_ENHANCED_SQL_GEN=true)
+  - Added debug logging (not showing in production logs)
+- 🐛 **Root Issues**:
+  - Count query execution path returning wrong format
+  - Production logging suppressed (NODE_ENV=production)
+  - Multiple query types experiencing timeouts
+
+### Previous Updates (15 Jul):
 - ✅ **Analysis Display Redesigned** - Improved formatting for better readability
   - Compact 3-column table (קריטריון | משקל | ציון) that fits chat window
   - Text citations moved to separate section at end
@@ -139,6 +156,10 @@ Health: `/api/chat/health` + `/health` per bot.
   - Set evaluator temperature to 0.0 for consistent scoring
 - ✅ Enhanced SQL search to include content fields for topics like "ענן הממשלתי"
 - ✅ Updated UI text (welcome message, decision guide title, example queries)
+- ✅ **Decision Guide Bot** - Fixed weight calculation instability
+  - Set temperature to 0.0 for consistent scoring
+  - Fixed criterion name mismatches causing 0% weights
+  - Added file upload click handler fix
 
 ### Previous Updates (14 Jul):
 - ✅ Fixed full content display - only shows when explicitly requested "תוכן מלא"

@@ -105,13 +105,39 @@ ssh root@178.62.39.248 "cd /root/CECI-W-BOTS && git pull && docker compose -f do
 
 ---
 
-## 7 · Current Project Status (15 Jul 2025)
+## 7 · Current Project Status (16 Jul 2025)
 
-### 🚀 Production Deployment Complete (15 Jul 2025)
+### 🚀 Production Deployment - Critical Issues Found (16 Jul 2025)
 
 **System is LIVE at**: https://ceci-ai.ceci.org.il
 
-**Latest Deployment (15 Jul 2025 - 09:26 UTC)** 🆕:
+**Latest Investigation (16 Jul 2025)** 🆕:
+1. ⚠️ **Example Query Testing Results**:
+   - ✅ Basic search: "החלטות בנושא חינוך ממשלה 37" - Works (10 results, ~29s)
+   - ❌ Count queries: "כמה החלטות בנושא ביטחון קיבלה ממשלה 37" - Returns "נמצאו 1 החלטות" with empty result
+   - ❌ Specific decision: "החלטה 2989" - Timeout
+   - ❌ Recent decisions: "הראה החלטות אחרונות בנושא סביבה" - Timeout
+   - ❌ Ministry search: "החלטות של משרד החינוך" - Timeout
+
+2. 🔧 **Fixes Applied**:
+   - Added `entities.count_only === true` to count detection logic
+   - Added SQL query and count detection debug logging
+   - Fixed missing environment variables (USE_UNIFIED_INTENT, USE_ENHANCED_SQL_GEN)
+   - Updated Decision Guide Bot (temperature=0, criterion name fixes, file upload fix)
+
+3. 🐛 **Root Issues Identified**:
+   - Count queries: Detection works (`count_only: true`) but execution returns wrong format
+   - Logging: Production mode suppresses console.log statements
+   - Timeouts: Multiple query types failing at SQL generation or execution
+   - Debug visibility: Can't trace actual SQL queries or execution flow
+
+**Earlier Today (15 Jul 2025 - 18:00 UTC)**:
+1. ✅ **Decision Guide Bot Fixed**:
+   - Temperature set to 0.0 for consistent scoring
+   - Fixed criterion name mismatches ("מעורבות של מספר דרגים בתהליך", "מבנה סעיפים וחלוקת עבודה ברורה")
+   - Fixed file upload click handler
+
+**Earlier Deployment (15 Jul 2025 - 09:26 UTC)**:
 1. ✅ **Analysis Display Redesigned** - Improved formatting for better readability
    - Changed from wide table to compact 3-column table (קריטריון | משקל | ציון)
    - Moved text citations to separate section at the end
@@ -204,16 +230,32 @@ ssh root@178.62.39.248 "cd /root/CECI-W-BOTS && git pull && docker compose -f do
 * `storeInCache()` - server/src/services/botChainService.ts:~550-600
 * `generateCacheKey()` - server/src/services/botChainService.ts:~600-650
 
-### ✅ RESOLVED ISSUES (14 Jul 2025)
+### ❌ CRITICAL ISSUES (16 Jul 2025)
 
-**Previously Critical Issues - NOW FIXED**:
-1. ✓ **Analysis Functionality** - Fixed empty responses, proper formatting
-2. ✓ **Full Content Display** - Only shows when explicitly requested
-3. ✓ **Token Limits** - Increased to 4000 for complete responses
-4. ✓ **URL Generation** - Uses only database URLs
-5. ✓ **Multiple Decisions** - Correctly handles same decision numbers
+**Currently Broken**:
+1. ❌ **Count Queries** - Detection works but returns "נמצאו 1 החלטות" instead of actual count
+2. ❌ **Specific Decision Lookup** - Queries like "החלטה 2989" timeout
+3. ❌ **Recent Decisions** - "החלטות אחרונות" queries timeout
+4. ❌ **Ministry Searches** - "החלטות של משרד X" timeout
+5. ❌ **Production Logging** - Debug statements not appearing (NODE_ENV=production)
 
-**Remaining TODO**:
+**Immediate Actions Needed**:
+1. Fix count query execution path (returns array instead of count)
+2. Add production-compatible logging (logger.error instead of console.log)
+3. Debug timeout issues in SQL generation/execution
+4. Add query timeout handling (30s max)
+
+### ✅ RESOLVED ISSUES (15 Jul 2025)
+
+**Recently Fixed**:
+1. ✓ **Decision Guide Bot Stability** - Temperature=0, criterion names fixed
+2. ✓ **File Upload Click Handler** - Now properly opens file dialog
+3. ✓ **Analysis Display** - Compact table format, better readability
+4. ✓ **Environment Variables** - Added missing unified architecture flags
+
+### 📋 KNOWN ISSUES (from 14 Jul)
+
+**Still TODO**:
 1. Restore cache systems safely (Priority 3)
 2. Implement Reference Resolution integration (Priority 2)
 3. Fix UNCLEAR routes (don't trigger Clarify bot)
