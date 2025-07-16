@@ -121,18 +121,6 @@ interface IntentPatternCache {
   usage_count: number;
 }
 
-// Helper function to add timeout to promises
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => 
-      setTimeout(() => reject(new Error(`${operation} timed out after ${timeoutMs}ms`)), timeoutMs)
-    )
-  ]);
-}
-
-// Query timeout constant - 30 seconds
-const QUERY_TIMEOUT_MS = 30000;
 
 class BotChainService {
   private config: BotChainConfig;
@@ -1723,20 +1711,9 @@ class BotChainService {
             });
           }
         }
-      } catch (error: any) {
-        if (error.message && error.message.includes('timed out')) {
-          logger.error('Query timeout error', { 
-            error: error.message, 
-            entities,
-            template_used,
-            timeout_ms: QUERY_TIMEOUT_MS
-          });
-          // Return a user-friendly error for timeout
-          throw new Error('The query took too long to execute. Please try a more specific search.');
-        } else {
-          logger.error('SQL execution failed', { error });
-          // Continue with empty results
-        }
+      } catch (error) {
+        logger.error('SQL execution failed', { error });
+        // Continue with empty results
       }
       logger.debug('SQL generation completed', { 
         resultCount: results?.length || 0, 
