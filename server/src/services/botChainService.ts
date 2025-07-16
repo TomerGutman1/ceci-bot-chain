@@ -1925,7 +1925,9 @@ class BotChainService {
       const isCountQuery = template_used && (
         template_used.includes('count_') ||
         template_used === 'compare_governments'
-      ) || (entities.operation === 'count');
+      ) || (entities.operation === 'count') || 
+      (sqlResponse && sqlResponse.query_type === 'count') ||
+      (entities.count_only === true);
       
       // Check if user requested full content
       const isFullContentRequest = entities.full_content === true;
