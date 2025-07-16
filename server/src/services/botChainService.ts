@@ -1331,9 +1331,13 @@ class BotChainService {
       // FORCE ERROR TO TEST IF CODE IS RUNNING
       console.log('🔥🔥🔥 CODE IS RUNNING - ABOUT TO PROCESS SQL RESPONSE 🔥🔥🔥');
 
-      // const sql = sqlResponse.sql_query; // Not used after removing evaluator
+      const sql = sqlResponse.sql_query;
       const template_used = sqlResponse.template_used;
       const parameters = sqlResponse.parameters || [];
+      
+      // Log the SQL query for debugging
+      console.log('🔵 SQL QUERY GENERATED:', sql);
+      console.log('🔵 SQL TEMPLATE USED:', template_used);
       
       // Execute the SQL query
       let results: any[] = [];
@@ -1375,6 +1379,7 @@ class BotChainService {
         console.log('  - template_used:', template_used);
         console.log('  - template_used includes count_:', template_used && template_used.includes('count_'));
         console.log('  - entities.operation:', entities.operation);
+        console.log('  - entities.count_only:', entities.count_only);
         console.log('  - intent:', intent);
         console.log('  - sqlResponse.query_type:', sqlResponse && sqlResponse.query_type);
         
@@ -1382,7 +1387,8 @@ class BotChainService {
           template_used.includes('count_') ||
           template_used === 'compare_governments'
         ) || (entities.operation === 'count' || intent === 'count') || 
-        (sqlResponse && sqlResponse.query_type === 'count');
+        (sqlResponse && sqlResponse.query_type === 'count') ||
+        (entities.count_only === true);
         
         console.log('  - isCountQuery result:', isCountQuery);
         console.log('  - Full sqlResponse:', JSON.stringify(sqlResponse, null, 2));
