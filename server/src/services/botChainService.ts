@@ -1431,7 +1431,11 @@ class BotChainService {
               countQuery = countQuery.eq('government_number', sqlParams.government_number.toString());
             }
             
-            const { count, error } = await withTimeout(countQuery, QUERY_TIMEOUT_MS, 'Count query');
+            const { count, error } = await withTimeout(
+              countQuery as Promise<{ count: number | null; error: any }>, 
+              QUERY_TIMEOUT_MS, 
+              'Count query'
+            );
             
             if (error) {
               logger.error('Count query error', { error, sqlParams });
@@ -1456,7 +1460,11 @@ class BotChainService {
               countQuery = countQuery.eq('government_number', sqlParams.government_number.toString());
             }
             
-            const { count, error } = await withTimeout(countQuery, QUERY_TIMEOUT_MS, 'Count query');
+            const { count, error } = await withTimeout(
+              countQuery as Promise<{ count: number | null; error: any }>, 
+              QUERY_TIMEOUT_MS, 
+              'Count query'
+            );
             
             if (error) {
               logger.error('Count query error', { error, sqlParams });
@@ -1484,7 +1492,11 @@ class BotChainService {
               countQuery = countQuery.gte('decision_date', yearStart).lte('decision_date', yearEnd);
             }
             
-            const { count, error } = await withTimeout(countQuery, QUERY_TIMEOUT_MS, 'Count query');
+            const { count, error } = await withTimeout(
+              countQuery as Promise<{ count: number | null; error: any }>, 
+              QUERY_TIMEOUT_MS, 
+              'Count query'
+            );
             
             if (error) {
               logger.error('Count by topic and year error', { error, sqlParams });
@@ -1510,7 +1522,11 @@ class BotChainService {
               countQuery = countQuery.gte('decision_date', sqlParams.start_date).lte('decision_date', sqlParams.end_date);
             }
             
-            const { count, error } = await withTimeout(countQuery, QUERY_TIMEOUT_MS, 'Count query');
+            const { count, error } = await withTimeout(
+              countQuery as Promise<{ count: number | null; error: any }>, 
+              QUERY_TIMEOUT_MS, 
+              'Count query'
+            );
             
             if (error) {
               logger.error('Count by topic date range error', { error, sqlParams });
@@ -1536,7 +1552,11 @@ class BotChainService {
               countQuery = countQuery.gte('decision_date', yearStart).lte('decision_date', yearEnd);
             }
             
-            const { count, error } = await withTimeout(countQuery, QUERY_TIMEOUT_MS, 'Count query');
+            const { count, error } = await withTimeout(
+              countQuery as Promise<{ count: number | null; error: any }>, 
+              QUERY_TIMEOUT_MS, 
+              'Count query'
+            );
             
             if (error) {
               logger.error('Count by year error', { error, sqlParams });
@@ -1560,7 +1580,11 @@ class BotChainService {
             // Add operational filter
             countQuery = countQuery.eq('operativity', 'אופרטיבית');
             
-            const { count, error } = await withTimeout(countQuery, QUERY_TIMEOUT_MS, 'Count query');
+            const { count, error } = await withTimeout(
+              countQuery as Promise<{ count: number | null; error: any }>, 
+              QUERY_TIMEOUT_MS, 
+              'Count query'
+            );
             
             if (error) {
               logger.error('Count operational by topic error', { error, sqlParams });
@@ -1587,7 +1611,11 @@ class BotChainService {
               countQuery = countQuery.ilike('tags_policy_area', `%${sqlParams.topic}%`);
             }
             
-            const { count, error } = await withTimeout(countQuery, QUERY_TIMEOUT_MS, 'Count query');
+            const { count, error } = await withTimeout(
+              countQuery as Promise<{ count: number | null; error: any }>, 
+              QUERY_TIMEOUT_MS, 
+              'Count query'
+            );
             
             if (error) {
               logger.error('Count query error', { error, sqlParams });
@@ -1676,7 +1704,11 @@ class BotChainService {
           .limit(requestedLimit);
         
           // Execute query with timeout
-          const { data, error } = await withTimeout(query, QUERY_TIMEOUT_MS, 'Search query');
+          const { data, error } = await withTimeout(
+            query as Promise<{ data: any[] | null; error: any }>,
+            QUERY_TIMEOUT_MS,
+            'Search query'
+          );
           
           if (error) {
             logger.error('Supabase query error', { error, entities });
