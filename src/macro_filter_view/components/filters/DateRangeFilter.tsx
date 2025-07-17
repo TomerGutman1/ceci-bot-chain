@@ -220,7 +220,7 @@ export default function DateRangeFilter({
               selected={selectingStart ? dateRange.start || undefined : dateRange.end || undefined}
               onSelect={handleCalendarSelect}
               className="rounded-md border-0"
-              locale="he"
+              // locale="he" // Remove locale prop as it needs proper Locale import
             />
 
             <div className="p-3 border-t flex gap-2">

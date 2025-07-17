@@ -123,10 +123,10 @@ export default function DataOptimizer({
   const handleDecisionSelect = useCallback((decision: DashboardDecision) => {
     setSelectedDecisions(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(decision.id)) {
-        newSet.delete(decision.id);
+      if (newSet.has(decision.id.toString())) {
+        newSet.delete(decision.id.toString());
       } else {
-        newSet.add(decision.id);
+        newSet.add(decision.id.toString());
       }
       return newSet;
     });
@@ -153,7 +153,7 @@ export default function DataOptimizer({
 
   // Process selected decisions
   const processSelected = useCallback(() => {
-    const selectedItems = decisions.filter(d => selectedDecisions.has(d.id));
+    const selectedItems = decisions.filter(d => selectedDecisions.has(d.id.toString()));
     if (selectedItems.length > 0) {
       processBatch(selectedItems);
       recordMetric('batch_process_started', selectedItems.length);
@@ -182,7 +182,7 @@ export default function DataOptimizer({
         key={decision.id}
         decision={decision}
         index={index}
-        isSelected={selectedDecisions.has(decision.id)}
+        isSelected={selectedDecisions.has(decision.id.toString())}
         onSelect={handleDecisionSelect}
         onFavorite={(d) => {
           // Handle favorite logic

@@ -33,8 +33,8 @@ const macroQueryClient = new QueryClient({
 const mockUserPreferences: UserPreferences = {
   theme: 'light',
   defaultView: 'cards',
-  favoriteCharts: ['timeline', 'policy', 'kpi'],
-  savedFilters: [],
+  // favoriteCharts: ['timeline', 'policy', 'kpi'], // Commented out as not in UserPreferences type
+  // savedFilters: [], // Commented out as not in UserPreferences type
   notifications: {
     newDecisions: true,
     weeklyReports: true,

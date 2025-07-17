@@ -89,7 +89,7 @@ function filtersToParams(filters: DashboardFilters): Record<string, any> {
   }
 
   if (filters.decisionType !== 'all') {
-    params.operativity = filters.decisionType === 'operative' ? 'אופרטיבית' : 'דקלרטיבית';
+    params.operativity = filters.decisionType === 'operative' ? 'operative' : 'declarative';
   }
 
   return params;

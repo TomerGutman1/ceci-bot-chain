@@ -231,7 +231,7 @@ function getFilterSummaryLines(filters: DashboardFilters): string[] {
   }
 
   if (filters.decisionType !== 'all') {
-    lines.push(`${hebrewToEnglish('סוג החלטה')}: ${hebrewToEnglish(filters.decisionType === 'operative' ? 'אופרטיבית' : 'דקלרטיבית')}`);
+    lines.push(`${hebrewToEnglish('סוג החלטה')}: ${hebrewToEnglish(filters.decisionType === 'operative' ? 'operative' : 'declarative')}`);
   }
 
   return lines;
