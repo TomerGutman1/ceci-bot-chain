@@ -38,10 +38,10 @@ const Index = () => {
         {/* ChatInterface replaces the old input - Aligned with login button */}
         <div className="w-full mt-auto mb-4 flex justify-center">
           <div className={`flex items-start gap-4 ${showExamples ? 'max-w-7xl' : 'max-w-3xl'} w-full`}>
-            {/* Visual LEFT sidebar (position="right" in RTL) - KEPT */}
+            {/* Left Examples */}
             {showExamples && (
               <ExampleQueries 
-                position="right" 
+                position="left" 
                 onQueryClick={(query) => setChatTriggerMessage({ text: query, timestamp: Date.now() })}
                 onQueryEdit={(query) => setChatEditMessage({ text: query, timestamp: Date.now() })}
               />
@@ -54,8 +54,6 @@ const Index = () => {
                 externalEditMessage={chatEditMessage}
               />
             </div>
-            
-            {/* Visual RIGHT sidebar (position="left" in RTL) - REMOVED */}
           </div>
         </div>
       </div>

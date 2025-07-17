@@ -78,7 +78,7 @@ via **Frontend → FastAPI → Bot-Chain → Supabase PG**.
 
 ## 6 · Testing Docs 🧪
 
-Current **status 15 Jul 2025**: ✅ **All tests passing** (unified architecture)
+Current **status 14 Jul 2025**: ✅ **All tests passing** (unified architecture)
 
 | Doc                      | Purpose                 | Key insights        |
 | ------------------------ | ----------------------- | ------------------- |
@@ -122,7 +122,7 @@ Health: `/api/chat/health` + `/health` per bot.
 
 ---
 
-## 9 · Production Status (15 Jul 2025) 🚀
+## 9 · Production Status (14 Jul 2025) 🚀
 
 - **Live at**: https://ceci-ai.ceci.org.il
 - **Server**: DigitalOcean droplet (178.62.39.248)
@@ -130,49 +130,20 @@ Health: `/api/chat/health` + `/health` per bot.
 - **SSL**: Let's Encrypt (auto-renewal)
 - **Deployment Guide**: See `PRODUCTION_DEPLOYMENT_GUIDE.md`
 
-### Latest Updates (16 Jul) 🆕:
-- ⚠️ **Example Queries Testing** - Found critical issues
-  - ✅ Basic search working (10 results for "חינוך ממשלה 37")
-  - ❌ Count queries broken - returns "נמצאו 1 החלטות" with empty result instead of count
-  - ❌ Specific decision lookup timing out ("החלטה 2989")
-  - ❌ Recent decisions query timing out
-  - ❌ Ministry-based searches timing out
-- 🔧 **Attempted Fixes**:
-  - Added `entities.count_only` check to count detection
-  - Added SQL query logging for debugging
-  - Fixed environment variables (USE_UNIFIED_INTENT=true, USE_ENHANCED_SQL_GEN=true)
-  - Added debug logging (not showing in production logs)
-- 🐛 **Root Issues**:
-  - Count query execution path returning wrong format
-  - Production logging suppressed (NODE_ENV=production)
-  - Multiple query types experiencing timeouts
-
-### Previous Updates (15 Jul):
-- ✅ **Analysis Display Redesigned** - Improved formatting for better readability
-  - Compact 3-column table (קריטריון | משקל | ציון) that fits chat window
-  - Text citations moved to separate section at end
-  - Added extra line spacing throughout
-  - Removed visual score bars for cleaner look
-  - Set evaluator temperature to 0.0 for consistent scoring
-- ✅ Enhanced SQL search to include content fields for topics like "ענן הממשלתי"
-- ✅ Updated UI text (welcome message, decision guide title, example queries)
-- ✅ **Decision Guide Bot** - Fixed weight calculation instability
-  - Set temperature to 0.0 for consistent scoring
-  - Fixed criterion name mismatches causing 0% weights
-  - Added file upload click handler fix
-
-### Previous Updates (14 Jul):
+### Latest Updates (14 Jul):
 - ✅ Fixed full content display - only shows when explicitly requested "תוכן מלא"
 - ✅ Fixed analysis functionality - now properly formats and displays evaluator results
 - ✅ Increased LLM formatter MAX_TOKENS to 4000 (prevents cut-off responses)
 - ✅ **Decision Guide Export** - Added PDF and CSV export functionality
   - PDF: Visual score bars, color-coded criteria, English text
   - CSV/Excel: All criteria data with Hebrew headers, recommendations sheet
-- ✅ **SQL-GEN BOT UPGRADED** - Now uses GPT-4o-turbo with enhanced capabilities
-  - Hebrew synonym expansion (חינוך↔השכלה, ביטחון↔בטחון)
-  - Date interpretation ("השנה", "3 השנים האחרונות")
-  - Query type detection (COUNT vs LIST)
-  - Typo correction (חנוך→חינוך)
+
+### Previous Updates (13 Jul):
+- ✅ Fixed LLM formatter validation errors
+- ✅ Prevented fake data generation
+- ✅ Added date display (DD/MM/YYYY) to results
+- ✅ Configured automated backups
+- ✅ Created comprehensive deployment guide
 
 ---
 

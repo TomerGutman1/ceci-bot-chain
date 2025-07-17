@@ -73,7 +73,7 @@ BOT_CONFIGS = {
         layer_name="EVAL_EVALUATOR_BOT_2E",
         port=8014,
         model="gpt-4-turbo",
-        temperature=0.0,
+        temperature=0.3,
         max_tokens=1000
     ),
     "CLARIFY_CLARIFY_BOT_2C": BotConfig(

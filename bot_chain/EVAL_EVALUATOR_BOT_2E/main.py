@@ -490,8 +490,13 @@ def validate_decision_for_analysis(decision_content: Dict[str, Any]) -> Tuple[bo
     operativity = decision_content.get("operativity", "").strip()
     decision_number = decision_content.get("decision_number", "זו")
     
-    # Check 1: Content length - we'll analyze all decisions but note if they're short
-    # Removed rejection of short decisions - will be handled in analysis instead
+    # Check 1: Content length - less than 250 characters is too short
+    if len(decision_text.strip()) < 250:
+        return (
+            False,
+            f"תוכן ההחלטה קצר מדי לניתוח מעמיק ({len(decision_text)} תווים, נדרשים לפחות 250)",
+            f"אתה יכול לבקש את התוכן המלא של החלטה {decision_number} או לחפש החלטות דומות בנושא."
+        )
     
     # Check 2: Operativity field - use the authoritative database field
     if operativity == "דקלרטיבית":
@@ -575,14 +580,9 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
 """
     
     # Create the analysis prompt with the full decision content and detailed criteria
-    # Add note if decision is short
-    length_note = ""
-    if len(full_decision_text.strip()) < 500:
-        length_note = "\n\n⚠️ שים לב: החלטה זו מנוסחת בתמציתיות רבה. בצע את הניתוח על בסיס המידע הקיים, אך ציין בסיכום שהחלטה קצרה מאתגרת ניתוח מעמיק.\n"
-    
     prompt = f"""נתח את החלטת הממשלה הבאה לפי 13 הקריטריונים לניתוח ישימות:
 
-{full_decision_text}{length_note}
+{full_decision_text}
 
 בצע ניתוח ישימות מפורט לפי הקריטריונים הבאים. על כל קריטריון תן ציון מ-0 עד 5 לפי ההנחיות המפורטות:
 
@@ -704,7 +704,7 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
 - 5: יעדים מספריים ברורים עם מתודולוגיה ותגובה לאי-עמידה
 
 החזר תוצאה בפורמט JSON המדויק הזה:
-{{"criteria": [{{"name": "לוח זמנים מחייב", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט המצביע על לוח זמנים או היעדרו", "weight": 17}}, {{"name": "צוות מתכלל", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי צוות מתכלל", "weight": 7}}, {{"name": "גורם מתכלל יחיד", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי גורם מתכלל יחיד", "weight": 5}}, {{"name": "מנגנון דיווח/בקרה", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי מנגנון דיווח", "weight": 9}}, {{"name": "מנגנון מדידה והערכה", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי מדידה והערכה", "weight": 6}}, {{"name": "מנגנון ביקורת חיצונית", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי ביקורת חיצונית", "weight": 4}}, {{"name": "משאבים נדרשים", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי משאבים ותקציב", "weight": 19}}, {{"name": "מעורבות של מספר דרגים בתהליך", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי מעורבות דרגים", "weight": 7}}, {{"name": "מבנה סעיפים וחלוקת עבודה ברורה", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי מבנה וחלוקת עבודה", "weight": 9}}, {{"name": "מנגנון יישום בשטח", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי יישום בשטח", "weight": 9}}, {{"name": "גורם מכריע", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי גורם מכריע", "weight": 3}}, {{"name": "שותפות בין מגזרית", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי שותפות בין מגזרית", "weight": 3}}, {{"name": "מדדי תוצאה ומרכיבי הצלחה", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי מדדי תוצאה", "weight": 2}}], "weighted_score": 0.0, "final_score": 0, "summary": "סיכום הניתוח", "decision_title": "כותרת ההחלטה"}}
+{{"criteria": [{{"name": "לוח זמנים מחייב", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט המצביע על לוח זמנים או היעדרו", "weight": 17}}, {{"name": "צוות מתכלל", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי צוות מתכלל", "weight": 7}}, {{"name": "גורם מתכלל יחיד", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי גורם מתכלל יחיד", "weight": 5}}, {{"name": "מנגנון דיווח/בקרה", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי מנגנון דיווח", "weight": 9}}, {{"name": "מנגנון מדידה והערכה", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי מדידה והערכה", "weight": 6}}, {{"name": "מנגנון ביקורת חיצונית", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי ביקורת חיצונית", "weight": 4}}, {{"name": "משאבים נדרשים", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי משאבים ותקציב", "weight": 19}}, {{"name": "מעורבות של מספר דרגים בתהליך", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי מעורבות דרגים", "weight": 7}}, {{"name": "מבנה סעיפים וחלוקת עבודה ברורה", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי מבנה וחלוקת עבודה", "weight": 9}}, {{"name": "מנגנון יישום בשטח", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי יישום בשטח", "weight": 9}}, {{"name": "גורם מכריע", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי גורם מכריע", "weight": 3}}, {{"name": "שותפות בין מגזרית", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי שותפות בין מגזרית", "weight": 3}}, {{"name": "מדדי תוצאה ומרכיבי הצלחה", "score": 0, "explanation": "הסבר קצר", "reference_from_document": "ציטוט ישיר מהטקסט לגבי מדדי תוצאה", "weight": 2}}], "weighted_score": 0.0, "final_score": 0, "summary": "סיכום הניתוח", "decision_title": "כותרת ההחלטה", "decision_number": 0, "government_number": 0}}
 
 חשוב מאוד לחישוב final_score:
 1. כל קריטריון מקבל ציון 0-5
@@ -737,7 +737,7 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
             openai.ChatCompletion.create,
             model=selected_model,
             messages=[
-                {"role": "system", "content": "אתה מנתח מומחה לישימות החלטות ממשלה. התפקיד שלך לנתח החלטות לפי 13 קריטריונים מוגדרים ולהחזיר תוצאה בפורמט JSON מדויק. עליך לקרוא בזהירות את תוכן ההחלטה ולהעריך כל קריטריון לפי הסקאלה המוגדרת (0-5). היה עקבי ומדויק - החלטה זהה חייבת לקבל אותם ציונים בכל ניתוח. בסס את הציונים רק על מה שכתוב בהחלטה, לא על הנחות. חשב את final_score כך: סכום של [(ציון כל קריטריון / 5) * משקל הקריטריון] עבור כל 13 הקריטריונים. התוצאה צריכה להיות בין 0-100. החזר רק JSON תקין ללא טקסט נוסף. אל תשתמש בעיצוב Bold או סימנים מיוחדים בתוך ה-JSON."},
+                {"role": "system", "content": "אתה מנתח מומחה לישימות החלטות ממשלה. התפקיד שלך לנתח החלטות לפי 13 קריטריונים מוגדרים ולהחזיר תוצאה בפורמט JSON מדויק. עליך לקרוא בזהירות את תוכן ההחלטה ולהעריך כל קריטריון לפי הסקאלה המוגדרת (0-5). חשב את final_score כך: סכום של [(ציון כל קריטריון / 5) * משקל הקריטריון] עבור כל 13 הקריטריונים. התוצאה צריכה להיות בין 0-100. החזר רק JSON תקין ללא טקסט נוסף. אל תשתמש בעיצוב Bold או סימנים מיוחדים בתוך ה-JSON."},
                 {"role": "user", "content": prompt}
             ],
             temperature=config.temperature,
@@ -805,8 +805,7 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
                 weighted_score = analysis_result.get("weighted_score", final_score)
                 summary = analysis_result.get("summary", "ניתוח הושלם")
                 decision_title = analysis_result.get("decision_title", decision_title)
-                # Always use the actual requested decision number, not what GPT might extract from content
-                decision_num = request.decision_number
+                decision_num = analysis_result.get("decision_number", request.decision_number)
                 gov_num = analysis_result.get("government_number", request.government_number)
                 
                 # Convert to expected format
@@ -841,24 +840,6 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
                 table_header = "| קריטריון | משקל | ציון (0–5) | נימוק |\n|---|---|---|---|"
                 criteria_table_str = table_header + "\n" + "\n".join(criteria_table)
                 
-                # Generate specific recommendations based on low-scoring criteria
-                specific_recommendations = []
-                for criterion in criteria:
-                    if criterion.get('score', 0) <= 2:
-                        name = criterion.get('name', '')
-                        if name == "לוח זמנים מחייב":
-                            specific_recommendations.append("הוספת לוח זמנים מפורט עם אבני דרך ותאריכי יעד ברורים")
-                        elif name == "צוות מתכלל":
-                            specific_recommendations.append("מינוי צוות מתכלל עם הגדרת תפקידים וסמכויות ברורות")
-                        elif name == "משאבים נדרשים":
-                            specific_recommendations.append("פירוט התקציב הנדרש ומקורות המימון הספציפיים")
-                        elif name == "מנגנון דיווח/בקרה":
-                            specific_recommendations.append("הגדרת מנגנון דיווח תקופתי עם תדירות ופורמט מוגדרים")
-                        elif name == "מדדי תוצאה ומרכיבי הצלחה":
-                            specific_recommendations.append("קביעת מדדי הצלחה כמותיים וברי מדידה")
-                        elif name == "מנגנון יישום בשטח":
-                            specific_recommendations.append("פירוט תהליכי היישום והגורמים האחראיים בשטח")
-                
                 # Create detailed explanation in the required format
                 formatted_explanation = f"""🔍 ניתוח החלטת ממשלה {decision_num} לפי קריטריוני היישום
 
@@ -873,9 +854,8 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
 📝 **סיכום ניתוח ואבחנות עיקריות**
 {summary}
 
-🔧 **המלצות לשיפור רמת הישימות**
-בהתבסס על הקריטריונים שקיבלו ציון נמוך, מומלץ:
-""" + "\n".join([f"• {rec}" for rec in specific_recommendations]) if specific_recommendations else "בהתבסס על הניתוח, ניתן לשפר את רמת הישימות על ידי התמקדות בקריטריונים שקיבלו ציון נמוך."
+🔧 **המלצות לשיפור**
+בהתבסס על הניתוח, ניתן לשפר את רמת הישימות על ידי התמקדות בקריטריונים שקיבלו ציון נמוך."""
                 
                 processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
                 
@@ -883,17 +863,8 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
                     overall_score=overall_score,
                     relevance_level=relevance_level,
                     quality_metrics=quality_metrics,
-                    content_analysis={
-                        "feasibility_analysis": summary, 
-                        "decision_title": decision_title, 
-                        "criteria_breakdown": criteria,
-                        "final_score": final_score
-                    },
-                    recommendations=specific_recommendations if specific_recommendations else [
-                        "בהתבסס על הניתוח, מומלץ להתמקד בשיפור הקריטריונים שקיבלו ציון נמוך",
-                        "הוספת פרטים ספציפיים יותר בתחומים החסרים",
-                        "הגדרת מנגנוני בקרה ומעקב ברורים"
-                    ],
+                    content_analysis={"feasibility_analysis": summary, "decision_title": decision_title, "criteria_breakdown": criteria},
+                    recommendations=[f"ציון ישימות כולל: {final_score}/100"],
                     confidence=0.9,
                     explanation=formatted_explanation,
                     processing_time_ms=processing_time,

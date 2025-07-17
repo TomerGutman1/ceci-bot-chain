@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import {
   Dialog,
@@ -48,7 +48,7 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
     }
   }, []);
 
-  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
       'application/pdf': ['.pdf'],
@@ -57,8 +57,6 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
     },
     maxFiles: 1,
     maxSize: 8 * 1024 * 1024, // 8MB
-    noClick: false, // Ensure clicking is enabled
-    noKeyboard: false,
   });
 
   const handleAnalyze = async () => {
@@ -168,20 +166,7 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
                     <div className="space-y-2">
                       <Upload className="mx-auto h-12 w-12 text-gray-400" />
                       <p className="text-lg">
-                        {isDragActive ? 'שחרר כאן...' : (
-                          <>
-                            גרור קובץ לכאן או{' '}
-                            <span 
-                              className="text-primary underline cursor-pointer hover:text-primary/80"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                open();
-                              }}
-                            >
-                              לחץ כאן לבחירה
-                            </span>
-                          </>
-                        )}
+                        {isDragActive ? 'שחרר כאן...' : 'גרור קובץ לכאן או לחץ לבחירה'}
                       </p>
                       <p className="text-sm text-gray-600">
                         PDF, DOCX או TXT עד 8MB
