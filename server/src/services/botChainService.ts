@@ -1352,6 +1352,13 @@ class BotChainService {
           sqlParams[param.name] = param.value;
         });
         
+        logger.info('🟡 SQL PARAMS EXTRACTED:', {
+          sqlParams,
+          parameters,
+          template_used,
+          isCountQueryDetected: isCountQuery
+        });
+        
         // NOTE: government_number is set correctly by SQL bot templates when needed
         
         // DEBUG: Log the conversion and filtering
@@ -1432,7 +1439,13 @@ class BotChainService {
                 decision_count: count || 0,
                 count: count || 0  // Formatter expects 'count' field
               }];
-              logger.info('Count query completed', { count, sqlParams });
+              logger.info('🔴 COUNT DECISIONS BY TOPIC:', { 
+                count, 
+                sqlParams,
+                topic: sqlParams.topic,
+                government: sqlParams.government_number,
+                template: template_used
+              });
             }
           } else if (template_used === 'count_decisions_by_government') {
             // Execute count by government
@@ -1585,7 +1598,15 @@ class BotChainService {
                 count: count || 0,
                 decision_count: count || 0
               }];
-              logger.info('Generic count query completed', { count, sqlParams });
+              logger.info('🔴 GENERIC COUNT QUERY:', { 
+                count, 
+                sqlParams,
+                topic: sqlParams.topic,
+                government: sqlParams.government_number,
+                hasGovernmentFilter: !!sqlParams.government_number,
+                hasTopicFilter: !!sqlParams.topic,
+                template: template_used || 'NO_TEMPLATE'
+              });
               logger.info('🔵 COUNT QUERY RESULTS:', { results });
             }
           }
