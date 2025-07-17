@@ -1514,7 +1514,7 @@ class BotChainService {
                 requestId,
                 elapsedMs: sqlElapsedTime,
                 success: sqlResult.success,
-                rowCount: sqlResult.rowCount
+                hasData: !!sqlResult.data
               });
               
               if (sqlResult.success && sqlResult.data) {
@@ -1777,7 +1777,7 @@ class BotChainService {
                 requestId,
                 elapsedMs: sqlElapsedTime,
                 success: sqlResult.success,
-                rowCount: sqlResult.rowCount
+                hasData: !!sqlResult.data
               });
               
               if (sqlResult.success && sqlResult.data) {
