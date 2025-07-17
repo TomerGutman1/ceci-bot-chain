@@ -43,18 +43,18 @@
 - ✅ TypeScript compilation successful
 - ✅ Docker build successful
 
-### 📋 Phase 2: Infrastructure Improvements (TODO)
+### 📋 Phase 2: Infrastructure Improvements (COMPLETED)
 
-#### 1. Docker Compose Updates
-- Add explicit container_name for each service
-- Increase health check start_period
-- Add restart policies with delays
-- Improve resource limits
+#### 1. Docker Compose Updates (COMPLETED)
+- ✅ Added explicit container_name for each service (ceci-redis, ceci-backend, etc.)
+- ✅ Increased health check start_period (20s for infra, 40s for backend, 60s for bots)
+- ✅ Updated restart policies to 'unless-stopped'
+- ✅ Added health check dependencies for proper startup order
 
-#### 2. Production Resource Increase
-- Update backend to 2 CPUs/2GB RAM in docker-compose.prod.yml
-- Add connection limits per service
-- Monitor during deployment
+#### 2. Production Resource Increase (COMPLETED)
+- ✅ Updated backend to 2 CPUs/2GB RAM in docker-compose.prod.yml
+- ✅ Resource reservations set to 1 CPU/1GB RAM minimum
+- ✅ Tested locally with new container names
 
 ### 📋 Phase 3: Monitoring & Observability (TODO)
 
