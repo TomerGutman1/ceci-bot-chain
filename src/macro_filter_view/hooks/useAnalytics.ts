@@ -438,7 +438,7 @@ export function useABTesting() {
 
   const trackExperiment = useCallback((experimentName: string, variant: string, metric: string, value: number) => {
     const { track } = useAnalytics();
-    track('experiment_metric', {
+    track('chart_interaction', {
       experimentName,
       variant,
       metric,

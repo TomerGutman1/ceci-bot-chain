@@ -316,11 +316,10 @@ export default function GovernmentComparisonChart({
                   <Bar
                     dataKey="totalDecisions"
                     name="סה״כ החלטות"
-                    fill={(entry) => entry.color}
                     radius={[4, 4, 0, 0]}
                   >
                     {chartData.map((entry, index) => (
-                      <Bar key={`bar-${index}`} fill={entry.color} />
+                      <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Bar>
                 </BarChart>

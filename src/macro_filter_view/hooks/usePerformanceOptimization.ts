@@ -90,8 +90,9 @@ export function useOptimizedDecisions(
 
       return response.json() as Promise<PaginatedResponse<DashboardDecision>>;
     }, 'fetch_decisions_paginated'),
-    getNextPageParam: (lastPage, allPages) => {
-      return lastPage.hasNextPage ? allPages.length : undefined;
+    initialPageParam: 0,
+    getNextPageParam: (lastPage: any, allPages) => {
+      return lastPage?.hasNextPage ? allPages.length : undefined;
     },
     staleTime: PERFORMANCE_CONFIG.STALE_TIME,
     gcTime: cacheTime,
@@ -101,11 +102,11 @@ export function useOptimizedDecisions(
 
   // Flatten all pages into a single array
   const allDecisions = useMemo(() => {
-    return query.data?.pages.flatMap(page => page.items) || [];
+    return query.data?.pages.flatMap((page: any) => page?.items || []) || [];
   }, [query.data]);
 
   // Total count from first page
-  const totalCount = query.data?.pages[0]?.totalCount || 0;
+  const totalCount = query.data?.pages?.[0]?.totalCount || 0;
 
   return {
     ...query,
