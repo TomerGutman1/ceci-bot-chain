@@ -2,6 +2,8 @@ import axios from 'axios';
 import logger from '../utils/logger';
 import { supabase } from '../dal/supabaseClient';
 import { getSQLQueryEngineServiceWrapper } from './sqlQueryEngineService';
+import httpClient, { getConnectionStats } from '../utils/httpClient';
+import { withRetry, CircuitBreaker } from '../utils/retryUtils';
 // DISABLED: import crypto from 'crypto';
 
 // Helper function to convert named parameters to positional parameters
@@ -180,6 +182,9 @@ class BotChainService {
     'gpt-3.5-turbo': { prompt: 0.0005, completion: 0.0015 },
     'gpt-3.5-turbo-16k': { prompt: 0.003, completion: 0.004 }
   };
+  
+  // Circuit breakers for each bot service
+  private circuitBreakers: Map<string, CircuitBreaker> = new Map();
 
   constructor() {
     // Feature flags for unified architecture
@@ -904,18 +909,60 @@ class BotChainService {
   private async callBot(url: string, endpoint: string, data: any, currentRequestTokens?: TokenUsage[], customTimeout?: number, requestId?: string): Promise<any> {
     const fullUrl = `${url}${endpoint}`;
     const callStartTime = Date.now();
+    
+    // Get or create circuit breaker for this bot
+    const botKey = `${url}_${endpoint}`;
+    if (!this.circuitBreakers.has(botKey)) {
+      this.circuitBreakers.set(botKey, new CircuitBreaker(
+        5,     // threshold: 5 failures
+        60000, // timeout: 1 minute
+        30000  // reset timeout: 30 seconds
+      ));
+    }
+    const circuitBreaker = this.circuitBreakers.get(botKey)!;
+    
     try {
       logger.info(`📡 Calling bot: ${fullUrl}`, { 
         requestId,
         endpoint,
         data,
-        timeout: customTimeout || this.config.timeout
-      });
-      const response = await axios.post(fullUrl, data, {
         timeout: customTimeout || this.config.timeout,
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        circuitBreakerState: circuitBreaker.getState()
+      });
+      
+      // Execute request with circuit breaker and retry logic
+      const response = await circuitBreaker.execute(async () => {
+        return await withRetry(
+          async () => {
+            // Log connection stats periodically
+            const stats = getConnectionStats();
+            if (Math.random() < 0.1) { // Log 10% of requests
+              logger.debug('Connection pool stats', stats);
+            }
+            
+            return await httpClient.post(fullUrl, data, {
+              timeout: customTimeout || this.config.timeout,
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Request-ID': requestId || ''
+              }
+            });
+          },
+          {
+            maxAttempts: 3,
+            initialDelay: 1000,
+            maxDelay: 5000,
+            backoffMultiplier: 2,
+            onRetry: (error, attempt) => {
+              logger.warn(`Retrying bot call to ${fullUrl}`, {
+                attempt,
+                error: error.message,
+                code: error.code,
+                requestId
+              });
+            }
+          }
+        );
       });
       
       const callElapsedTime = Date.now() - callStartTime;

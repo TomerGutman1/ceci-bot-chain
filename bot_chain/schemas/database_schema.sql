@@ -1,0 +1,1 @@
+-- Placeholder database schema
