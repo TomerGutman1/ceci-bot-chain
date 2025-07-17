@@ -1355,8 +1355,7 @@ class BotChainService {
         logger.info('🟡 SQL PARAMS EXTRACTED:', {
           sqlParams,
           parameters,
-          template_used,
-          isCountQueryDetected: isCountQuery
+          template_used
         });
         
         // NOTE: government_number is set correctly by SQL bot templates when needed
