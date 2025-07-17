@@ -901,19 +901,30 @@ class BotChainService {
   // תיקון לפונקציה callBot בקובץ botChainService.ts
 // מחליף את החלק שבודק token_usage
 
-  private async callBot(url: string, endpoint: string, data: any, currentRequestTokens?: TokenUsage[], customTimeout?: number): Promise<any> {
+  private async callBot(url: string, endpoint: string, data: any, currentRequestTokens?: TokenUsage[], customTimeout?: number, requestId?: string): Promise<any> {
     const fullUrl = `${url}${endpoint}`;
+    const callStartTime = Date.now();
     try {
-      logger.info(`Calling bot: ${fullUrl}`, { data });
+      logger.info(`📡 Calling bot: ${fullUrl}`, { 
+        requestId,
+        endpoint,
+        data,
+        timeout: customTimeout || this.config.timeout
+      });
       const response = await axios.post(fullUrl, data, {
         timeout: customTimeout || this.config.timeout,
         headers: {
           'Content-Type': 'application/json'
         }
       });
-      logger.info(`Bot response from ${fullUrl}`, { 
+      
+      const callElapsedTime = Date.now() - callStartTime;
+      logger.info(`✅ Bot response from ${fullUrl}`, { 
+        requestId,
         status: response.status,
-        data: response.data 
+        elapsedMs: callElapsedTime,
+        endpoint,
+        hasData: !!response.data
       });
       
       // Track token usage if available in response
@@ -983,12 +994,30 @@ class BotChainService {
       
       return response.data;
     } catch (error) {
-      logger.error(`Bot call failed: ${fullUrl}`, { 
-        error: error instanceof Error ? error.message : String(error), 
+      const isTimeout = (error as any).code === 'ECONNABORTED' || 
+                       (error as any).message?.includes('timeout') ||
+                       (error as any).code === 'ETIMEDOUT';
+      
+      const errorDetails = {
+        message: error instanceof Error ? error.message : String(error),
+        code: (error as any).code,
+        isTimeout,
+        timeout: customTimeout || this.config.timeout,
+        bot: endpoint.replace('/', '').toUpperCase(),
+        url: fullUrl,
         data,
         response: (error as any).response?.data,
         status: (error as any).response?.status
-      });
+      };
+      
+      if (isTimeout) {
+        logger.error(`⏱️ Bot call TIMEOUT: ${fullUrl}`, errorDetails);
+        // Add timeout-specific error message
+        throw new Error(`Bot timeout after ${(customTimeout || this.config.timeout) / 1000}s: ${endpoint}`);
+      } else {
+        logger.error(`Bot call failed: ${fullUrl}`, errorDetails);
+      }
+      
       throw error;
     }
   }
@@ -999,12 +1028,16 @@ class BotChainService {
     
     // Use consistent conversation ID throughout the entire bot chain
     const conversationId = request.sessionId || `temp_${Date.now()}`;
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     
     try {
-      logger.info('Processing query with bot chain', { 
+      logger.info('🚀 Starting bot chain processing', { 
+        requestId,
         sessionId: request.sessionId,
         conversationId: conversationId,
-        messageLength: request.message.length 
+        message: request.message,
+        messageLength: request.message.length,
+        timestamp: new Date().toISOString()
       });
       
       // Check response cache first (with safety checks for specific entities)
@@ -1034,7 +1067,7 @@ class BotChainService {
           raw_user_text: request.message,
           chat_history: [], // TODO: Add conversation history
           conv_id: conversationId
-        }, currentRequestTokens);
+        }, currentRequestTokens, undefined, requestId);
         
         logger.info('Unified intent response received', { 
           response: unifiedResponse,
@@ -1344,7 +1377,7 @@ class BotChainService {
       }
       
       // Call SQL generation bot
-      sqlResponse = await this.callBot(this.config.urls.sqlGen, '/sqlgen', sqlGenRequest, currentRequestTokens);
+      sqlResponse = await this.callBot(this.config.urls.sqlGen, '/sqlgen', sqlGenRequest, currentRequestTokens, undefined, requestId);
 
       // Log the SQL response for debugging
       logger.info('SQL bot response details', { 
@@ -1467,7 +1500,22 @@ class BotChainService {
                 paramValues: paramValues
               });
               
+              logger.info('🔄 Starting SQL query execution', {
+                requestId,
+                queryType: 'query_execution',
+                sql: convertedSql.substring(0, 100) + '...'
+              });
+              
+              const sqlStartTime = Date.now();
               const sqlResult = await sqlEngine.executeSQL(convertedSql, paramValues);
+              const sqlElapsedTime = Date.now() - sqlStartTime;
+              
+              logger.info('⏱️ SQL query execution completed', {
+                requestId,
+                elapsedMs: sqlElapsedTime,
+                success: sqlResult.success,
+                rowCount: sqlResult.rowCount
+              });
               
               if (sqlResult.success && sqlResult.data) {
                 // Enhanced SQL returns data in the correct format
@@ -1715,7 +1763,22 @@ class BotChainService {
                 paramValues: paramValues
               });
               
+              logger.info('🔄 Starting SQL query execution', {
+                requestId,
+                queryType: 'query_execution',
+                sql: convertedSql.substring(0, 100) + '...'
+              });
+              
+              const sqlStartTime = Date.now();
               const sqlResult = await sqlEngine.executeSQL(convertedSql, paramValues);
+              const sqlElapsedTime = Date.now() - sqlStartTime;
+              
+              logger.info('⏱️ SQL query execution completed', {
+                requestId,
+                elapsedMs: sqlElapsedTime,
+                success: sqlResult.success,
+                rowCount: sqlResult.rowCount
+              });
               
               if (sqlResult.success && sqlResult.data) {
                 // Enhanced SQL returns data in the correct format
