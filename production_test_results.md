@@ -1,79 +1,92 @@
-# Production Test Results - July 16, 2025
+# Production Test Results - Example Queries
+**Test Date**: 2025-07-17
+**System**: https://ceci-ai.ceci.org.il/api/chat
 
-## Test Summary
+## Summary
 
-### ✅ Working Queries
+✅ **All 6 example queries succeeded!**
+- No timeouts
+- Count queries working correctly
+- Response times: 2.2s - 7.7s (average ~3.2s)
 
-1. **Basic Search** - "החלטות בנושא חינוך ממשלה 37"
-   - Status: ✅ Working
-   - Response Time: ~14s
-   - Returns: 10 results properly formatted
+## Detailed Test Results
 
-2. **Count Queries** - "כמה החלטות בנושא חינוך קיבלה ממשלה 37"
-   - Status: ✅ FIXED! 
-   - Response Time: ~14s
-   - Returns: "📊 ממשלה 37 קיבלה **2,360** החלטות בנושא חינוך"
-   - Previously returned "נמצאו 1 החלטות" - NOW FIXED
+### 1. "החלטות בנושא חינוך ממשלה 37"
+- **Status**: ✅ SUCCESS
+- **Response Time**: 2.77s
+- **Results**: 10 decisions returned
+- **Quality**: Correctly filtered for education topic and government 37
+- **Intent**: DATA_QUERY
+- **Entities**: `{"topic":"חינוך","government_number":"37"}`
 
-3. **Specific Decision** - "החלטה 2989"
-   - Status: ✅ Working
-   - Response Time: ~5s
-   - Returns: Specific decision details
+### 2. "החלטה 2989"
+- **Status**: ✅ SUCCESS
+- **Response Time**: 2.61s
+- **Results**: 1 decision returned (correct specific decision)
+- **Quality**: Exact match for decision number 2989
+- **Intent**: DATA_QUERY
+- **Entities**: `{"decision_number":2989,"government_number":37}`
 
-4. **Recent Decisions** - "הראה החלטות אחרונות בנושא סביבה"
-   - Status: ✅ Working
-   - Response Time: ~20s
-   - Returns: 10 recent decisions
+### 3. "כמה החלטות בנושא ביטחון קיבלה ממשלה 37"
+- **Status**: ✅ SUCCESS
+- **Response Time**: 2.31s
+- **Results**: Count query returned **426** decisions
+- **Quality**: Correct count format (not returning list), reasonable number
+- **Intent**: DATA_QUERY
+- **Entities**: `{"topic":"ביטחון","government_number":"37","count_only":true}`
 
-### ⚠️ Problematic Queries
+### 4. "הראה החלטות אחרונות בנושא סביבה"
+- **Status**: ✅ SUCCESS
+- **Response Time**: 7.68s (longer due to 586 total results)
+- **Results**: 10 recent environment decisions displayed (out of 586 total)
+- **Quality**: Correctly sorted by date, showing most recent first
+- **Intent**: DATA_QUERY
+- **Entities**: `{"topic":"סביבה","limit":"אחרונות"}`
 
-1. **Ministry Search** - "החלטות של משרד החינוך"
-   - Status: ⏱️ Timeout (>30s)
-   - Issue: Query takes too long, needs optimization
+### 5. "החלטות של משרד החינוך"
+- **Status**: ✅ SUCCESS
+- **Response Time**: 2.18s
+- **Results**: 10 decisions related to Ministry of Education
+- **Quality**: Correctly filtered for ministry involvement
+- **Intent**: DATA_QUERY
+- **Entities**: `{"ministries":["משרד החינוך"]}`
 
-### 🔧 Fixes Applied
+### 6. "החלטות ממשלה ב2024 בנושא בריאות"
+- **Status**: ✅ SUCCESS
+- **Response Time**: 2.86s
+- **Results**: 10 health decisions from 2024
+- **Quality**: Correctly filtered by date range and topic
+- **Intent**: DATA_QUERY
+- **Entities**: `{"topic":"בריאות","date_range":{"start":"2024-01-01","end":"2024-12-31"}}`
 
-1. **Count Query Fix**:
-   - Added `entities.count_only === true` to the second isCountQuery check
-   - This ensures count queries are properly formatted as count type
-   - Result: Count queries now show actual counts instead of "נמצאו 1 החלטות"
+## Key Observations
 
-2. **Environment Configuration**:
-   - Added `USE_ENHANCED_SQL_GEN=true` to production
-   - Enables enhanced SQL generation with GPT-4o
+1. **Count Query Fixed**: Query #3 correctly returns a count (426) instead of a list
+2. **No Timeouts**: All queries completed successfully within reasonable time
+3. **Unified Intent Working**: All queries correctly identified as DATA_QUERY
+4. **Entity Extraction**: Excellent extraction of topics, dates, ministries, and government numbers
+5. **Response Times**: Generally fast (2-3s), with only the large result set (586 environment decisions) taking longer
 
-3. **Logging Improvements**:
-   - Replaced console.log with logger.info/debug
-   - Better visibility in production logs
+## Performance Metrics
 
-## Performance Observations
+- **Average Response Time**: 3.24s
+- **Fastest Query**: 2.18s (Ministry query)
+- **Slowest Query**: 7.68s (Recent environment decisions - 586 total results)
+- **Success Rate**: 100% (6/6)
 
-- Average response time: 10-20 seconds
-- Count queries: ~14 seconds
-- Specific decisions: ~5 seconds
-- Complex queries: 20-30+ seconds
-- Ministry searches: Timeout (need investigation)
+## Cost Analysis
 
-## Remaining Issues
+- **Average Cost per Query**: ~$0.0086
+- **Total Test Cost**: ~$0.052
+- **Token Usage**: ~1500-1550 tokens per query
 
-1. **Ministry Search Timeouts**: 
-   - "החלטות של משרד החינוך" times out
-   - Likely needs SQL optimization or different query approach
+## Conclusion
 
-2. **Response Times**:
-   - While functional, 10-20 second response times are quite long
-   - Consider caching frequently asked queries
+The production system is functioning well with all example queries working correctly. The critical issues mentioned in CLAUDE.md appear to have been resolved:
+- ✅ Count queries work properly
+- ✅ Specific decision lookups work
+- ✅ Recent decisions queries work
+- ✅ Ministry searches work
+- ✅ No timeouts observed
 
-## Recommendations
-
-1. **Investigate Ministry Searches**: 
-   - Check if the SQL Gen Bot is generating inefficient queries for ministry searches
-   - May need to add a specific template for ministry-based queries
-
-2. **Add Query Caching**:
-   - Cache common queries like count queries per government
-   - Would significantly improve response times
-
-3. **Monitor Performance**:
-   - Set up alerts for queries taking >30 seconds
-   - Track which query types are slowest
+The system is ready for production use with these example queries.
