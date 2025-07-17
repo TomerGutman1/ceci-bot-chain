@@ -221,8 +221,16 @@ class BotChainService {
 
     logger.info('BotChainService initialized', { 
       urls: this.config.urls,
-      enabled: this.config.enabled 
+      enabled: this.config.enabled,
+      useUnifiedIntent: this.useUnifiedIntent,
+      useLLMFormatter: this.useLLMFormatter
     });
+    
+    // Periodically log circuit breaker states and connection pool stats (every 5 minutes)
+    setInterval(() => {
+      this.logCircuitBreakerStates();
+      this.logConnectionPoolStats();
+    }, 300000);
 
     // Start cache cleanup interval
     setInterval(() => this.cleanupCache(), 300000); // Cleanup every 5 minutes
@@ -937,7 +945,11 @@ class BotChainService {
             // Log connection stats periodically
             const stats = getConnectionStats();
             if (Math.random() < 0.1) { // Log 10% of requests
-              logger.debug('Connection pool stats', stats);
+              logger.info('Connection pool stats', {
+                requestId,
+                ...stats,
+                timestamp: new Date().toISOString()
+              });
             }
             
             return await httpClient.post(fullUrl, data, {
@@ -958,7 +970,9 @@ class BotChainService {
                 attempt,
                 error: error.message,
                 code: error.code,
-                requestId
+                requestId,
+                circuitBreakerState: circuitBreaker.getState(),
+                bot: endpoint.replace('/', '').toUpperCase()
               });
             }
           }
@@ -2373,6 +2387,30 @@ class BotChainService {
       responseCacheSize: this.responseCache.size,
       intentPatternCacheSize: this.intentPatternCache.size
     };
+  }
+  
+  private logCircuitBreakerStates(): void {
+    const states: Record<string, any> = {};
+    this.circuitBreakers.forEach((breaker, key) => {
+      states[key] = breaker.getState();
+    });
+    
+    logger.info('Circuit breaker states', {
+      timestamp: new Date().toISOString(),
+      circuitBreakers: states,
+      totalBreakers: this.circuitBreakers.size
+    });
+  }
+  
+  private logConnectionPoolStats(): void {
+    const stats = getConnectionStats();
+    logger.info('Connection pool statistics', {
+      timestamp: new Date().toISOString(),
+      ...stats,
+      totalConnections: stats.http.totalSockets + stats.https.totalSockets,
+      totalFreeConnections: stats.http.freeSockets + stats.https.freeSockets,
+      totalPendingRequests: stats.http.requests + stats.https.requests
+    });
   }
 }
 
