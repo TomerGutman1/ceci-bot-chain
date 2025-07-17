@@ -1011,10 +1011,12 @@ class BotChainService {
       };
       
       if (isTimeout) {
+        console.error(`⏱️ Bot call TIMEOUT: ${fullUrl}`, JSON.stringify(errorDetails));
         logger.error(`⏱️ Bot call TIMEOUT: ${fullUrl}`, errorDetails);
         // Add timeout-specific error message
         throw new Error(`Bot timeout after ${(customTimeout || this.config.timeout) / 1000}s: ${endpoint}`);
       } else {
+        console.error(`❌ Bot call failed: ${fullUrl}`, JSON.stringify(errorDetails));
         logger.error(`Bot call failed: ${fullUrl}`, errorDetails);
       }
       
@@ -1031,6 +1033,16 @@ class BotChainService {
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     
     try {
+      // Use console.error for production visibility
+      console.error('🚀 Starting bot chain processing', JSON.stringify({ 
+        requestId,
+        sessionId: request.sessionId,
+        conversationId: conversationId,
+        message: request.message,
+        messageLength: request.message.length,
+        timestamp: new Date().toISOString()
+      }));
+      
       logger.info('🚀 Starting bot chain processing', { 
         requestId,
         sessionId: request.sessionId,
