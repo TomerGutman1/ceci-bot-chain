@@ -29,8 +29,9 @@ export class QueryExecutor {
 
   async execute(sql: string, params: any[] = []): Promise<ExecutionResult> {
     const startTime = Date.now();
-    console.log('[QueryExecutor] Executing SQL:', sql);
-    console.log('[QueryExecutor] With params:', params);
+    // Use console.error for production logging (not suppressed)
+    console.error('[QueryExecutor] Executing SQL:', sql);
+    console.error('[QueryExecutor] With params:', params);
     
     try {
       // First try to use RPC function if available
@@ -55,7 +56,7 @@ export class QueryExecutor {
         const result = await this.executeWithQueryBuilder(sql, params);
         
         const executionTime = Date.now() - startTime;
-        console.log(`[QueryExecutor] Query executed in ${executionTime}ms`);
+        console.error(`[QueryExecutor] Query executed in ${executionTime}ms`);
         
         return {
           success: true,
@@ -76,7 +77,7 @@ export class QueryExecutor {
   }
 
   private async executeWithRPC(sql: string, params: any[]): Promise<any> {
-    console.log('[QueryExecutor] Executing via RPC function');
+    console.error('[QueryExecutor] Executing via RPC function');
     
     // Clean SQL - remove extra whitespace and newlines
     const cleanSQL = sql.trim().replace(/\s+/g, ' ');
@@ -94,7 +95,7 @@ export class QueryExecutor {
       }
     });
     
-    console.log('[QueryExecutor] Cleaned SQL:', finalSQL);
+    console.error('[QueryExecutor] Cleaned SQL:', finalSQL);
     
     const { data, error } = await this.supabase.rpc('execute_simple_sql', {
       query_text: finalSQL

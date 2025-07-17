@@ -58,10 +58,12 @@ const ChatInterface = ({ externalMessage, externalEditMessage }: ChatInterfacePr
       // Get response from backend
       const response = await chatService.sendMessage(text);
       
+      console.log('Chat response received:', response?.length || 0, 'characters');
+      
       // Add assistant response
       setMessages((prev) => [...prev, {
         role: "assistant",
-        content: response,
+        content: response || "לא התקבלה תשובה מהשרת",
         timestamp: new Date(),
       }]);
     } catch (error) {

@@ -6,7 +6,7 @@ import sys
 import json
 import asyncio
 import sqlparse
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 from uuid import uuid4
 
@@ -162,6 +162,15 @@ If entities contain "count_only": true or intent suggests counting:
   "query_type": "count"
 }}
 
+### Example 1b: Count Query with Government Filter
+IMPORTANT: When counting with government_number, ALWAYS include it in WHERE clause:
+{{
+  "sql": "SELECT COUNT(*) as count FROM israeli_government_decisions WHERE tags_policy_area ILIKE '%%ביטחון%%' AND government_number = %(government_number)s",
+  "parameters": {{"government_number": "37"}},
+  "query_type": "count",
+  "description": "ספירת החלטות בנושא ביטחון של ממשלה 37"
+}}
+
 ### Example 2: Fetch/List Query with Synonyms
 For topic queries, expand synonyms AND search in multiple fields:
 {{
@@ -188,7 +197,16 @@ When only decision_number is specified (e.g. "החלטה 2989"), search for EXAC
 }}
 IMPORTANT: For specific decision queries, use EXACT match (=) not similarity or LIKE. Do NOT return similar numbers.
 
-### Example 5: Topic Search in Content (not in standard tags)
+### Example 5: Ministry Search Query
+For ministry queries, search in tags_government_body:
+{{
+  "sql": "SELECT id, government_number, decision_number, decision_date, decision_title, summary, tags_policy_area, tags_government_body, decision_url FROM israeli_government_decisions WHERE tags_government_body ILIKE '%%משרד החינוך%%' ORDER BY decision_date DESC LIMIT %(limit)s",
+  "parameters": {{"limit": 20}},
+  "query_type": "list",
+  "description": "החלטות של משרד החינוך"
+}}
+
+### Example 6: Topic Search in Content (not in standard tags)
 For topics like "ענן הממשלתי", "מחשוב ענן", "תשתיות דיגיטליות" that might not be in tags:
 {{
   "sql": "SELECT id, government_number, decision_number, decision_date, decision_title, summary, tags_policy_area, tags_government_body, decision_url FROM israeli_government_decisions WHERE (decision_title ILIKE '%%ענן%%' OR summary ILIKE '%%ענן%%' OR decision_content ILIKE '%%ענן%%' OR all_tags ILIKE '%%ענן%%') ORDER BY decision_date DESC LIMIT %(limit)s",
@@ -223,6 +241,9 @@ CRITICAL RULES:
 6. Do NOT return decisions with similar numbers (2998, 2996, etc.) when an exact number is requested
 7. For topic searches: ALWAYS search in multiple fields (tags_policy_area, all_tags, decision_title, summary, decision_content)
 8. If a topic is not in the standard synonym mapping, still search for it in title, summary and content fields
+9. COUNT queries must ONLY return COUNT(*) as count - no other fields
+10. When count_only=true AND government_number exists, ALWAYS filter by government_number
+11. For "כמה החלטות בנושא X קיבלה ממשלה Y", generate: SELECT COUNT(*) as count WHERE topic AND government_number = Y
 """
 
 
@@ -399,8 +420,29 @@ async def generate_enhanced_sql(intent: str, entities: Dict[str, Any], use_enhan
         if "validation_notes" in result:
             validation_warnings.extend(result["validation_notes"])
         
+        # Validate count queries
+        sql = result["sql"]
+        is_valid, error_msg = validate_count_query(sql, entities, query_type)
+        if not is_valid:
+            validation_warnings.append(f"SQL validation error: {error_msg}")
+            confidence_score *= 0.7
+            logger.warning(f"Count query validation failed: {error_msg}", extra={
+                "sql": sql,
+                "entities": entities,
+                "query_type": query_type
+            })
+        
+        # Log the generated SQL for debugging
+        logger.info("Enhanced SQL generated", extra={
+            "sql": sql,
+            "parameters": result.get("parameters", {}),
+            "query_type": query_type,
+            "token_usage": gpt_response["usage"],
+            "validation_passed": is_valid
+        })
+        
         return {
-            "sql": result["sql"],
+            "sql": sql,
             "parameters": result.get("parameters", {}),
             "query_type": query_type,
             "synonym_expansions": synonym_expansions,
@@ -671,6 +713,169 @@ def validate_sql_syntax(sql: str) -> bool:
         return False
 
 
+def validate_count_query(sql: str, entities: Dict[str, Any], query_type: str) -> Tuple[bool, str]:
+    """
+    Validate that count queries are properly formatted.
+    Returns (is_valid, error_message)
+    """
+    sql_lower = sql.lower().strip()
+    
+    # If it's marked as a count query or has count_only flag
+    if query_type == "count" or entities.get("count_only", False):
+        # Must have COUNT(*) in the SELECT clause
+        if "count(*)" not in sql_lower:
+            return False, "Count query must use COUNT(*)"
+        
+        # Should not select other columns (except for aliased count)
+        select_part = sql_lower.split("from")[0].replace("select", "").strip()
+        # Remove COUNT(*) as count or COUNT(*)
+        select_clean = select_part.replace("count(*) as count", "").replace("count(*)", "").strip()
+        if select_clean and select_clean != ",":
+            return False, "Count query should only select COUNT(*)"
+        
+        # If government_number is in entities, ensure it's in WHERE clause
+        if entities.get("government_number"):
+            if "government_number" not in sql_lower:
+                return False, "Count query with government filter must include government_number in WHERE clause"
+        
+        # If topic is in entities, ensure some filtering is applied
+        if entities.get("topic") or entities.get("expanded_topics"):
+            if "where" not in sql_lower:
+                return False, "Count query with topic filter must have WHERE clause"
+            
+            # Check for topic-related filtering
+            topic_found = False
+            for field in ["tags_policy_area", "decision_content", "title", "summary"]:
+                if field in sql_lower:
+                    topic_found = True
+                    break
+            if not topic_found:
+                return False, "Count query with topic must filter on policy area or content fields"
+    
+    # For non-count queries, ensure they don't have COUNT(*)
+    elif "count(*)" in sql_lower and "count" not in query_type.lower():
+        return False, "Non-count query should not use COUNT(*)"
+    
+    return True, ""
+
+
+def should_use_template(intent: str, entities: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    Determine if a query should use template-based SQL generation.
+    Returns (should_use_template, reason)
+    
+    Templates are preferred for:
+    1. Simple, well-defined queries
+    2. Queries that match exact template patterns
+    3. Performance-critical queries
+    """
+    # Always use templates for these simple cases
+    if entities.get("count_only") and entities.get("government_number") and entities.get("topic"):
+        # Count with government and topic - template is reliable
+        return True, "Simple count query with filters"
+    
+    if entities.get("decision_number") and not entities.get("topic"):
+        # Single decision lookup - template is perfect
+        return True, "Single decision lookup"
+    
+    # Check if we have a complex date interpretation
+    if entities.get("relative_date") or entities.get("date_context"):
+        # Complex date queries benefit from GPT
+        return False, "Complex date interpretation needed"
+    
+    # Check for typos or non-standard terms
+    topic = entities.get("topic", "")
+    if topic:
+        # Common typos that need GPT correction
+        typo_indicators = ["חנוך", "בראות", "תיחבורה", "בטחון"]
+        for typo in typo_indicators:
+            if typo in topic:
+                return False, f"Typo correction needed: {typo}"
+    
+    # Check for ministry queries
+    if entities.get("ministries"):
+        # Ministry queries often need synonym expansion
+        return False, "Ministry query needs synonym expansion"
+    
+    # Check for complex filtering
+    complex_filters = 0
+    for field in ["topic", "government_number", "committee_id", "policy_area", "date_range"]:
+        if entities.get(field):
+            complex_filters += 1
+    
+    if complex_filters >= 3:
+        # Too many filters, GPT can optimize better
+        return False, "Complex multi-filter query"
+    
+    # Default: try template first
+    return True, "Default to template for efficiency"
+
+
+async def generate_hybrid_sql(intent: str, entities: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Generate SQL using hybrid approach: template first, then enhanced if needed.
+    """
+    validation_warnings = []
+    
+    # Step 1: Decide whether to use template
+    use_template, reason = should_use_template(intent, entities)
+    
+    logger.info(f"Hybrid SQL decision: {'template' if use_template else 'enhanced'}", extra={
+        "reason": reason,
+        "intent": intent,
+        "entities": entities
+    })
+    
+    # Step 2: Try template approach first if recommended
+    if use_template:
+        template_result = generate_sql_from_template(intent, entities)
+        if template_result:
+            # Template succeeded
+            query_type = detect_query_type(intent, entities)
+            
+            # Validate count queries even from templates
+            is_valid, error_msg = validate_count_query(
+                template_result["sql"], 
+                entities, 
+                query_type
+            )
+            
+            if is_valid:
+                logger.info("Template SQL validated successfully", extra={
+                    "sql": template_result["sql"],
+                    "parameters": template_result["parameters"],
+                    "template": template_result["template_used"],
+                    "query_type": query_type,
+                    "hybrid_reason": reason
+                })
+                
+                return {
+                    "sql": template_result["sql"],
+                    "parameters": template_result["parameters"],
+                    "query_type": query_type,
+                    "synonym_expansions": {},
+                    "date_interpretations": {},
+                    "validation_warnings": validation_warnings,
+                    "confidence_score": 0.95,  # High confidence for validated templates
+                    "template_used": template_result["template_used"],
+                    "method": "hybrid_template",
+                    "hybrid_reason": reason
+                }
+            else:
+                validation_warnings.append(f"Template validation failed: {error_msg}")
+                logger.warning(f"Template SQL failed validation, falling back to enhanced", extra={
+                    "template": template_result["template_used"],
+                    "error": error_msg
+                })
+    
+    # Step 3: Fall back to enhanced generation
+    result = await generate_enhanced_sql(intent, entities, use_enhanced=True)
+    result["method"] = "hybrid_enhanced"
+    result["hybrid_reason"] = f"Fallback from: {reason}"
+    
+    return result
+
+
 @app.post("/sqlgen", response_model=SQLGenResponse)
 async def generate_sql(request: SQLGenRequest) -> SQLGenResponse:
     """Generate SQL query from intent and entities."""
@@ -694,12 +899,12 @@ async def generate_sql(request: SQLGenRequest) -> SQLGenResponse:
         )
         
         if use_enhanced:
-            # Use new enhanced SQL generation
-            logger.info("Using enhanced SQL generation", extra={
+            # Use hybrid SQL generation (template first, then enhanced)
+            logger.info("Using hybrid SQL generation", extra={
                 "conv_id": request.conv_id
             })
             
-            result = await generate_enhanced_sql(request.intent, enhanced_entities)
+            result = await generate_hybrid_sql(request.intent, enhanced_entities)
             
             sql_query = result["sql"]
             params = result["parameters"]
@@ -829,9 +1034,12 @@ async def generate_sql(request: SQLGenRequest) -> SQLGenResponse:
         logger.info(f"SQL generation completed", extra={
             "conv_id": request.conv_id,
             "duration_ms": duration_ms,
-            "method": "enhanced" if use_enhanced else ("template" if template_used else "gpt"),
+            "method": result.get("method", "enhanced") if use_enhanced else ("template" if template_used else "gpt"),
             "parameter_count": len(parameters),
-            "query_type": response.query_type if use_enhanced else "unknown"
+            "query_type": response.query_type if use_enhanced else "unknown",
+            "sql_query": sql_query[:200] + "..." if len(sql_query) > 200 else sql_query,
+            "validation_passed": response.validation_passed,
+            "confidence_score": response.confidence_score if hasattr(response, 'confidence_score') else None
         })
         
         return response

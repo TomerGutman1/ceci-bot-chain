@@ -1,7 +1,44 @@
 import axios from 'axios';
 import logger from '../utils/logger';
 import { supabase } from '../dal/supabaseClient';
+import { getSQLQueryEngineServiceWrapper } from './sqlQueryEngineService';
 // DISABLED: import crypto from 'crypto';
+
+// Helper function to convert named parameters to positional parameters
+function convertNamedToPositionalParams(sql: string, namedParams: any[]): { sql: string; values: any[] } {
+  let convertedSql = sql;
+  const values: any[] = [];
+  const paramMap = new Map<string, number>();
+  
+  // First, build a map of parameter names to their values
+  const paramsByName: Record<string, any> = {};
+  namedParams.forEach((param: any) => {
+    paramsByName[param.name] = param.value;
+  });
+  
+  // Find all named parameters in the SQL
+  const namedParamRegex = /%\((\w+)\)s/g;
+  let match;
+  let paramIndex = 1;
+  
+  while ((match = namedParamRegex.exec(sql)) !== null) {
+    const paramName = match[1];
+    
+    if (!paramMap.has(paramName)) {
+      paramMap.set(paramName, paramIndex);
+      values.push(paramsByName[paramName]);
+      paramIndex++;
+    }
+  }
+  
+  // Replace named parameters with positional parameters
+  paramMap.forEach((index, name) => {
+    const regex = new RegExp(`%\\(${name}\\)s`, 'g');
+    convertedSql = convertedSql.replace(regex, `$${index}`);
+  });
+  
+  return { sql: convertedSql, values };
+}
 
 interface BotChainConfig {
   timeout: number;
@@ -120,6 +157,7 @@ interface IntentPatternCache {
   last_used: number;
   usage_count: number;
 }
+
 
 class BotChainService {
   private config: BotChainConfig;
@@ -1329,22 +1367,32 @@ class BotChainService {
       }
       
       // FORCE ERROR TO TEST IF CODE IS RUNNING
-      console.log('🔥🔥🔥 CODE IS RUNNING - ABOUT TO PROCESS SQL RESPONSE 🔥🔥🔥');
+      logger.info('🔥🔥🔥 CODE IS RUNNING - ABOUT TO PROCESS SQL RESPONSE 🔥🔥🔥');
 
-      // const sql = sqlResponse.sql_query; // Not used after removing evaluator
+      const sql = sqlResponse.sql_query;
       const template_used = sqlResponse.template_used;
       const parameters = sqlResponse.parameters || [];
+      
+      // Log the SQL query for debugging
+      logger.info('🔵 SQL QUERY GENERATED:', { sql });
+      logger.info('🔵 SQL TEMPLATE USED:', { template_used });
       
       // Execute the SQL query
       let results: any[] = [];
       // Check for requested limit in entities
       const requestedLimit = entities.limit || 10;
       try {
-        console.log('🚨 ENTERING SQL EXECUTION BLOCK - THIS SHOULD ALWAYS SHOW!');
+        logger.info('🚨 ENTERING SQL EXECUTION BLOCK');
         // Convert parameters from array to object for easier access
         const sqlParams: Record<string, any> = {};
         parameters.forEach((param: any) => {
           sqlParams[param.name] = param.value;
+        });
+        
+        logger.info('🟡 SQL PARAMS EXTRACTED:', {
+          sqlParams,
+          parameters,
+          template_used
         });
         
         // NOTE: government_number is set correctly by SQL bot templates when needed
@@ -1361,35 +1409,85 @@ class BotChainService {
         });
         
         // EXPLICIT DEBUG FOR GOVERNMENT PARAMETER
-        console.log('🔥 SQLPARAMS DETAILED DEBUG:');
-        console.log('  - sqlParams =', JSON.stringify(sqlParams, null, 2));
-        console.log('  - sqlParams.government_number =', sqlParams.government_number);
-        console.log('  - typeof sqlParams.government_number =', typeof sqlParams.government_number);
-        console.log('  - Boolean(sqlParams.government_number) =', Boolean(sqlParams.government_number));
-        console.log('  - Original parameters array =', JSON.stringify(parameters, null, 2));
-        console.log('  - Template used =', template_used);
-        console.log('  - Intent =', intent);
+        logger.debug('🔥 SQLPARAMS DETAILED DEBUG:', {
+          sqlParams,
+          government_number: sqlParams.government_number,
+          government_number_type: typeof sqlParams.government_number,
+          government_number_boolean: Boolean(sqlParams.government_number),
+          original_parameters: parameters,
+          template_used,
+          intent
+        });
         
         // SPECIAL HANDLING FOR COUNT QUERIES
-        console.log('🔴 COUNT QUERY DETECTION DEBUG:');
-        console.log('  - template_used:', template_used);
-        console.log('  - template_used includes count_:', template_used && template_used.includes('count_'));
-        console.log('  - entities.operation:', entities.operation);
-        console.log('  - intent:', intent);
+        logger.debug('🔴 COUNT QUERY DETECTION DEBUG:', {
+          template_used,
+          template_includes_count: template_used && template_used.includes('count_'),
+          entities_operation: entities.operation,
+          entities_count_only: entities.count_only,
+          intent,
+          sql_query_type: sqlResponse && sqlResponse.query_type
+        });
         
         const isCountQuery = template_used && (
           template_used.includes('count_') ||
           template_used === 'compare_governments'
-        ) || (entities.operation === 'count' || intent === 'count');
+        ) || (entities.operation === 'count' || intent === 'count') || 
+        (sqlResponse && sqlResponse.query_type === 'count') ||
+        (entities.count_only === true);
         
-        console.log('  - isCountQuery result:', isCountQuery);
+        logger.debug('🔴 COUNT QUERY DETECTION RESULT:', { 
+          isCountQuery,
+          sqlResponse
+        });
         
         if (isCountQuery) {
           logger.info('Processing COUNT query with special handling', { template_used, intent });
-          console.log('✅ ENTERING COUNT QUERY HANDLING BLOCK');
+          logger.info('✅ ENTERING COUNT QUERY HANDLING BLOCK');
           
-          // For count queries, we need to execute actual counting logic
-          if (template_used === 'count_decisions_by_topic') {
+          // Check if this is an enhanced SQL query (no template used, but has SQL)
+          const isEnhancedSQL = !template_used && sqlResponse?.sql_query && sqlResponse?.query_type === 'count';
+          
+          if (isEnhancedSQL) {
+            // Execute the actual SQL query generated by enhanced SQL bot
+            logger.info('🚀 Executing enhanced SQL COUNT query', { 
+              sql: sql,
+              parameters: parameters 
+            });
+            
+            try {
+              const sqlEngine = getSQLQueryEngineServiceWrapper();
+              
+              // Convert named parameters to positional parameters
+              const { sql: convertedSql, values: paramValues } = convertNamedToPositionalParams(sql, parameters);
+              
+              logger.info('📝 Converted SQL for execution', {
+                originalSql: sql,
+                convertedSql: convertedSql,
+                paramValues: paramValues
+              });
+              
+              const sqlResult = await sqlEngine.executeSQL(convertedSql, paramValues);
+              
+              if (sqlResult.success && sqlResult.data) {
+                // Enhanced SQL returns data in the correct format
+                results = Array.isArray(sqlResult.data) ? sqlResult.data : [sqlResult.data];
+                logger.info('✅ Enhanced SQL COUNT query executed successfully', { 
+                  resultCount: results.length,
+                  results: results
+                });
+              } else {
+                logger.error('Enhanced SQL COUNT query failed', { 
+                  error: sqlResult.error,
+                  sql: sql
+                });
+                results = [];
+              }
+            } catch (error) {
+              logger.error('Failed to execute enhanced SQL COUNT query', { error, sql });
+              results = [];
+            }
+          } else if (template_used === 'count_decisions_by_topic') {
             // Execute count by topic
             let countQuery = supabase
               .from('israeli_government_decisions')
@@ -1418,7 +1516,13 @@ class BotChainService {
                 decision_count: count || 0,
                 count: count || 0  // Formatter expects 'count' field
               }];
-              logger.info('Count query completed', { count, sqlParams });
+              logger.info('🔴 COUNT DECISIONS BY TOPIC:', { 
+                count, 
+                sqlParams,
+                topic: sqlParams.topic,
+                government: sqlParams.government_number,
+                template: template_used
+              });
             }
           } else if (template_used === 'count_decisions_by_government') {
             // Execute count by government
@@ -1571,18 +1675,71 @@ class BotChainService {
                 count: count || 0,
                 decision_count: count || 0
               }];
-              logger.info('Generic count query completed', { count, sqlParams });
+              logger.info('🔴 GENERIC COUNT QUERY:', { 
+                count, 
+                sqlParams,
+                topic: sqlParams.topic,
+                government: sqlParams.government_number,
+                hasGovernmentFilter: !!sqlParams.government_number,
+                hasTopicFilter: !!sqlParams.topic,
+                template: template_used || 'NO_TEMPLATE'
+              });
+              logger.info('🔵 COUNT QUERY RESULTS:', { results });
             }
           }
         } else {
           // REGULAR SEARCH QUERIES - existing logic
-          console.log('❌ NOT A COUNT QUERY - ENTERING REGULAR SEARCH BLOCK');
+          logger.info('❌ NOT A COUNT QUERY - ENTERING REGULAR SEARCH BLOCK');
           logger.info('Processing regular search query');
           
-          // Build Supabase query based on SQL parameters (not entities)
-          let query = supabase
-            .from('israeli_government_decisions')
-            .select('*');
+          // Check if this is an enhanced SQL query (no template used, but has SQL)
+          const isEnhancedSQL = !template_used && sqlResponse?.sql_query;
+          
+          if (isEnhancedSQL) {
+            // Execute the actual SQL query generated by enhanced SQL bot
+            logger.info('🚀 Executing enhanced SQL query', { 
+              sql: sql,
+              parameters: parameters,
+              query_type: sqlResponse?.query_type
+            });
+            
+            try {
+              const sqlEngine = getSQLQueryEngineServiceWrapper();
+              
+              // Convert named parameters to positional parameters
+              const { sql: convertedSql, values: paramValues } = convertNamedToPositionalParams(sql, parameters);
+              
+              logger.info('📝 Converted SQL for execution', {
+                originalSql: sql,
+                convertedSql: convertedSql,
+                paramValues: paramValues
+              });
+              
+              const sqlResult = await sqlEngine.executeSQL(convertedSql, paramValues);
+              
+              if (sqlResult.success && sqlResult.data) {
+                // Enhanced SQL returns data in the correct format
+                results = Array.isArray(sqlResult.data) ? sqlResult.data : [sqlResult.data];
+                logger.info('✅ Enhanced SQL query executed successfully', { 
+                  resultCount: results.length
+                });
+              } else {
+                logger.error('Enhanced SQL query failed', { 
+                  error: sqlResult.error,
+                  sql: sql
+                });
+                results = [];
+              }
+            } catch (error) {
+              logger.error('Failed to execute enhanced SQL query', { error, sql });
+              results = [];
+            }
+          } else {
+            // Use template-based query building
+            // Build Supabase query based on SQL parameters (not entities)
+            let query = supabase
+              .from('israeli_government_decisions')
+              .select('*');
         
         // Government number filter: ALWAYS use SQL params when available (SQL bot handles government 37 default)
         if (sqlParams.government_number) {
@@ -1665,6 +1822,7 @@ class BotChainService {
               requestedLimit
             });
           }
+          } // End of else block for template-based queries
         } // End of else block for regular search queries
         
         // Special handling for decision number not found
@@ -1910,7 +2068,9 @@ class BotChainService {
       const isCountQuery = template_used && (
         template_used.includes('count_') ||
         template_used === 'compare_governments'
-      ) || (entities.operation === 'count');
+      ) || (entities.operation === 'count') || 
+      (sqlResponse && sqlResponse.query_type === 'count') ||
+      (entities.count_only === true);
       
       // Check if user requested full content
       const isFullContentRequest = entities.full_content === true;
@@ -1947,7 +2107,14 @@ class BotChainService {
         
         if (isCountQuery) {
           dataType = 'count';
-          content = mappedResults[0] || { count: 0 };
+          // Extract count from the first result, ensuring proper format
+          const countResult = mappedResults[0] || {};
+          content = { 
+            count: countResult.count || countResult.decision_count || 0,
+            topic: countResult.topic,
+            government_number: countResult.government_number,
+            year: countResult.year
+          };
         } else if (intent === 'EVAL' || intent === 'ANALYSIS') {
           dataType = 'analysis';
           content = {
