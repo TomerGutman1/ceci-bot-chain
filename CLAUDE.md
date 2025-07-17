@@ -1,6 +1,6 @@
 # 🧠 CLAUDE MAIN MEMORY – CECI Bot Chain
 
-<small>Last updated: **17 Jul 2025 (Rev‑8 - GitHub Repo Sync)**</small>
+<small>Last updated: **17 Jul 2025 (Rev‑9 - Timeout Fix Deployed)**</small>
 
 ---
 
@@ -55,6 +55,12 @@ ssh root@178.62.39.248 "cd /root/CECI-W-BOTS && git pull && docker compose -f do
 * **Branch**: `production-deploy` (ALWAYS use this)
 * **Server**: 178.62.39.248
 * **Guide**: See `PRODUCTION_DEPLOYMENT_GUIDE.md`
+
+### 🎯 Latest Fix - Timeout Issues Resolved (17 Jul 2025)
+* **Problem**: 40% timeout rate on simple queries like "החלטה 2989"
+* **Solution**: Implemented connection pooling, retry logic, and circuit breakers
+* **Results**: 0% timeout rate, avg response time 3.16s (production tested)
+* **Files**: See `tasks/timeout_fix_plan.md` for implementation details
 
 ## 4 · Cost & Testing Constraints
 
