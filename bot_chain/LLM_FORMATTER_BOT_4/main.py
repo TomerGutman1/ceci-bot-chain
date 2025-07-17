@@ -617,7 +617,7 @@ async def call_gpt_formatter(
             model=os.getenv('MODEL', 'gpt-4o-mini'),
             messages=messages,
             temperature=float(os.getenv('TEMPERATURE', '0.4')),
-            max_tokens=int(os.getenv('MAX_TOKENS', '2000'))
+            max_tokens=int(os.getenv('MAX_TOKENS', '12000'))
         )
         
         # Extract response
