@@ -120,10 +120,10 @@ const ChatInterface = ({ externalMessage, externalEditMessage }: ChatInterfacePr
     
     // For assistant messages, render markdown
     return (
-      <ReactMarkdown 
-        remarkPlugins={[remarkGfm]}
-        className="prose prose-sm max-w-none"
-        components={{
+      <div className="prose prose-sm max-w-none">
+        <ReactMarkdown 
+          remarkPlugins={[remarkGfm]}
+          components={{
           // Custom table styling
           table: ({node, ...props}) => (
             <table className="min-w-full divide-y divide-gray-300 my-2" {...props} />
@@ -160,8 +160,8 @@ const ChatInterface = ({ externalMessage, externalEditMessage }: ChatInterfacePr
             <strong className="font-bold text-gray-900" {...props} />
           ),
           // Code blocks
-          code: ({node, inline, ...props}) => (
-            inline ? 
+          code: ({node, ...props}: any) => (
+            props.inline ? 
               <code className="bg-gray-100 rounded px-1 py-0.5 text-sm" {...props} /> :
               <code className="block bg-gray-100 rounded p-2 text-sm overflow-x-auto my-2" {...props} />
           ),
@@ -174,9 +174,10 @@ const ChatInterface = ({ externalMessage, externalEditMessage }: ChatInterfacePr
             <blockquote className="border-r-4 border-gray-300 pr-4 my-2 text-gray-600" {...props} />
           ),
         }}
-      >
-        {content}
-      </ReactMarkdown>
+        >
+          {content}
+        </ReactMarkdown>
+      </div>
     );
   };
 
