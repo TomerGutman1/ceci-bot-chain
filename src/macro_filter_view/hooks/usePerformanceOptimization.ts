@@ -331,7 +331,9 @@ export function useBatchProcessor<T, R>(
         `batch_process_${i}`
       );
 
-      allResults.push(...batchResults);
+      // Ensure batchResults is an array before spreading
+      const resultsArray = Array.isArray(batchResults) ? batchResults : [batchResults];
+      allResults.push(...resultsArray);
       setProgress(((i + 1) / batches.length) * 100);
       setResults([...allResults]);
 

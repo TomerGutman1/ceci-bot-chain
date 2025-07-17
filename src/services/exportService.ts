@@ -134,7 +134,7 @@ export async function exportToCSV(results: DecisionGuideAnalysis): Promise<void>
     // Add summary row
     csvData.push({
       'קריטריון': 'ציון משוקלל כולל',
-      'ציון (1-10)': results.weightedScore.toFixed(1),
+      'ציון (1-10)': parseFloat(results.weightedScore.toFixed(1)),
       'משקל (%)': '100',
       'הסבר': `רמת ישימות: ${results.feasibilityLevel === 'high' ? 'גבוהה' : 
                            results.feasibilityLevel === 'medium' ? 'בינונית' : 'נמוכה'}`,
