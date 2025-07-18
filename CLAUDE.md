@@ -1,6 +1,6 @@
 # 🧠 CLAUDE MAIN MEMORY – CECI Bot Chain
 
-<small>Last updated: **17 Jul 2025 (Rev‑9 - Timeout Fix Deployed)**</small>
+<small>Last updated: **18 Jul 2025 (Rev‑10 - Database Empty Issue)**</small>
 
 ---
 
@@ -119,6 +119,19 @@ ssh root@178.62.39.248 "cd /root/CECI-W-BOTS && git pull && docker compose -f do
 * **NEW**: Monitor unified intent accuracy with `unified_intent_accuracy` metric
 * **NEW**: Track formatter quality with `formatter_quality_score` metric
 
-## 9 · Testing Guidelines
+## 9 · ❌ CRITICAL DATABASE ISSUE (18 Jul 2025) 
+
+**Database Empty - No Data Available**:
+1. **Investigation of content truncation** revealed the government_decisions table has 0 rows
+2. **Fixed Issues**:
+   - ✅ LLM Formatter: Increased content limit from 1000 to 10000 chars
+   - ✅ SQL Gen Bot: Fixed schema documentation (was using wrong column names)
+   - ✅ SQL Templates: Aligned with actual database schema:
+     - Table: `government_decisions` (not `israeli_government_decisions`)
+     - Columns: `content` (not `decision_content`), `title` (not `decision_title`)
+     - Arrays: `topics` (not `tags_policy_area`), `ministries` (not `tags_government_body`)
+3. **Immediate Action Required**: Load data into the government_decisions table
+
+## 10 · Testing Guidelines
 
 * Always test as if a real user inputed through the chat box in the real UI, and check logs
