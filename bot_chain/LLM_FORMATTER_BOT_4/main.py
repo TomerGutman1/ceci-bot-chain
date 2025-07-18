@@ -207,14 +207,31 @@ def format_analysis_results(content: Dict[str, Any]) -> str:
                 lines.append("")  # Line break after each recommendation
         lines.append("")  # Extra spacing at the end
     
-    # Add citations section at the end
+    # Add citations section at the end - but filter out duplicates and generic messages
     if citations:
-        lines.append("### 📋 ציטוטים מהטקסט")
-        lines.append("")
+        # Filter out duplicate citations and generic "no mention" citations
+        unique_citations = []
+        seen_refs = set()
+        
         for citation in citations:
-            lines.append(f"**{citation['name']}:**")
-            lines.append(f"_{citation['reference']}_")
+            ref = citation.get('reference', '')
+            # Skip generic "no mention" citations and duplicates
+            if ref and ref not in seen_refs and not ref.startswith('לא נמצא אזכור'):
+                unique_citations.append(citation)
+                seen_refs.add(ref)
+        
+        # Only show citations section if we have meaningful unique citations
+        if unique_citations:
+            lines.append("### 📋 ציטוטים מהטקסט")
             lines.append("")
+            for citation in unique_citations:
+                lines.append(f"**{citation['name']}:**")
+                # Truncate very long citations
+                ref_text = citation['reference']
+                if len(ref_text) > 200:
+                    ref_text = ref_text[:197] + "..."
+                lines.append(f"_{ref_text}_")
+                lines.append("")
     
     return "\n".join(lines)
 

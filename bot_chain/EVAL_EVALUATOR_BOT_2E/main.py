@@ -715,22 +715,26 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
 חשוב מאוד לגבי reference_from_document:
 - עבור כל קריטריון, חובה לצטט קטע רלוונטי מהטקסט של ההחלטה
 - אם יש עדות חיובית לקריטריון - צטט את הקטע המדויק
-- אם אין עדות לקריטריון - צטט קטע שמראה את ההיעדר או כתוב "לא נמצא אזכור ב..."
+- אם אין עדות לקריטריון - צטט קטע שמראה את ההיעדר או כתוב "לא נמצא אזכור ל[שם הקריטריון] בהחלטה"
 - הציטוטים צריכים להיות ישירים מהטקסט, לא פרפרזה
+- חובה שכל קריטריון יקבל ציטוט שונה! אם אין מספיק תוכן, כתוב "החלטה קצרה - אין פירוט נוסף על [שם הקריטריון]"
+- אסור שכל הציטוטים יהיו זהים!
+
+חשוב לגבי summary:
+- כתוב סיכום של 2-3 משפטים שמתאר את הממצאים העיקריים מהניתוח
+- התמקד בחוזקות וחולשות עיקריות שזוהו
+- אל תחזור על הכותרת או תיאור כללי של ההחלטה
+- דוגמה טובה: "ההחלטה כוללת לוח זמנים ברור ומשאבים מוגדרים, אך חסרים מנגנוני בקרה ומדידה. נדרש חיזוק בהגדרת גורם מתכלל וצוות יישום."
 
 חשוב: החזר רק JSON תקין, ללא טקסט נוסף לפני או אחרי.
 """
     
     try:
-        # Dynamic model selection based on content length
+        # Always use GPT-4o for evaluator as it requires complex thinking and analysis
         content_length = len(decision_text)
-        selected_model = "gpt-4-turbo" if content_length > 4000 else "gpt-3.5-turbo"
+        selected_model = "gpt-4o"
         
-        # Log model selection and potential cost savings
-        if selected_model == "gpt-3.5-turbo":
-            logger.info(f"Using GPT-3.5-turbo for content length {content_length} chars (saving ~20x cost)")
-        else:
-            logger.info(f"Using GPT-4-turbo for long content {content_length} chars")
+        logger.info(f"Using GPT-4o for evaluation (content length: {content_length} chars)")
         
         # Call GPT for feasibility analysis
         response = await asyncio.to_thread(
@@ -750,7 +754,7 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
             prompt_tokens=usage.prompt_tokens,
             completion_tokens=usage.completion_tokens,
             total_tokens=usage.total_tokens,
-            model="gpt-4-turbo"  # Always use GPT-4 for evaluator
+            model=selected_model  # Use the selected model
         )
         
         # Log GPT usage
@@ -809,6 +813,17 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
                 decision_num = request.decision_number
                 gov_num = analysis_result.get("government_number", request.government_number)
                 
+                # Validate citations - check if all are identical
+                citations = [c.get('reference_from_document', '') for c in criteria]
+                if citations and len(set(citations)) == 1 and citations[0]:
+                    logger.warning(f"All citations are identical: {citations[0][:50]}... - this indicates poor extraction")
+                    # Try to add variation based on criterion name
+                    for i, criterion in enumerate(criteria):
+                        if criterion.get('score', 0) == 0:
+                            criterion['reference_from_document'] = f"לא נמצא אזכור ל{criterion.get('name', 'קריטריון')} בהחלטה"
+                        elif i > 0 and criterion['reference_from_document'] == criteria[0]['reference_from_document']:
+                            criterion['reference_from_document'] = f"החלטה קצרה - אין פירוט נוסף על {criterion.get('name', 'קריטריון')}"
+                
                 # Convert to expected format
                 quality_metrics = []
                 for criterion in criteria:
@@ -825,13 +840,13 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
                 # Determine relevance level and category based on score  
                 if overall_score >= 0.75:
                     relevance_level = RelevanceLevel.HIGHLY_RELEVANT
-                    feasibility_category = "ישימות גבוהה"
+                    feasibility_category = "✅ רמת ישימות: גבוהה"
                 elif overall_score >= 0.50:
                     relevance_level = RelevanceLevel.RELEVANT
-                    feasibility_category = "ישימות בינונית"
+                    feasibility_category = "⚠️ רמת ישימות: בינונית"
                 else:
                     relevance_level = RelevanceLevel.PARTIALLY_RELEVANT
-                    feasibility_category = "ישימות נמוכה"
+                    feasibility_category = "❌ רמת ישימות: נמוכה"
                 
                 # Generate formatted analysis table
                 criteria_table = []
@@ -859,23 +874,65 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
                         elif name == "מנגנון יישום בשטח":
                             specific_recommendations.append("פירוט תהליכי היישום והגורמים האחראיים בשטח")
                 
+                # Add decision metadata
+                decision_date = decision_content.get('decision_date', '')
+                prime_minister = decision_content.get('prime_minister', '')
+                policy_areas = decision_content.get('tags_policy_area', decision_content.get('topics', []))
+                government_body = decision_content.get('tags_government_body', decision_content.get('ministries', []))
+                
+                # Ensure arrays are properly formatted
+                if isinstance(policy_areas, str):
+                    policy_areas = [policy_areas]
+                if isinstance(government_body, str):
+                    government_body = [government_body]
+                
+                # Format date nicely
+                if decision_date:
+                    try:
+                        from datetime import datetime as dt
+                        date_obj = dt.fromisoformat(decision_date.replace('Z', '+00:00'))
+                        hebrew_months = {
+                            1: 'ינואר', 2: 'פברואר', 3: 'מרץ', 4: 'אפריל',
+                            5: 'מאי', 6: 'יוני', 7: 'יולי', 8: 'אוגוסט',
+                            9: 'ספטמבר', 10: 'אוקטובר', 11: 'נובמבר', 12: 'דצמבר'
+                        }
+                        formatted_date = f"{date_obj.day} ב{hebrew_months[date_obj.month]} {date_obj.year}"
+                    except:
+                        formatted_date = decision_date
+                else:
+                    formatted_date = "לא צוין"
+                
                 # Create detailed explanation in the required format
-                formatted_explanation = f"""🔍 ניתוח החלטת ממשלה {decision_num} לפי קריטריוני היישום
+                formatted_explanation = f"""🔍 ניתוח החלטת ממשלה {decision_num}
 
 **כותרת ההחלטה:** {decision_title}
+
+📋 **פרטי ההחלטה:**
+• **ממשלה:** {gov_num or request.government_number or 'לא צוין'}
+• **תאריך:** {formatted_date}
+• **ראש הממשלה:** {prime_minister or 'לא צוין'}
+• **תחומי מדיניות:** {', '.join(policy_areas) if policy_areas else 'לא צוינו'}
+• **משרדים מעורבים:** {', '.join(government_body) if government_body else 'לא צוינו'}
 
 {criteria_table_str}
 
 🧮 **חישוב ציון ישימות משוקלל**
-הציון הכולל של החלטת ממשלה {decision_num} הוא {final_score}%, כלומר:
-✅ רמת ישימות: {feasibility_category}
+הציון הכולל של החלטת ממשלה {decision_num} הוא **{final_score}/100**
+
+**אופן החישוב:**
+{chr(10).join([f"• {c.get('name')}: {c.get('score')}/5 × {c.get('weight')}% = {(c.get('score', 0)/5 * c.get('weight', 0)):.1f}%" for c in criteria[:3]])}  
+• ... (ועוד {len(criteria)-3} קריטריונים)
+━━━━━━━━━━━━━━━━━━━━━
+**סה״כ: {final_score}%**
+
+{feasibility_category}
 
 📝 **סיכום ניתוח ואבחנות עיקריות**
-{summary}
+{summary if summary and summary != 'ניתוח הושלם' else 'ההחלטה נבחנה לפי 13 קריטריונים של ישימות מדיניות. הניתוח מראה את החוזקות והחולשות ביכולת היישום של ההחלטה.'}
 
-🔧 **המלצות לשיפור רמת הישימות**
+💡 **המלצות לשיפור רמת הישימות**
 בהתבסס על הקריטריונים שקיבלו ציון נמוך, מומלץ:
-""" + "\n".join([f"• {rec}" for rec in specific_recommendations]) if specific_recommendations else "בהתבסס על הניתוח, ניתן לשפר את רמת הישימות על ידי התמקדות בקריטריונים שקיבלו ציון נמוך."
+""" + "\n".join([f"{i+1}. {rec}" for i, rec in enumerate(specific_recommendations)]) if specific_recommendations else "בהתבסס על הניתוח, ניתן לשפר את רמת הישימות על ידי התמקדות בקריטריונים שקיבלו ציון נמוך."
                 
                 processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
                 
@@ -1015,6 +1072,9 @@ async def analyze_content_with_gpt(query: str, intent: str, entities: Dict, resu
     try:
         start_time = datetime.utcnow()
         
+        # Always use GPT-4o for complex analysis
+        selected_model = "gpt-4o"
+        
         response = await asyncio.to_thread(
             openai.ChatCompletion.create,
             model=selected_model,
@@ -1034,7 +1094,7 @@ async def analyze_content_with_gpt(query: str, intent: str, entities: Dict, resu
             prompt_tokens=usage.prompt_tokens,
             completion_tokens=usage.completion_tokens,
             total_tokens=usage.total_tokens,
-            model="gpt-4-turbo"  # Always use GPT-4 for evaluator
+            model=selected_model  # Use the selected model
         )
         
         # Log GPT usage
