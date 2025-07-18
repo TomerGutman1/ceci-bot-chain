@@ -75,6 +75,7 @@ Answer Hebrew questions about Israeli government decisions through **unified GPT
 - **Budget**: $10/day cap, prefer GPT-3.5 where possible
 - **Testing**: No CI tests (budget), use local tests only
 - **Monitoring**: Alert if >$10/day or >2s p95 latency
+- **⚠️ DATABASE WARNING**: Local PostgreSQL (port 5433) is TEST ONLY! Production data is in Supabase (israeli_government_decisions)
 
 ---
 
