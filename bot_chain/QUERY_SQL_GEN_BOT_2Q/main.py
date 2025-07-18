@@ -120,26 +120,20 @@ Transform Hebrew natural language queries into precise PostgreSQL queries while 
 - Statistical vs. List queries (כמה vs. אילו)
 
 ## Database Schema:
-israeli_government_decisions(
-  id BIGINT PRIMARY KEY,
-  decision_date DATE NOT NULL,
-  decision_number TEXT NOT NULL,
-  government_number TEXT NOT NULL,
-  prime_minister TEXT NOT NULL,
-  committee TEXT,
-  decision_title TEXT NOT NULL,
-  summary TEXT NOT NULL,
-  decision_content TEXT NOT NULL,
-  operativity TEXT NOT NULL, -- 'אופרטיבית' or 'דקלרטיבית'
-  tags_policy_area TEXT,
-  tags_government_body TEXT,
-  tags_location TEXT,
-  all_tags TEXT NOT NULL,
-  decision_url TEXT NOT NULL,
-  decision_key TEXT UNIQUE NOT NULL,
-  embedding VECTOR(768),
-  created_at TIMESTAMPTZ NOT NULL,
-  updated_at TIMESTAMPTZ NOT NULL
+government_decisions(
+  id INTEGER PRIMARY KEY,
+  government_number INTEGER NOT NULL,
+  decision_number INTEGER NOT NULL,
+  decision_date DATE,
+  title TEXT NOT NULL,
+  content TEXT,
+  summary TEXT,
+  topics TEXT[],
+  ministries TEXT[],
+  decision_type VARCHAR(50),
+  status VARCHAR(20) DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
 )
 
 ## Query Types:

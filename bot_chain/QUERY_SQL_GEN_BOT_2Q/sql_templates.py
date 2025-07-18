@@ -26,10 +26,10 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            decision_title, summary, tags_policy_area, tags_government_body, decision_url
-        FROM israeli_government_decisions 
+            title, summary, topics, ministries
+        FROM government_decisions 
         WHERE government_number = %(government_number)s
-        AND tags_policy_area ILIKE '%' || %(topic)s || '%'
+        AND %(topic)s = ANY(topics)
         ORDER BY decision_date DESC, decision_number DESC
         LIMIT %(limit)s;
         """,
@@ -49,14 +49,14 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            decision_title, 
+            title, 
             CASE 
                 WHEN LENGTH(summary) > 500 THEN SUBSTRING(summary, 1, 497) || '...'
                 ELSE summary
             END as summary,
-            tags_policy_area, tags_government_body, decision_url
-        FROM israeli_government_decisions 
-        WHERE tags_policy_area ILIKE '%' || %(topic)s || '%'
+            topics, ministries
+        FROM government_decisions 
+        WHERE %(topic)s = ANY(topics)
         ORDER BY decision_date DESC, government_number DESC, decision_number DESC
         LIMIT %(limit)s;
         """,
@@ -75,8 +75,8 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            decision_title, decision_content, summary, tags_policy_area, tags_government_body, operativity, decision_url
-        FROM israeli_government_decisions 
+            title, content, summary, topics, ministries, decision_type
+        FROM government_decisions 
         WHERE government_number = %(government_number)s
         AND decision_number = %(decision_number)s;
         """,
@@ -95,8 +95,8 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            decision_title, decision_content, summary, tags_policy_area, tags_government_body, operativity, decision_url
-        FROM israeli_government_decisions 
+            title, content, summary, topics, ministries, decision_type
+        FROM government_decisions 
         WHERE decision_number = %(decision_number)s
         ORDER BY government_number DESC;
         """,
@@ -115,7 +115,7 @@ SQL_TEMPLATES = {
         SELECT 
             %(government_number)s as government_number,
             COUNT(*) as count
-        FROM israeli_government_decisions 
+        FROM government_decisions 
         WHERE government_number = %(government_number)s;
         """,
         required_params=["government_number"],
@@ -134,8 +134,8 @@ SQL_TEMPLATES = {
             government_number,
             %(topic)s as topic,
             COUNT(*) as decision_count
-        FROM israeli_government_decisions 
-        WHERE tags_policy_area ILIKE '%' || %(topic)s || '%'
+        FROM government_decisions 
+        WHERE %(topic)s = ANY(topics)
         {government_filter}
         GROUP BY government_number
         ORDER BY government_number DESC;
@@ -155,8 +155,8 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             COUNT(*) as count
-        FROM israeli_government_decisions 
-        WHERE tags_policy_area ILIKE '%' || %(topic)s || '%'
+        FROM government_decisions 
+        WHERE %(topic)s = ANY(topics)
         AND EXTRACT(YEAR FROM decision_date) = %(year)s;
         """,
         required_params=["topic", "year"],
@@ -174,8 +174,8 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             COUNT(*) as count
-        FROM israeli_government_decisions 
-        WHERE tags_policy_area ILIKE '%' || %(topic)s || '%'
+        FROM government_decisions 
+        WHERE %(topic)s = ANY(topics)
         AND decision_date >= %(start_date)s
         AND decision_date <= %(end_date)s;
         """,
@@ -196,7 +196,7 @@ SQL_TEMPLATES = {
         SELECT 
             %(year)s as year,
             COUNT(*) as count
-        FROM israeli_government_decisions 
+        FROM government_decisions 
         WHERE EXTRACT(YEAR FROM decision_date) = %(year)s;
         """,
         required_params=["year"],
@@ -213,11 +213,11 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             %(topic)s as topic,
-            'אופרטיבית' as operativity,
+            'אופרטיבית' as decision_type,
             COUNT(*) as count
-        FROM israeli_government_decisions 
-        WHERE tags_policy_area ILIKE '%' || %(topic)s || '%'
-        AND operativity = 'אופרטיבית';
+        FROM government_decisions 
+        WHERE %(topic)s = ANY(topics)
+        AND decision_type = 'אופרטיבית';
         """,
         required_params=["topic"],
         optional_params=[],
@@ -233,8 +233,8 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            decision_title, summary, tags_policy_area, tags_government_body, decision_url
-        FROM israeli_government_decisions 
+            title, summary, topics, ministries
+        FROM government_decisions 
         WHERE decision_date >= %(start_date)s
         AND decision_date <= %(end_date)s
         {topic_filter}
@@ -259,9 +259,9 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            decision_title, summary, tags_policy_area, tags_government_body, decision_url
-        FROM israeli_government_decisions 
-        WHERE %(ministry)s = ANY(tags_government_body)
+            title, summary, topics, ministries
+        FROM government_decisions 
+        WHERE %(ministry)s = ANY(ministries)
         {government_filter}
         {topic_filter}
         ORDER BY decision_date DESC, government_number DESC, decision_number DESC
@@ -279,14 +279,14 @@ SQL_TEMPLATES = {
     
     "full_text_search": SQLTemplate(
         name="full_text_search",
-        description="Full-text search in decision decision_content",
+        description="Full-text search in decision content",
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            decision_title, summary, tags_policy_area, tags_government_body, decision_url,
-            ts_rank(to_tsvector('hebrew', decision_content), to_tsquery('hebrew', %(search_term)s)) as relevance_score
-        FROM israeli_government_decisions 
-        WHERE to_tsvector('hebrew', decision_content) @@ to_tsquery('hebrew', %(search_term)s)
+            title, summary, topics, ministries,
+            ts_rank(to_tsvector('hebrew', content), to_tsquery('hebrew', %(search_term)s)) as relevance_score
+        FROM government_decisions 
+        WHERE to_tsvector('hebrew', content) @@ to_tsquery('hebrew', %(search_term)s)
         {government_filter}
         ORDER BY relevance_score DESC, decision_date DESC
         LIMIT %(limit)s;
@@ -308,12 +308,12 @@ SQL_TEMPLATES = {
         SELECT 
             government_number,
             COUNT(*) as total_decisions,
-            COUNT(CASE WHEN tags_policy_area ILIKE '%' || %(topic)s || '%' THEN 1 END) as topic_decisions,
+            COUNT(CASE WHEN %(topic)s = ANY(topics) THEN 1 END) as topic_decisions,
             ROUND(
-                100.0 * COUNT(CASE WHEN tags_policy_area ILIKE '%' || %(topic)s || '%' THEN 1 END) / COUNT(*), 
+                100.0 * COUNT(CASE WHEN %(topic)s = ANY(topics) THEN 1 END) / COUNT(*), 
                 2
             ) as topic_percentage
-        FROM israeli_government_decisions 
+        FROM government_decisions 
         WHERE government_number IN %(government_list)s
         GROUP BY government_number
         ORDER BY government_number;
@@ -336,27 +336,27 @@ SQL_TEMPLATES = {
                 government_number,
                 decision_number,
                 decision_date,
-                decision_title,
+                title,
                 summary,
-                tags_policy_area,
-                tags_government_body,
+                topics,
+                ministries,
                 decision_url,
-                operativity
-            FROM israeli_government_decisions 
+                decision_type
+            FROM government_decisions 
             WHERE government_number IN %(government_list)s
-            AND tags_policy_area ILIKE '%' || %(topic)s || '%'
+            AND %(topic)s = ANY(topics)
         )
         SELECT 
             government_number,
             json_agg(json_build_object(
                 'decision_number', decision_number,
                 'decision_date', decision_date,
-                'decision_title', decision_title,
+                'title', title,
                 'summary', summary,
-                'tags_policy_area', tags_policy_area,
-                'tags_government_body', tags_government_body,
+                'topics', topics,
+                'ministries', ministries,
                 'decision_url', decision_url,
-                'operativity', operativity
+                'decision_type', decision_type
             ) ORDER BY decision_date DESC) as decisions,
             COUNT(*) as decision_count
         FROM gov_decisions
@@ -380,18 +380,18 @@ SQL_TEMPLATES = {
             government_number,
             decision_number,
             decision_date,
-            decision_title,
+            title,
             summary,
-            tags_policy_area,
-            tags_government_body,
+            topics,
+            ministries,
             decision_url,
             CASE 
                 WHEN government_number = %(gov1)s THEN 'ממשלה ' || %(gov1)s::text
                 WHEN government_number = %(gov2)s THEN 'ממשלה ' || %(gov2)s::text
             END as government_label
-        FROM israeli_government_decisions 
+        FROM government_decisions 
         WHERE government_number IN (%(gov1)s, %(gov2)s)
-        AND tags_policy_area ILIKE '%' || %(topic)s || '%'
+        AND %(topic)s = ANY(topics)
         ORDER BY government_number, decision_date DESC
         LIMIT %(limit)s;
         """,
@@ -412,8 +412,8 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            decision_title, summary, tags_policy_area, tags_government_body, decision_url
-        FROM israeli_government_decisions 
+            title, summary, topics, ministries
+        FROM government_decisions 
         WHERE 1=1
         AND decision_date IS NOT NULL
         AND decision_date >= '1990-01-01'
@@ -437,8 +437,8 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            decision_title, summary, tags_policy_area, tags_government_body, decision_url
-        FROM israeli_government_decisions 
+            title, summary, topics, ministries
+        FROM government_decisions 
         WHERE EXTRACT(YEAR FROM decision_date) = %(year)s
         {topic_filter}
         ORDER BY decision_date DESC, government_number DESC, decision_number DESC
@@ -462,16 +462,16 @@ SQL_TEMPLATES = {
             EXTRACT(YEAR FROM decision_date) as year,
             government_number,
             COUNT(*) as decision_count,
-            COUNT(CASE WHEN tags_policy_area ILIKE '%' || %(topic)s || '%' THEN 1 END) as topic_count,
+            COUNT(CASE WHEN %(topic)s = ANY(topics) THEN 1 END) as topic_count,
             ROUND(
-                100.0 * COUNT(CASE WHEN tags_policy_area ILIKE '%' || %(topic)s || '%' THEN 1 END) / COUNT(*),
+                100.0 * COUNT(CASE WHEN %(topic)s = ANY(topics) THEN 1 END) / COUNT(*),
                 2
             ) as topic_percentage,
             STRING_AGG(DISTINCT 
-                CASE WHEN tags_policy_area ILIKE '%' || %(topic)s || '%' THEN decision_title END, 
+                CASE WHEN %(topic)s = ANY(topics) THEN title END, 
                 ' | ' ORDER BY decision_date DESC
             ) as sample_titles
-        FROM israeli_government_decisions 
+        FROM government_decisions 
         WHERE decision_date >= %(start_date)s
         AND decision_date <= %(end_date)s
         {topic_filter}
@@ -495,20 +495,20 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            decision_title, summary, decision_content, tags_policy_area, tags_government_body, decision_url,
+            title, summary, content, topics, ministries,
             CASE 
-                WHEN decision_content ILIKE '%חסם%' OR decision_content ILIKE '%מניעה%' OR decision_content ILIKE '%קושי%' 
+                WHEN content ILIKE '%חסם%' OR content ILIKE '%מניעה%' OR content ILIKE '%קושי%' 
                 THEN 'מכיל חסמים אפשריים'
                 ELSE 'ללא חסמים מזוהים'
             END as obstacle_indicators,
             CASE 
-                WHEN decision_content ILIKE '%מאפשר%' OR decision_content ILIKE '%תמיכה%' OR decision_content ILIKE '%עידוד%'
+                WHEN content ILIKE '%מאפשר%' OR content ILIKE '%תמיכה%' OR content ILIKE '%עידוד%'
                 THEN 'מכיל מאפשרים אפשריים'
                 ELSE 'ללא מאפשרים מזוהים'
             END as enabler_indicators,
-            LENGTH(decision_content) as content_length
-        FROM israeli_government_decisions 
-        WHERE tags_policy_area ILIKE '%' || %(topic)s || '%'
+            LENGTH(content) as content_length
+        FROM government_decisions 
+        WHERE %(topic)s = ANY(topics)
         {government_filter}
         {date_filter}
         ORDER BY decision_date DESC, government_number DESC, decision_number DESC
@@ -536,10 +536,10 @@ SQL_TEMPLATES = {
                     THEN 'תקופה שנייה'
                 END as period,
                 COUNT(*) as total_decisions,
-                COUNT(CASE WHEN tags_policy_area ILIKE '%' || %(topic)s || '%' THEN 1 END) as topic_decisions,
+                COUNT(CASE WHEN %(topic)s = ANY(topics) THEN 1 END) as topic_decisions,
                 STRING_AGG(DISTINCT government_number::text, ', ') as governments,
-                AVG(LENGTH(decision_content)) as avg_content_length
-            FROM israeli_government_decisions 
+                AVG(LENGTH(content)) as avg_content_length
+            FROM government_decisions 
             WHERE (
                 EXTRACT(YEAR FROM decision_date) BETWEEN %(start_year)s AND %(start_year)s + 1 OR
                 EXTRACT(YEAR FROM decision_date) BETWEEN %(end_year)s - 1 AND %(end_year)s
@@ -567,25 +567,25 @@ SQL_TEMPLATES = {
     
     "ministry_breakdown": SQLTemplate(
         name="ministry_breakdown",
-        description="Breakdown of decisions by ministry for specific tags_policy_area",
+        description="Breakdown of decisions by ministry for specific topics",
         sql="""
         SELECT 
-            unnest(tags_government_body) as ministry,
+            unnest(ministries) as ministry,
             COUNT(*) as decision_count,
             COUNT(DISTINCT government_number) as government_span,
             MIN(decision_date) as earliest_decision,
             MAX(decision_date) as latest_decision,
             STRING_AGG(DISTINCT 
-                CASE WHEN char_length(decision_title) > 100 
-                THEN substring(decision_title, 1, 97) || '...'
-                ELSE decision_title END, 
+                CASE WHEN char_length(title) > 100 
+                THEN substring(title, 1, 97) || '...'
+                ELSE title END, 
                 ' | ' ORDER BY decision_date DESC
             ) as sample_titles
-        FROM israeli_government_decisions 
-        WHERE tags_policy_area ILIKE '%' || %(topic)s || '%'
+        FROM government_decisions 
+        WHERE %(topic)s = ANY(topics)
         {government_filter}
         {date_filter}
-        GROUP BY unnest(tags_government_body)
+        GROUP BY unnest(ministries)
         HAVING COUNT(*) >= %(min_count)s
         ORDER BY decision_count DESC
         LIMIT %(limit)s;
@@ -607,19 +607,19 @@ SQL_TEMPLATES = {
         WITH successful_patterns AS (
             SELECT 
                 id, government_number, decision_number, decision_date,
-                decision_title, summary, tags_policy_area, tags_government_body, decision_url,
+                title, summary, topics, ministries,
                 CASE 
-                    WHEN decision_content ILIKE '%הצלחה%' OR decision_content ILIKE '%יעיל%' OR decision_content ILIKE '%חיובי%'
+                    WHEN content ILIKE '%הצלחה%' OR content ILIKE '%יעיל%' OR content ILIKE '%חיובי%'
                     THEN 'הצלחה מזוהה'
-                    WHEN decision_content ILIKE '%יישום%' AND decision_content ILIKE '%מלא%'
+                    WHEN content ILIKE '%יישום%' AND content ILIKE '%מלא%'
                     THEN 'יישום מלא'
-                    WHEN decision_content ILIKE '%תוצאות%' AND decision_content ILIKE '%טוב%'
+                    WHEN content ILIKE '%תוצאות%' AND content ILIKE '%טוב%'
                     THEN 'תוצאות חיוביות'
                     ELSE 'רגיל'
                 END as success_indicator,
-                LENGTH(decision_content) as detail_level
-            FROM israeli_government_decisions 
-            WHERE tags_policy_area ILIKE '%' || %(topic)s || '%'
+                LENGTH(content) as detail_level
+            FROM government_decisions 
+            WHERE %(topic)s = ANY(topics)
             {government_filter}
             ORDER BY decision_date DESC
         )
@@ -627,9 +627,9 @@ SQL_TEMPLATES = {
             government_number,
             COUNT(*) as total_decisions,
             COUNT(CASE WHEN success_indicator != 'רגיל' THEN 1 END) as successful_decisions,
-            STRING_AGG(DISTINCT unnest(tags_government_body), ', ') as involved_ministries,
+            STRING_AGG(DISTINCT unnest(ministries), ', ') as involved_ministries,
             STRING_AGG(DISTINCT 
-                CASE WHEN success_indicator != 'רגיל' THEN decision_title END,
+                CASE WHEN success_indicator != 'רגיל' THEN title END,
                 ' | '
             ) as successful_examples
         FROM successful_patterns
@@ -651,15 +651,15 @@ SQL_TEMPLATES = {
         description="Summarize decisions by topic across governments",
         sql="""
         SELECT 
-            unnest(tags_policy_area) as topic,
+            unnest(topics) as topic,
             COUNT(*) as decision_count,
             COUNT(DISTINCT government_number) as government_count,
             MIN(decision_date) as first_decision,
             MAX(decision_date) as last_decision
-        FROM israeli_government_decisions 
+        FROM government_decisions 
         WHERE 1=1
         {government_filter}
-        GROUP BY unnest(tags_policy_area)
+        GROUP BY unnest(topics)
         HAVING COUNT(*) >= %(min_count)s
         ORDER BY decision_count DESC
         LIMIT %(limit)s;
@@ -675,13 +675,13 @@ SQL_TEMPLATES = {
     
     "joint_ministries_decisions": SQLTemplate(
         name="joint_ministries_decisions",
-        description="Find decisions involving ALL specified tags_government_body",
+        description="Find decisions involving ALL specified ministries",
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            decision_title, summary, tags_policy_area, tags_government_body, decision_url
-        FROM israeli_government_decisions 
-        WHERE tags_government_body @> %(ministry_list)s::text[]
+            title, summary, topics, ministries
+        FROM government_decisions 
+        WHERE ministries @> %(ministry_list)s::text[]
         {government_filter}
         {date_filter}
         ORDER BY decision_date DESC, government_number DESC, decision_number DESC
@@ -698,16 +698,16 @@ SQL_TEMPLATES = {
     
     "decisions_by_multiple_topics": SQLTemplate(
         name="decisions_by_multiple_topics",
-        description="Find decisions covering multiple tags_policy_area",
+        description="Find decisions covering multiple topics",
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            decision_title, summary, tags_policy_area, tags_government_body, decision_url,
-            array_length(tags_policy_area, 1) as topic_count
-        FROM israeli_government_decisions 
-        WHERE tags_policy_area && %(topic_list)s::text[]
+            title, summary, topics, ministries,
+            array_length(topics, 1) as topic_count
+        FROM government_decisions 
+        WHERE topics && %(topic_list)s::text[]
         {government_filter}
-        ORDER BY array_length(tags_policy_area && %(topic_list)s::text[], 1) DESC, decision_date DESC
+        ORDER BY array_length(topics && %(topic_list)s::text[], 1) DESC, decision_date DESC
         LIMIT %(limit)s;
         """,
         required_params=["topic_list"],
@@ -725,13 +725,13 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            decision_title, summary, tags_policy_area, tags_government_body, decision_url,
+            title, summary, topics, ministries,
             CASE 
-                WHEN decision_content ~* 'מיליון|מיליארד|תקציב|הקצאה|מימון' THEN true
+                WHEN content ~* 'מיליון|מיליארד|תקציב|הקצאה|מימון' THEN true
                 ELSE false
             END as has_budget_mention
-        FROM israeli_government_decisions 
-        WHERE decision_content ~* 'ש"ח|₪|מיליון|מיליארד|תקציב'
+        FROM government_decisions 
+        WHERE content ~* 'ש"ח|₪|מיליון|מיליארד|תקציב'
         {topic_filter}
         {government_filter}
         ORDER BY decision_date DESC
@@ -752,9 +752,9 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            decision_title, summary, tags_policy_area, tags_government_body, decision_url
-        FROM israeli_government_decisions 
-        WHERE (decision_title ~* 'דחוף|מיידי|חירום' OR decision_content ~* 'דחוף|מיידי|חירום|בהול')
+            title, summary, topics, ministries
+        FROM government_decisions 
+        WHERE (title ~* 'דחוף|מיידי|חירום' OR content ~* 'דחוף|מיידי|חירום|בהול')
         {topic_filter}
         {government_filter}
         {date_filter}
@@ -775,10 +775,10 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            decision_title, summary, tags_policy_area, tags_government_body, decision_url,
-            operativity
-        FROM israeli_government_decisions 
-        WHERE operativity = 'בוטלה' OR decision_title ~* 'ביטול|בטל'
+            title, summary, topics, ministries,
+            decision_type
+        FROM government_decisions 
+        WHERE decision_type = 'בוטלה' OR title ~* 'ביטול|בטל'
         {topic_filter}
         {government_filter}
         ORDER BY decision_date DESC
@@ -798,9 +798,9 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            decision_title, summary, tags_policy_area, tags_government_body, decision_url,
+            title, summary, topics, ministries,
             goverment_secretary_name as committee
-        FROM israeli_government_decisions 
+        FROM government_decisions 
         WHERE goverment_secretary_name ILIKE '%' || %(committee_name)s || '%'
         {topic_filter}
         {government_filter}
@@ -822,9 +822,9 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            decision_title, summary, tags_policy_area, tags_government_body, decision_url
-        FROM israeli_government_decisions 
-        WHERE (decision_title ~* 'יישום|ביצוע|הוצאה לפועל' OR decision_content ~* 'ליישום החלטה|לביצוע החלטה')
+            title, summary, topics, ministries
+        FROM government_decisions 
+        WHERE (title ~* 'יישום|ביצוע|הוצאה לפועל' OR content ~* 'ליישום החלטה|לביצוע החלטה')
         {topic_filter}
         {government_filter}
         ORDER BY decision_date DESC
@@ -844,9 +844,9 @@ SQL_TEMPLATES = {
         sql="""
         SELECT 
             id, government_number, decision_number, decision_date,
-            decision_title, summary, tags_policy_area, tags_government_body, decision_url
-        FROM israeli_government_decisions 
-        WHERE decision_title ~* 'הארכ|עדכון|תיקון החלטה|שינוי'
+            title, summary, topics, ministries
+        FROM government_decisions 
+        WHERE title ~* 'הארכ|עדכון|תיקון החלטה|שינוי'
         {topic_filter}
         {government_filter}
         ORDER BY decision_date DESC
@@ -965,7 +965,7 @@ def get_template_by_intent(intent: str, entities: Dict[str, Any]) -> Optional[SQ
             return SQL_TEMPLATES["count_by_year"]
         
         # Count operational decisions by topic
-        elif entities.get("topic") and entities.get("operativity") == "אופרטיבית":
+        elif entities.get("topic") and entities.get("decision_type") == "אופרטיבית":
             return SQL_TEMPLATES["count_operational_by_topic"]
         
         # Count by government only
@@ -1006,7 +1006,7 @@ def get_template_by_intent(intent: str, entities: Dict[str, Any]) -> Optional[SQ
                 return SQL_TEMPLATES["count_by_year"]
             
             # Count operational decisions by topic
-            elif entities.get("topic") and entities.get("operativity") == "אופרטיבית":
+            elif entities.get("topic") and entities.get("decision_type") == "אופרטיבית":
                 return SQL_TEMPLATES["count_operational_by_topic"]
             
             # Count by government only
@@ -1029,10 +1029,10 @@ def get_template_by_intent(intent: str, entities: Dict[str, Any]) -> Optional[SQ
             return SQL_TEMPLATES["search_by_date_range"]
         
         # Ministry search
-        if entities.get("tags_government_body"):
-            # Check if we need joint tags_government_body (ALL tags_government_body must be involved)
-            if len(entities.get("tags_government_body", [])) > 1:
-                entities["ministry_list"] = entities["tags_government_body"]
+        if entities.get("ministries"):
+            # Check if we need joint ministries (ALL ministries must be involved)
+            if len(entities.get("ministries", [])) > 1:
+                entities["ministry_list"] = entities["ministries"]
                 return SQL_TEMPLATES["joint_ministries_decisions"]
             else:
                 # Single ministry search
@@ -1082,7 +1082,7 @@ def get_template_by_intent(intent: str, entities: Dict[str, Any]) -> Optional[SQ
             return SQL_TEMPLATES["recommendations_analysis"]
         
         # Ministry breakdown for detailed searches
-        if ("משרד" in topic or "משרדים" in topic or entities.get("tags_government_body")):
+        if ("משרד" in topic or "משרדים" in topic or entities.get("ministries")):
             return SQL_TEMPLATES["ministry_breakdown"]
         
         # Year + topic search - extract year from date_range or topic
@@ -1148,7 +1148,7 @@ def build_dynamic_filters(template: SQLTemplate, entities: Dict[str, Any]) -> st
     # Topic filter
     if "{topic_filter}" in sql:
         if entities.get("topic"):
-            topic_filter = "AND tags_policy_area ILIKE '%' || %(topic)s || '%'"
+            topic_filter = "AND %(topic)s = ANY(topics)"
         else:
             topic_filter = ""
         sql = sql.replace("{topic_filter}", topic_filter)
@@ -1232,7 +1232,7 @@ def get_template_coverage() -> Dict[str, Any]:
 
 # Default parameters for common cases
 DEFAULT_PARAMS = {
-    "limit": 5,  # Reduced from 20 to prevent token overflow for large tags_policy_area like environment
+    "limit": 5,  # Reduced from 20 to prevent token overflow for large topics like environment
     "min_count": 1,
     "start_date": "2020-01-01",
     "end_date": "2025-12-31"
