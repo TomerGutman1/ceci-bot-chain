@@ -129,10 +129,13 @@ services:
       start_period: 40s
     container_name: ceci-nginx
   postgres:
+    # ⚠️ WARNING: TEST DATABASE ONLY - DO NOT USE FOR PRODUCTION QUERIES!
+    # This PostgreSQL is ONLY for bot chain unit tests
+    # Production data is in Supabase (israeli_government_decisions table)
     image: postgres:15
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ceci_bot_chain
+      POSTGRES_DB: ceci_bot_chain  # Test database - not production data!
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:

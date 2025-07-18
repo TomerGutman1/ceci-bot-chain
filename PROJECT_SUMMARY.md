@@ -12,7 +12,8 @@ via **Frontend → FastAPI → Bot-Chain → Supabase PG**.
 1. `POST /api/process-query` (frontend)
 2. Container `BOT_CHAIN` (port 8002) runs:
    `1_UNIFIED_INTENT → 2X_ROUTER → 2C_CLARIFY? → 2Q_SQL → 2E_EVAL? → 3Q_RANK? → 4_LLM_FORMATTER`
-3. Source tables: `israeli_government_decisions_*`.
+3. **PRODUCTION DATA**: Supabase table `israeli_government_decisions`
+4. **⚠️ NOT FOR QUERIES**: Local PostgreSQL (port 5433) - test fixtures only!
 
 **Unified Architecture**: Merged Rewrite+Intent bots, upgraded to LLM formatter for Hebrew quality.
 
@@ -115,7 +116,7 @@ Current **status 15 Jul 2025**: ✅ **All tests passing** (unified architecture)
 | Ranker | 8016 | Currently disabled |
 | LLM Formatter | 8017 | Replaced code formatter |
 | Decision Guide | 8018 | NEW service |
-| Postgres | 5433 | |
+| Postgres | 5433 | ⚠️ TEST ONLY - not for production queries! |
 | Redis | 6380 | |
 
 Health: `/api/chat/health` + `/health` per bot.

@@ -73,6 +73,27 @@ ssh root@178.62.39.248 "cd /root/CECI-W-BOTS && git pull && docker compose -f do
 
 > **NEVER change fundamental data types** again – e.g. the `id` field **must stay `UUID4` *as string***. All future PRs touching DB schema require explicit approval.
 
+### ⚠️ CRITICAL: Database Architecture ⚠️
+
+**TWO SEPARATE DATABASES EXIST - DO NOT CONFUSE THEM:**
+
+1. **PRODUCTION DATA** (Supabase):
+   - Table: `israeli_government_decisions`
+   - Columns: `decision_title`, `decision_content`, `tags_policy_area`, `tags_government_body`
+   - This is the ONLY source of real government decision data
+   - Access via Supabase SDK or SQL Engine Service
+
+2. **TEST DATABASE** (Local PostgreSQL container):
+   - Table: `government_decisions` (EMPTY - test fixtures only)
+   - Used ONLY for bot chain unit tests
+   - Runs on port 5433 in Docker
+   - DO NOT use this for production queries!
+
+**Schema Documentation:**
+- Production: `/israeli_government_decisions_DB_SCHEMA.md`
+- TypeScript: `/server/src/services/sqlQueryEngine/schema.ts`
+- Test warning: `/bot_chain/schemas/database_schema.sql`
+
 ---
 
 ## 5 · Unified Architecture Changes (10 Jul 2025)
