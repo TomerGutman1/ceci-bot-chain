@@ -546,8 +546,8 @@ async def call_gpt_formatter(
             for result in truncated_content["results"]:
                 if isinstance(result, dict):
                     # Truncate content field if it exists and is too long
-                    if "content" in result and isinstance(result["content"], str) and len(result["content"]) > 1000:
-                        result["content"] = result["content"][:997] + "..."
+                    if "content" in result and isinstance(result["content"], str) and len(result["content"]) > 10000:
+                        result["content"] = result["content"][:9997] + "..."
                     # Truncate summary field if it's too long
                     if "summary" in result and isinstance(result["summary"], str) and len(result["summary"]) > 500:
                         result["summary"] = result["summary"][:497] + "..."
