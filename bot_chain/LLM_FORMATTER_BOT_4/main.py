@@ -418,12 +418,17 @@ Card Format:
 
 IMPORTANT: Only if there are MORE than 5 results, add at the end:
 
+
 ### 💡 רוצה לצמצם את התוצאות?
 נסה להיות יותר ספציפי:
-- **תאריכים מדויקים**: "החלטות בנושא X בין ינואר למרץ 2025"
-- **נושא ספציפי**: "החלטות בנושא חינוך יסודי" במקום רק "חינוך"
-- **ממשלה ספציפית**: "החלטות בנושא X בממשלה 37"
-- **משרד מסוים**: "החלטות משרד החינוך בנושא X"
+
+• **תאריכים מדויקים**: "החלטות בנושא X בין ינואר למרץ 2025"
+
+• **נושא ספציפי**: "החלטות בנושא חינוך יסודי" במקום רק "חינוך"
+
+• **ממשלה ספציפית**: "החלטות בנושא X בממשלה 37"
+
+• **משרד מסוים**: "החלטות משרד החינוך בנושא X"
 
 Input data: {content}
 Original query: {query}
@@ -833,10 +838,13 @@ async def format_response(request: FormatterRequest) -> FormatterResponse:
         
         # Add tips if many results
         if len(results) > 5:
-            response_parts.append("\n💡 רוצה לצמצם את התוצאות?")
+            response_parts.append("\n\n💡 רוצה לצמצם את התוצאות?")
             response_parts.append("נסה להיות יותר ספציפי:")
+            response_parts.append("")
             response_parts.append("• **תאריכים מדויקים**: \"החלטות בנושא X בין ינואר למרץ 2025\"")
+            response_parts.append("")
             response_parts.append("• **נושא ספציפי**: \"החלטות בנושא חינוך יסודי\" במקום רק \"חינוך\"")
+            response_parts.append("")
             response_parts.append("• **ממשלה ספציפית**: \"החלטות בנושא X בממשלה 37\"")
         
         formatted_response = "\n".join(response_parts)
