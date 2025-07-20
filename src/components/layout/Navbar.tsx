@@ -50,7 +50,7 @@ const Navbar = () => {
           </nav>
 
           <div className="hidden md:flex items-center space-x-2 space-x-reverse">
-            <Link to="/dashboard">
+            <Link to="/auth">
               <Button variant="outline" className="font-medium rounded-full">
                 התחברות
               </Button>
@@ -93,7 +93,7 @@ const Navbar = () => {
               </Link>
             ))}
             <div className="flex flex-col space-y-2 pt-2 border-t border-gray-200">
-              <Link to="/dashboard" onClick={() => setIsMenuOpen(false)}>
+              <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
                 <Button variant="outline" className="w-full font-medium rounded-full">
                   התחברות
                 </Button>
