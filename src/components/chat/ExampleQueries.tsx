@@ -99,7 +99,6 @@ const ExampleQueries = ({ onQueryClick, onQueryEdit, position }: ExampleQueriesP
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-1">
                         <h4 className="font-semibold text-sm text-gray-800">{example.title}</h4>
-                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">{example.category}</span>
                       </div>
                       
                       <p className="text-sm text-gray-600 leading-relaxed mb-2">
