@@ -31,7 +31,7 @@ const ExampleQueries = ({ onQueryClick, onQueryEdit, position }: ExampleQueriesP
     {
       icon: <FileText className="w-5 h-5" />,
       title: "החלטה ספציפית",
-      query: "החלטה 549",
+      query: "החלטה 550",
       category: "ספציפי"
     },
     {
