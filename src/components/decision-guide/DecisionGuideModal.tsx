@@ -37,10 +37,11 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
   const [analysisResults, setAnalysisResults] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
+  const [viewState, setViewState] = useState<'input' | 'loading' | 'results'>('input');
 
   // Rotate messages effect
   useEffect(() => {
-    if (!isAnalyzing) {
+    if (viewState !== 'loading') {
       setCurrentMessageIndex(0);
       return;
     }
@@ -50,7 +51,7 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
     }, 8000);
 
     return () => clearInterval(interval);
-  }, [isAnalyzing]);
+  }, [viewState]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const uploadedFile = acceptedFiles[0];
@@ -93,7 +94,8 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
       return;
     }
 
-    console.log('Setting isAnalyzing to true...');
+    console.log('Setting viewState to loading...');
+    setViewState('loading');
     setIsAnalyzing(true);
     setError(null);
     
@@ -113,6 +115,7 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
       }
       
       setAnalysisResults(results);
+      setViewState('results');
       
       // Show toast if misuse detected
       if (results.misuse_detected) {
@@ -127,6 +130,7 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
     } catch (err) {
       setError('אירעה שגיאה זמנית. מומלץ לנסות שוב בעוד כמה דקות.');
       console.error('Analysis error:', err);
+      setViewState('input');
     } finally {
       setIsAnalyzing(false);
     }
@@ -137,13 +141,14 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
     setFile(null);
     setTextContent('');
     setError(null);
+    setViewState('input');
   };
 
   const handleBackToChat = () => {
     onClose();
   };
 
-  console.log('DecisionGuideModal render - isAnalyzing:', isAnalyzing, 'analysisResults:', !!analysisResults);
+  console.log('DecisionGuideModal render - viewState:', viewState, 'isAnalyzing:', isAnalyzing);
 
   return (
     <>
@@ -154,7 +159,7 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
         }
       }}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        {isAnalyzing ? (
+        {viewState === 'loading' ? (
           // Loading state
           <div className="py-16">
             <div className="flex justify-center mb-8">
@@ -177,7 +182,19 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
               </div>
             </div>
           </div>
-        ) : !analysisResults ? (
+        ) : viewState === 'results' && analysisResults ? (
+          <>
+            <DialogHeader>
+              <DialogTitle className="text-2xl text-center">תוצאות ניתוח ההחלטה</DialogTitle>
+            </DialogHeader>
+            
+            <AnalysisResults
+              results={analysisResults}
+              onReset={handleReset}
+              onBackToChat={handleBackToChat}
+            />
+          </>
+        ) : (
           <>
             <DialogHeader>
               <DialogTitle className="text-2xl text-center">שיפור ניסוח ישימות החלטת ממשלה</DialogTitle>
@@ -299,18 +316,6 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
                 </Button>
               </div>
             </div>
-          </>
-        ) : (
-          <>
-            <DialogHeader>
-              <DialogTitle className="text-2xl text-center">תוצאות ניתוח ההחלטה</DialogTitle>
-            </DialogHeader>
-            
-            <AnalysisResults
-              results={analysisResults}
-              onReset={handleReset}
-              onBackToChat={handleBackToChat}
-            />
           </>
         )}
       </DialogContent>
