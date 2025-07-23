@@ -68,11 +68,17 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
       return;
     }
 
+    console.log('handleAnalyze called - setting isAnalyzing to true'); // Debug log
     setIsAnalyzing(true);
     setError(null);
-    console.log('Starting analysis...'); // Debug log
+    console.log('isAnalyzing state should be true now'); // Debug log
 
     try {
+      console.log('Calling analyzeDecisionDraft...'); // Debug log
+      
+      // Add artificial delay for testing
+      await new Promise(resolve => setTimeout(resolve, 5000)); // 5 second delay
+      
       const results = await analyzeDecisionDraft(file, textContent);
       console.log('Analysis completed:', results); // Debug log
       setAnalysisResults(results);

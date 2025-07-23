@@ -20,7 +20,10 @@ const ANALYSIS_MESSAGES = [
 export function AnalysisLoadingModal({ isOpen }: AnalysisLoadingModalProps) {
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
 
+  console.log('AnalysisLoadingModal - isOpen:', isOpen); // Debug log
+
   useEffect(() => {
+    console.log('AnalysisLoadingModal useEffect - isOpen:', isOpen); // Debug log
     if (!isOpen) {
       setCurrentMessageIndex(0);
       return;
