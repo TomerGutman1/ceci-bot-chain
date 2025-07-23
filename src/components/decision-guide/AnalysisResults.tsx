@@ -113,7 +113,7 @@ export function AnalysisResults({ results, onReset, onBackToChat }: AnalysisResu
                   {criteria.reference_from_document && (
                     <div>
                       <p className="font-medium text-gray-900 mb-1">ציטוט מהמסמך:</p>
-                      <blockquote className="pr-4 border-r-2 border-gray-300 text-gray-600 italic">
+                      <blockquote className="pr-4 border-r-2 border-gray-300 text-gray-600 italic" dir="rtl">
                         "{criteria.reference_from_document}"
                       </blockquote>
                     </div>

@@ -12,13 +12,22 @@ import { Textarea } from '@/components/ui/textarea';
 import { Upload, FileText, AlertCircle } from 'lucide-react';
 import { analyzeDecisionDraft } from '@/services/decisionGuide.service';
 import { AnalysisResults } from './AnalysisResults';
-import { AnalysisLoadingModal } from './AnalysisLoadingModal';
 import { toast } from '@/components/ui/use-toast';
 
 interface DecisionGuideModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
+
+// Analysis status messages
+const ANALYSIS_MESSAGES = [
+  'הטיוטה התקבלה. מתחילים בניתוח.',
+  'בודקים את מבנה הטיוטה ותקינות הנתונים.',
+  'מזהים קריטריונים רלוונטיים לציון.',
+  'מחשבים מדדי הערכה לפי מתודולוגיית המשרד.',
+  'מכינים דו״ח מסכם להצגה.',
+  'עוד רגע – מבצעים אימות סופי.'
+];
 
 export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps) {
   const [mode, setMode] = useState<'upload' | 'paste'>('upload');
@@ -27,6 +36,21 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResults, setAnalysisResults] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
+
+  // Rotate messages effect
+  useEffect(() => {
+    if (!isAnalyzing) {
+      setCurrentMessageIndex(0);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setCurrentMessageIndex((prev) => (prev + 1) % ANALYSIS_MESSAGES.length);
+    }, 8000);
+
+    return () => clearInterval(interval);
+  }, [isAnalyzing]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const uploadedFile = acceptedFiles[0];
@@ -68,13 +92,10 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
       return;
     }
 
-    console.log('handleAnalyze called - setting isAnalyzing to true'); // Debug log
     setIsAnalyzing(true);
     setError(null);
-    console.log('isAnalyzing state should be true now'); // Debug log
 
     try {
-      console.log('Calling analyzeDecisionDraft...'); // Debug log
       
       // Ensure minimum display time for loading modal
       const startTime = Date.now();
@@ -86,7 +107,6 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
         await new Promise(resolve => setTimeout(resolve, 2000 - elapsedTime));
       }
       
-      console.log('Analysis completed:', results); // Debug log
       setAnalysisResults(results);
       
       // Show toast if misuse detected
@@ -122,7 +142,30 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        {!analysisResults ? (
+        {isAnalyzing ? (
+          // Loading state
+          <div className="py-16">
+            <div className="flex justify-center mb-8">
+              <div className="animate-spin rounded-full h-20 w-20 border-4 border-blue-600 border-t-transparent"></div>
+            </div>
+            <h3 className="text-2xl font-medium text-center mb-4">מנתח את ההחלטה</h3>
+            <div className="max-w-md mx-auto bg-blue-50 rounded-lg p-6">
+              <p className="text-center text-blue-900 font-medium text-lg">{ANALYSIS_MESSAGES[currentMessageIndex]}</p>
+            </div>
+            <div className="mt-6 flex justify-center">
+              <div className="flex gap-2">
+                {ANALYSIS_MESSAGES.map((_, i) => (
+                  <div
+                    key={i}
+                    className={`h-2 w-2 rounded-full transition-all duration-300 ${
+                      i === currentMessageIndex ? 'bg-blue-600 w-8' : 'bg-blue-300'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : !analysisResults ? (
           <>
             <DialogHeader>
               <DialogTitle className="text-2xl text-center">שיפור ניסוח ישימות החלטת ממשלה</DialogTitle>
@@ -260,10 +303,6 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
         )}
       </DialogContent>
     </Dialog>
-    
-    {/* Loading Modal */}
-    {console.log('Rendering AnalysisLoadingModal with isAnalyzing:', isAnalyzing)}
-    <AnalysisLoadingModal isOpen={isAnalyzing} />
     </>
   );
 }
