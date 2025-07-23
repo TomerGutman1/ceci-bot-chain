@@ -19,7 +19,13 @@ app = FastAPI(title="Decision Guide Bot")
 
 # Simple in-memory cache for validation results
 validation_cache = {}
+analysis_cache = {}  # Cache for analysis results
 CACHE_EXPIRY_SECONDS = 3600  # 1 hour
+
+# Document size limits
+WARN_CHAR_LIMIT = 50000  # ~20 pages
+MAX_CHAR_LIMIT = 100000  # ~40 pages
+CHUNK_SIZE = 40000  # Size for each chunk when splitting
 
 # Configuration
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -352,8 +358,38 @@ async def analyze_decision(request: AnalyzeRequest):
         # Calculate document hash for tracking
         doc_hash = hashlib.md5(request.text.encode()).hexdigest()
         
-        # Log the request with hash
-        logger.info(f"Analyzing decision draft - text_length: {len(request.text)}, request_id: {request.requestId}, doc_hash: {doc_hash}")
+        # Check document size
+        doc_length = len(request.text)
+        logger.info(f"Analyzing decision draft - text_length: {doc_length}, request_id: {request.requestId}, doc_hash: {doc_hash}")
+        
+        # Check if document exceeds warning limit
+        if doc_length > MAX_CHAR_LIMIT:
+            logger.warning(f"Document exceeds maximum size limit - doc_hash: {doc_hash}, length: {doc_length}, max: {MAX_CHAR_LIMIT}")
+            return AnalyzeResponse(
+                criteria_scores=[],
+                recommendations=[f"המסמך ארוך מדי ({doc_length:,} תווים). הגבלת המערכת היא {MAX_CHAR_LIMIT:,} תווים (כ-40 עמודים). אנא קצר את המסמך או חלק אותו למספר חלקים."],
+                model_used="none",
+                misuse_detected=False,
+                retry_status="מסמך גדול מדי"
+            )
+        
+        if doc_length > WARN_CHAR_LIMIT:
+            logger.info(f"Document exceeds warning limit - doc_hash: {doc_hash}, length: {doc_length}")
+            # Continue with analysis but add warning
+            size_warning = f"שים לב: המסמך ארוך ({doc_length:,} תווים, כ-{doc_length//2500} עמודים). זה עלול להשפיע על איכות הניתוח."
+        
+        # Check analysis cache first
+        analysis_cache_key = f"analysis_{doc_hash}"
+        cached_analysis = analysis_cache.get(analysis_cache_key)
+        if cached_analysis:
+            cache_timestamp, cached_response = cached_analysis
+            if (datetime.utcnow() - cache_timestamp).total_seconds() < CACHE_EXPIRY_SECONDS:
+                logger.info(f"Using cached analysis result - doc_hash: {doc_hash}")
+                # Add size warning if applicable
+                if doc_length > WARN_CHAR_LIMIT:
+                    size_warning = f"שים לב: המסמך ארוך ({doc_length:,} תווים, כ-{doc_length//2500} עמודים). זה עלול להשפיע על איכות הניתוח."
+                    cached_response.recommendations.insert(0, size_warning)
+                return cached_response
         
         # Check cache for previous validation result
         cache_key = f"validation_{doc_hash}"
@@ -377,7 +413,7 @@ async def analyze_decision(request: AnalyzeRequest):
         # Create the evaluation prompt
         prompt = create_evaluation_prompt(request.text)
         
-        # Call OpenAI API
+        # Call OpenAI API with seed for consistency
         response = client.chat.completions.create(
             model=model,
             messages=[
@@ -390,7 +426,8 @@ async def analyze_decision(request: AnalyzeRequest):
                 {"role": "user", "content": prompt}
             ],
             temperature=0.0,  # Set to 0 for consistent scoring
-            max_tokens=3000
+            max_tokens=3000,
+            seed=42  # Fixed seed for deterministic results
         )
         
         # Parse the response
@@ -432,7 +469,18 @@ async def analyze_decision(request: AnalyzeRequest):
         
         # Document passed validation - now perform analysis with retries
         logger.info(f"Document passed validation, starting analysis for doc_hash: {doc_hash}")
-        return perform_analysis_with_retries(response_json, model, doc_hash, request.requestId)
+        result = perform_analysis_with_retries(response_json, model, doc_hash, request.requestId)
+        
+        # Cache successful analysis results
+        if result and not result.misuse_detected and result.criteria_scores:
+            analysis_cache[analysis_cache_key] = (datetime.utcnow(), result)
+            logger.info(f"Cached analysis result for doc_hash: {doc_hash}")
+        
+        # Add size warning if applicable
+        if doc_length > WARN_CHAR_LIMIT and 'size_warning' in locals():
+            result.recommendations.insert(0, size_warning)
+        
+        return result
         
     except json.JSONDecodeError as e:
         logger.error(f"JSON parsing error for doc_hash {doc_hash}: {str(e)}")
@@ -458,12 +506,20 @@ async def health_check():
 
 @app.post("/clear-cache")
 async def clear_cache():
-    """Clear the validation cache - useful for testing"""
-    global validation_cache
-    cache_size = len(validation_cache)
+    """Clear both validation and analysis caches - useful for testing"""
+    global validation_cache, analysis_cache
+    validation_size = len(validation_cache)
+    analysis_size = len(analysis_cache)
     validation_cache.clear()
-    logger.info(f"Cleared validation cache - removed {cache_size} entries")
-    return {"status": "cache cleared", "entries_removed": cache_size}
+    analysis_cache.clear()
+    total_removed = validation_size + analysis_size
+    logger.info(f"Cleared caches - validation: {validation_size}, analysis: {analysis_size}, total: {total_removed}")
+    return {
+        "status": "caches cleared", 
+        "validation_entries_removed": validation_size,
+        "analysis_entries_removed": analysis_size,
+        "total_entries_removed": total_removed
+    }
 
 if __name__ == "__main__":
     import uvicorn
