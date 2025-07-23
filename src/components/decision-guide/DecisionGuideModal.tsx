@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useDropzone } from 'react-dropzone';
 import {
   Dialog,
@@ -159,30 +160,7 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
         }
       }}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        {viewState === 'loading' ? (
-          // Loading state
-          <div className="py-16">
-            <div className="flex justify-center mb-8">
-              <div className="animate-spin rounded-full h-20 w-20 border-4 border-blue-600 border-t-transparent"></div>
-            </div>
-            <h3 className="text-2xl font-medium text-center mb-4">מנתח את ההחלטה</h3>
-            <div className="max-w-md mx-auto bg-blue-50 rounded-lg p-6">
-              <p className="text-center text-blue-900 font-medium text-lg">{ANALYSIS_MESSAGES[currentMessageIndex]}</p>
-            </div>
-            <div className="mt-6 flex justify-center">
-              <div className="flex gap-2">
-                {ANALYSIS_MESSAGES.map((_, i) => (
-                  <div
-                    key={i}
-                    className={`h-2 w-2 rounded-full transition-all duration-300 ${
-                      i === currentMessageIndex ? 'bg-blue-600 w-8' : 'bg-blue-300'
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : viewState === 'results' && analysisResults ? (
+        {viewState === 'results' && analysisResults ? (
           <>
             <DialogHeader>
               <DialogTitle className="text-2xl text-center">תוצאות ניתוח ההחלטה</DialogTitle>
@@ -320,6 +298,33 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
         )}
       </DialogContent>
     </Dialog>
+    
+    {/* Loading Overlay */}
+    {viewState === 'loading' && createPortal(
+      <div className="fixed inset-0 flex items-center justify-center animate-fadeIn" style={{ zIndex: 99999 }}>
+        <div className="absolute inset-0 bg-black/60 animate-fadeIn" />
+        <div className="relative bg-white rounded-xl shadow-2xl p-8 max-w-md w-full mx-4 animate-scaleIn">
+          <div className="flex justify-center mb-6">
+            <div className="animate-spin rounded-full h-20 w-20 border-4 border-blue-600 border-t-transparent"></div>
+          </div>
+          <h3 className="text-2xl font-semibold text-center mb-4 text-gray-900">מנתח את ההחלטה</h3>
+          <div className="bg-blue-50 rounded-lg p-4 mb-6">
+            <p className="text-center text-blue-900 font-medium text-lg">{ANALYSIS_MESSAGES[currentMessageIndex]}</p>
+          </div>
+          <div className="flex justify-center gap-2">
+            {ANALYSIS_MESSAGES.map((_, i) => (
+              <div
+                key={i}
+                className={`h-2 rounded-full transition-all duration-300 ${
+                  i === currentMessageIndex ? 'bg-blue-600 w-8' : 'bg-blue-300 w-2'
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
     </>
   );
 }
