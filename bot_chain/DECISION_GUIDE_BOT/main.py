@@ -8,12 +8,17 @@ import logging
 from openai import OpenAI
 import json
 import re
+import hashlib
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Decision Guide Bot")
+
+# Simple in-memory cache for validation results
+validation_cache = {}
+CACHE_EXPIRY_SECONDS = 3600  # 1 hour
 
 # Configuration
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -239,17 +244,56 @@ def create_evaluation_prompt(text: str) -> str:
 def detect_misuse(response_json: dict) -> tuple[bool, Optional[str]]:
     """Detect if the user is trying to misuse the bot"""
     if not response_json.get("is_government_decision", True):
-        return True, response_json.get("misuse_message", 
-            "מצטער, אני מיועד אך ורק לניתוח טיוטות של החלטות ממשלה. "
-            "אם ברצונך לנתח טיוטת החלטת ממשלה, אנא העלה או הדבק את הטקסט המלא של הטיוטה.")
+        # Get the GPT's explanation if available
+        gpt_message = response_json.get("misuse_message", "")
+        
+        # Extract what type of document GPT detected
+        doc_type_match = re.search(r'נראה כמו\s*([^\.]+)', gpt_message)
+        detected_type = doc_type_match.group(1) if doc_type_match else "מסמך לא מזוהה"
+        
+        # Create a more informative error message
+        enhanced_message = f"""⚠️ **שימוש לא תקין**
+
+מצטער, אני מיועד אך ורק לניתוח טיוטות של החלטות ממשלה.
+
+המסמך שהעלית נראה כמו **{detected_type}** ולא מובנה כהחלטת ממשלה.
+
+אם ברצונך לנתח טיוטת החלטת ממשלה, אנא העלה או הדבק את הטקסט המלא של הטיוטה.
+
+💡 **טיפ**: החלטת ממשלה צריכה לכלול:
+• כותרת עם נושא מדיניות
+• אזכור של משרדי ממשלה או שרים
+• סעיפים המתארים פעולות ממשלתיות
+• שפה פורמלית של מסמך ממשלתי"""
+        
+        return True, enhanced_message
     return False, None
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 async def analyze_decision(request: AnalyzeRequest):
     """Analyze a government decision draft against 13 criteria"""
     try:
-        # Log the request
-        logger.info(f"Analyzing decision draft - text_length: {len(request.text)}, request_id: {request.requestId}")
+        # Calculate document hash for tracking
+        doc_hash = hashlib.md5(request.text.encode()).hexdigest()
+        
+        # Log the request with hash
+        logger.info(f"Analyzing decision draft - text_length: {len(request.text)}, request_id: {request.requestId}, doc_hash: {doc_hash}")
+        
+        # Check cache for previous validation result
+        cache_key = f"validation_{doc_hash}"
+        cached_result = validation_cache.get(cache_key)
+        if cached_result:
+            cache_timestamp, is_valid, rejection_reason = cached_result
+            if (datetime.utcnow() - cache_timestamp).total_seconds() < CACHE_EXPIRY_SECONDS:
+                logger.info(f"Using cached validation result - doc_hash: {doc_hash}, is_valid: {is_valid}")
+                if not is_valid:
+                    return AnalyzeResponse(
+                        criteria_scores=[],
+                        recommendations=[],
+                        model_used="cached",
+                        misuse_detected=True,
+                        misuse_message=rejection_reason
+                    )
         
         # Always use GPT-4 for better accuracy in document classification
         model = "gpt-4o"
@@ -279,11 +323,21 @@ async def analyze_decision(request: AnalyzeRequest):
         if json_match:
             response_json = json.loads(json_match.group())
         else:
+            logger.error(f"Failed to extract JSON from GPT response for doc_hash: {doc_hash}")
             raise ValueError("Failed to extract JSON from response")
+        
+        # Log the validation result
+        is_gov_decision = response_json.get("is_government_decision", True)
+        logger.info(f"Document validation - doc_hash: {doc_hash}, is_government_decision: {is_gov_decision}")
         
         # Check for misuse
         misuse_detected, misuse_message = detect_misuse(response_json)
+        
+        # Cache the validation result
+        validation_cache[cache_key] = (datetime.utcnow(), not misuse_detected, misuse_message)
+        
         if misuse_detected:
+            logger.warning(f"Document rejected - doc_hash: {doc_hash}, reason: {misuse_message}")
             return AnalyzeResponse(
                 criteria_scores=[],
                 recommendations=[],
@@ -329,8 +383,17 @@ async def analyze_decision(request: AnalyzeRequest):
             misuse_detected=False
         )
         
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON parsing error for doc_hash {doc_hash}: {str(e)}")
+        # Try to be more resilient - assume it's a valid government document if parsing failed
+        return AnalyzeResponse(
+            criteria_scores=[],
+            recommendations=["לא ניתן לפענח את תגובת המערכת. אנא נסה שוב."],
+            model_used=model,
+            misuse_detected=False
+        )
     except Exception as e:
-        logger.error(f"Error analyzing decision: {str(e)}")
+        logger.error(f"Error analyzing decision for doc_hash {doc_hash}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
