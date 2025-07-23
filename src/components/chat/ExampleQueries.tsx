@@ -128,14 +128,6 @@ const ExampleQueries = ({ onQueryClick, onQueryEdit, position }: ExampleQueriesP
               ))}
             </div>
           </div>
-
-          <div className="mt-4 pt-4 border-t border-gray-200 flex-shrink-0">
-            <div className="p-3 bg-blue-50 rounded-lg">
-              <p className="text-xs text-gray-600 text-center">
-                📤 שלח ישירות | ✏️ העתק לתיבת הצ'אט לעריכה
-              </p>
-            </div>
-          </div>
           
           {/* Macro View Button - Only show if enabled */}
           {showMacroButton && (
