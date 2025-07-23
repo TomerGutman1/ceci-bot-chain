@@ -21,6 +21,15 @@ export interface DecisionGuideAnalysis {
   misuse_message?: string;
 }
 
+export async function clearDecisionGuideCache(): Promise<void> {
+  try {
+    await axios.post(`${API_BASE_URL}/decision-guide/clear-cache`);
+  } catch (error) {
+    console.error('Failed to clear cache:', error);
+    throw new Error('Failed to clear cache');
+  }
+}
+
 export async function analyzeDecisionDraft(
   file: File | null,
   text: string

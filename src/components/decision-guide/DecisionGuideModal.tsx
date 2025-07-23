@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Upload, FileText, AlertCircle } from 'lucide-react';
-import { analyzeDecisionDraft } from '@/services/decisionGuide.service';
+import { analyzeDecisionDraft, clearDecisionGuideCache } from '@/services/decisionGuide.service';
 import { AnalysisResults } from './AnalysisResults';
 import { toast } from '@/components/ui/use-toast';
 
@@ -89,19 +89,14 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
   });
 
   const handleAnalyze = async () => {
-    console.log('handleAnalyze called!');
     if (!file && !textContent.trim()) {
       setError('אנא העלה קובץ או הדבק טקסט לניתוח.');
       return;
     }
 
-    console.log('Setting viewState to loading...');
-    alert('לפני שינוי viewState ל-loading');
     setViewState('loading');
     setIsAnalyzing(true);
     setError(null);
-    
-    alert('אחרי שינוי viewState ל-loading, viewState = ' + viewState);
     
     // Force a small delay to ensure the loading state is shown
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -152,12 +147,22 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
     onClose();
   };
 
-  console.log('DecisionGuideModal render - viewState:', viewState, 'isAnalyzing:', isAnalyzing);
-  
-  // בדיקה אם יש לנו גישה ל-document
-  if (typeof document !== 'undefined') {
-    console.log('document.body exists:', !!document.body);
-  }
+  const handleClearCache = async () => {
+    try {
+      await clearDecisionGuideCache();
+      toast({
+        title: "המטמון נוקה בהצלחה",
+        description: "כעת ניתן לנתח מחדש מסמכים שנותחו בעבר",
+      });
+    } catch (error) {
+      toast({
+        title: "שגיאה בניקוי המטמון",
+        description: "נא לנסות שוב",
+        variant: "destructive",
+      });
+    }
+  };
+
 
   return (
     <>
@@ -168,18 +173,27 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
         }
       }}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        {/* Debug Info */}
-        <div className="bg-red-100 p-2 text-sm">
-          Debug: viewState = {viewState}, isAnalyzing = {String(isAnalyzing)}
-        </div>
-        
         {viewState === 'loading' ? (
           <div className="py-16">
-            <h1 className="text-4xl text-center text-red-600">טוען!!!</h1>
             <div className="flex justify-center mb-8">
               <div className="animate-spin rounded-full h-20 w-20 border-4 border-blue-600 border-t-transparent"></div>
             </div>
-            <p className="text-center text-2xl">{ANALYSIS_MESSAGES[currentMessageIndex]}</p>
+            <h3 className="text-2xl font-medium text-center mb-4">מנתח את ההחלטה</h3>
+            <div className="max-w-md mx-auto bg-blue-50 rounded-lg p-6">
+              <p className="text-center text-blue-900 font-medium text-lg">{ANALYSIS_MESSAGES[currentMessageIndex]}</p>
+            </div>
+            <div className="mt-6 flex justify-center">
+              <div className="flex gap-2">
+                {ANALYSIS_MESSAGES.map((_, i) => (
+                  <div
+                    key={i}
+                    className={`h-2 w-2 rounded-full transition-all duration-300 ${
+                      i === currentMessageIndex ? 'bg-blue-600 w-8' : 'bg-blue-300'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         ) : viewState === 'results' && analysisResults ? (
           <>
@@ -304,9 +318,14 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
 
               {/* Action Buttons */}
               <div className="mt-6 flex justify-between">
-                <Button variant="outline" onClick={onClose}>
-                  ביטול
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={onClose}>
+                    ביטול
+                  </Button>
+                  <Button variant="ghost" onClick={handleClearCache} title="נקה מטמון כדי לנתח מחדש מסמכים">
+                    נקה מטמון
+                  </Button>
+                </div>
                 <Button
                   onClick={handleAnalyze}
                   disabled={(!file && !textContent.trim())}
