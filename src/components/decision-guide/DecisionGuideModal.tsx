@@ -76,10 +76,16 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
     try {
       console.log('Calling analyzeDecisionDraft...'); // Debug log
       
-      // Add artificial delay for testing
-      await new Promise(resolve => setTimeout(resolve, 5000)); // 5 second delay
-      
+      // Ensure minimum display time for loading modal
+      const startTime = Date.now();
       const results = await analyzeDecisionDraft(file, textContent);
+      const elapsedTime = Date.now() - startTime;
+      
+      // If the request was too fast, wait a bit to show the loading state
+      if (elapsedTime < 2000) {
+        await new Promise(resolve => setTimeout(resolve, 2000 - elapsedTime));
+      }
+      
       console.log('Analysis completed:', results); // Debug log
       setAnalysisResults(results);
       
@@ -256,6 +262,7 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
     </Dialog>
     
     {/* Loading Modal */}
+    {console.log('Rendering AnalysisLoadingModal with isAnalyzing:', isAnalyzing)}
     <AnalysisLoadingModal isOpen={isAnalyzing} />
     </>
   );
