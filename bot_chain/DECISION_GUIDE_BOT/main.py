@@ -9,6 +9,7 @@ from openai import OpenAI
 import json
 import re
 import hashlib
+import time
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -48,6 +49,7 @@ class AnalyzeResponse(BaseModel):
     model_used: str
     misuse_detected: bool = False
     misuse_message: Optional[str] = None
+    retry_status: Optional[str] = None
 
 # Criteria definitions
 CRITERIA = [
@@ -268,6 +270,81 @@ def detect_misuse(response_json: dict) -> tuple[bool, Optional[str]]:
         return True, enhanced_message
     return False, None
 
+def perform_analysis(response_json: dict, model: str, doc_hash: str) -> AnalyzeResponse:
+    """Perform the actual analysis of the document after validation"""
+    try:
+        # Extract criteria scores
+        criteria_scores = []
+        for score_data in response_json.get("criteria_scores", []):
+            criteria_scores.append(CriteriaScore(
+                criterion=score_data["criterion"],
+                score=score_data["score"],
+                explanation=score_data["explanation"],
+                reference_from_document=score_data.get("reference_from_document"),
+                specific_improvement=score_data.get("specific_improvement")
+            ))
+        
+        # Extract recommendations
+        recommendations = response_json.get("recommendations", [])
+        
+        # Generate additional recommendations based on low scores
+        for score in criteria_scores:
+            if score.score <= 2:
+                if score.criterion == "לוח זמנים מחייב":
+                    recommendations.append("יש להוסיף תאריכי יעד מחייבים לכל משימה עיקרית בהחלטה")
+                elif score.criterion == "מנגנון ביקורת חיצונית":
+                    recommendations.append("מומלץ להוסיף מנגנון ביקורת חיצונית לוודא יישום אפקטיבי")
+                elif score.criterion == "מדדי תוצאה ומרכיבי הצלחה":
+                    recommendations.append("יש להגדיר מדדי הצלחה כמותיים וברורים עם יעדים מספריים")
+        
+        return AnalyzeResponse(
+            criteria_scores=criteria_scores,
+            recommendations=recommendations[:5],  # Limit to top 5 recommendations
+            model_used=model,
+            misuse_detected=False
+        )
+    except KeyError as e:
+        logger.error(f"Missing required field in analysis for doc_hash {doc_hash}: {str(e)}")
+        raise
+    except Exception as e:
+        logger.error(f"Error during analysis for doc_hash {doc_hash}: {str(e)}")
+        raise
+
+def perform_analysis_with_retries(response_json: dict, model: str, doc_hash: str, request_id: str) -> AnalyzeResponse:
+    """Perform analysis with retry logic"""
+    MAX_RETRIES = 3
+    
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            logger.info(f"Analysis attempt {attempt} for doc_hash {doc_hash}, request_id {request_id}")
+            result = perform_analysis(response_json, model, doc_hash)
+            
+            if attempt > 1:
+                result.retry_status = f"הניתוח הצליח בניסיון {attempt}"
+                logger.info(f"Analysis succeeded on attempt {attempt} for doc_hash {doc_hash}")
+            
+            return result
+            
+        except Exception as e:
+            logger.warning(f"Analysis attempt {attempt} failed for doc_hash {doc_hash}: {str(e)}")
+            
+            if attempt < MAX_RETRIES:
+                # Calculate wait time with exponential backoff
+                wait_time = attempt * 1.5  # 1.5s, 3s
+                logger.info(f"Waiting {wait_time}s before retry {attempt + 1} for doc_hash {doc_hash}")
+                time.sleep(wait_time)
+                continue
+            else:
+                # All retries exhausted
+                logger.error(f"All {MAX_RETRIES} analysis attempts failed for doc_hash {doc_hash}")
+                return AnalyzeResponse(
+                    criteria_scores=[],
+                    recommendations=[f"הניתוח נכשל לאחר {MAX_RETRIES} ניסיונות. אנא נסה שוב מאוחר יותר."],
+                    model_used=model,
+                    misuse_detected=False,
+                    retry_status=f"נכשל לאחר {MAX_RETRIES} ניסיונות"
+                )
+
 @app.post("/analyze", response_model=AnalyzeResponse)
 async def analyze_decision(request: AnalyzeRequest):
     """Analyze a government decision draft against 13 criteria"""
@@ -347,42 +424,15 @@ async def analyze_decision(request: AnalyzeRequest):
                 misuse_message=misuse_message
             )
         
-        # Extract criteria scores
-        criteria_scores = []
-        for score_data in response_json.get("criteria_scores", []):
-            criteria_scores.append(CriteriaScore(
-                criterion=score_data["criterion"],
-                score=score_data["score"],
-                explanation=score_data["explanation"],
-                reference_from_document=score_data.get("reference_from_document"),
-                specific_improvement=score_data.get("specific_improvement")
-            ))
-        
-        # Extract recommendations
-        recommendations = response_json.get("recommendations", [])
-        
-        # Generate additional recommendations based on low scores
-        for score in criteria_scores:
-            if score.score <= 2:
-                if score.criterion == "לוח זמנים מחייב":
-                    recommendations.append("יש להוסיף תאריכי יעד מחייבים לכל משימה עיקרית בהחלטה")
-                elif score.criterion == "מנגנון ביקורת חיצונית":
-                    recommendations.append("מומלץ להוסיף מנגנון ביקורת חיצונית לוודא יישום אפקטיבי")
-                elif score.criterion == "מדדי תוצאה ומרכיבי הצלחה":
-                    recommendations.append("יש להגדיר מדדי הצלחה כמותיים וברורים עם יעדים מספריים")
-        
         # Log token usage
         if hasattr(response, 'usage'):
             logger.info(f"Token usage - Model: {model}, Prompt: {response.usage.prompt_tokens}, "
                        f"Completion: {response.usage.completion_tokens}, "
                        f"Total: {response.usage.total_tokens}")
         
-        return AnalyzeResponse(
-            criteria_scores=criteria_scores,
-            recommendations=recommendations[:5],  # Limit to top 5 recommendations
-            model_used=model,
-            misuse_detected=False
-        )
+        # Document passed validation - now perform analysis with retries
+        logger.info(f"Document passed validation, starting analysis for doc_hash: {doc_hash}")
+        return perform_analysis_with_retries(response_json, model, doc_hash, request.requestId)
         
     except json.JSONDecodeError as e:
         logger.error(f"JSON parsing error for doc_hash {doc_hash}: {str(e)}")
