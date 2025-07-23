@@ -137,4 +137,26 @@ router.get('/export/:id', async (req: any, res: any) => {
   }
 });
 
+// Clear cache endpoint - forwards to Decision Guide Bot
+router.post('/clear-cache', async (_req: any, res: any) => {
+  try {
+    const axios = require('axios');
+    const botUrl = process.env.DECISION_GUIDE_BOT_URL || 'http://decision-guide-bot:8018';
+    
+    const response = await axios.post(`${botUrl}/clear-cache`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Cache cleared successfully',
+      details: response.data 
+    });
+  } catch (error: any) {
+    console.error('Error clearing cache:', error);
+    res.status(500).json({ 
+      error: 'Failed to clear cache',
+      details: error.message 
+    });
+  }
+});
+
 export default router;
