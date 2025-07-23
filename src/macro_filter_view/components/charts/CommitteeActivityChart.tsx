@@ -7,6 +7,7 @@ import React, { useState, useMemo } from 'react';
 import {
   BarChart,
   Bar,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -253,11 +254,10 @@ export default function CommitteeActivityChart({ filters, className }: Committee
               
               <Bar
                 dataKey="count"
-                fill={(entry) => entry.color}
                 radius={[0, 4, 4, 0]}
               >
                 {sortedData.map((entry, index) => (
-                  <Bar key={`bar-${index}`} fill={entry.color} />
+                  <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Bar>
             </BarChart>

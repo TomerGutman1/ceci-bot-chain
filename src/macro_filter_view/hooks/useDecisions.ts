@@ -46,9 +46,10 @@ export const queryKeys = {
 export function useDecisions(filters: DashboardFilters, limit: number = 50) {
   return useInfiniteQuery({
     queryKey: queryKeys.decisions(filters),
-    queryFn: ({ pageParam = 1 }) => fetchDecisions(filters, pageParam, limit),
-    getNextPageParam: (lastPage) => 
-      lastPage.hasMore ? lastPage.page + 1 : undefined,
+    queryFn: ({ pageParam = 1 }) => fetchDecisions(filters, pageParam as number, limit),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage: any) => 
+      lastPage?.hasMore ? (lastPage.page + 1) : undefined,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes cache
   });

@@ -415,15 +415,15 @@ export default function ReportSharing({ filters, onShare, className }: ReportSha
               <div className="space-y-2 text-sm text-blue-800">
                 <div className="flex items-center justify-between">
                   <span>כלול מסננים</span>
-                  <Switch size="sm" defaultChecked />
+                  <Switch defaultChecked />
                 </div>
                 <div className="flex items-center justify-between">
                   <span>כלול תרשימים</span>
-                  <Switch size="sm" defaultChecked />
+                  <Switch defaultChecked />
                 </div>
                 <div className="flex items-center justify-between">
                   <span>רזולוציה גבוהה</span>
-                  <Switch size="sm" />
+                  <Switch />
                 </div>
               </div>
             </div>

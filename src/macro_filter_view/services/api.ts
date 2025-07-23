@@ -89,7 +89,8 @@ function filtersToParams(filters: DashboardFilters): Record<string, any> {
   }
 
   if (filters.decisionType !== 'all') {
-    params.operativity = filters.decisionType === 'operative' ? 'אופרטיבית' : 'דקלרטיבית';
+    // Direct mapping since types now match
+    params.operativity = filters.decisionType;
   }
 
   return params;

@@ -25,20 +25,20 @@ const ExampleQueries = ({ onQueryClick, onQueryEdit, position }: ExampleQueriesP
     {
       icon: <Search className="w-5 h-5" />,
       title: "חיפוש פשוט",
-      query: "החלטות בנושא חינוך ממשלה 37",
+      query: "החלטות בנושא מינהל ציבורי ושירות המדינה",
       category: "חיפוש"
     },
     {
       icon: <FileText className="w-5 h-5" />,
       title: "החלטה ספציפית",
-      query: "החלטה 2989",
+      query: "החלטה 550",
       category: "ספציפי"
     },
     {
       icon: <BarChart3 className="w-5 h-5" />,
       title: "ספירת החלטות",
       query: "כמה החלטות בנושא ביטחון קיבלה ממשלה 37",
-      category: "ספירה"
+      category: "חיפוש"
     },
     {
       icon: <Calendar className="w-5 h-5" />,
@@ -50,13 +50,13 @@ const ExampleQueries = ({ onQueryClick, onQueryEdit, position }: ExampleQueriesP
       icon: <FileText className="w-5 h-5" />,
       title: "החלטות לפי משרד",
       query: "החלטות של משרד החינוך",
-      category: "משרדים"
+      category: "חיפוש"
     },
     {
       icon: <Search className="w-5 h-5" />,
       title: "חיפוש לפי תאריך",
       query: "החלטות ממשלה ב2024 בנושא בריאות",
-      category: "תאריכים"
+      category: "חיפוש"
     }
   ];
 
@@ -99,7 +99,6 @@ const ExampleQueries = ({ onQueryClick, onQueryEdit, position }: ExampleQueriesP
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-1">
                         <h4 className="font-semibold text-sm text-gray-800">{example.title}</h4>
-                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">{example.category}</span>
                       </div>
                       
                       <p className="text-sm text-gray-600 leading-relaxed mb-2">
@@ -126,14 +125,6 @@ const ExampleQueries = ({ onQueryClick, onQueryEdit, position }: ExampleQueriesP
                   </div>
                 </div>
               ))}
-            </div>
-          </div>
-
-          <div className="mt-4 pt-4 border-t border-gray-200 flex-shrink-0">
-            <div className="p-3 bg-blue-50 rounded-lg">
-              <p className="text-xs text-gray-600 text-center">
-                📤 שלח ישירות | ✏️ העתק לתיבת הצ'אט לעריכה
-              </p>
             </div>
           </div>
           

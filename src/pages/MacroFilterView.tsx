@@ -33,15 +33,18 @@ const macroQueryClient = new QueryClient({
 const mockUserPreferences: UserPreferences = {
   theme: 'light',
   defaultView: 'cards',
-  favoriteCharts: ['timeline', 'policy', 'kpi'],
-  savedFilters: [],
-  notifications: {
-    newDecisions: true,
-    weeklyReports: true,
-    systemAlerts: true,
+  chartsConfiguration: {
+    timeline: { visible: true, position: 1, size: 'medium' },
+    policy: { visible: true, position: 2, size: 'large' },
+    kpi: { visible: true, position: 3, size: 'small' }
   },
-  language: 'he',
-  dateFormat: 'hebrew',
+  filterPresets: [
+    {
+      name: 'ברירת מחדל',
+      filters: getDefaultFilters(),
+      isDefault: true
+    }
+  ]
 };
 
 const MacroFilterView = () => {

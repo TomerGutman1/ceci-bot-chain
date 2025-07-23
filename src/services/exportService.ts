@@ -48,7 +48,7 @@ export async function exportToPDF(results: DecisionGuideAnalysis): Promise<void>
     const feasibilityText = `Feasibility Level: ${results.feasibilityLevel.toUpperCase()}`;
     const color = results.weightedScore >= 7.5 ? [76, 175, 80] : 
                   results.weightedScore >= 5 ? [255, 193, 7] : [244, 67, 54];
-    pdf.setTextColor(...color);
+    pdf.setTextColor(color[0], color[1], color[2]);
     pdf.text(feasibilityText, centerX, yPosition, { align: 'center' });
     
     // Criteria Scores
@@ -82,7 +82,7 @@ export async function exportToPDF(results: DecisionGuideAnalysis): Promise<void>
       // Score bar
       const scoreColor = criteria.score >= 8 ? [76, 175, 80] : 
                         criteria.score >= 5 ? [255, 193, 7] : [244, 67, 54];
-      pdf.setFillColor(...scoreColor);
+      pdf.setFillColor(scoreColor[0], scoreColor[1], scoreColor[2]);
       pdf.rect(barX, yPosition + 2, (criteria.score / 10) * barWidth, barHeight, 'F');
       
       yPosition += 12;
@@ -134,7 +134,7 @@ export async function exportToCSV(results: DecisionGuideAnalysis): Promise<void>
     // Add summary row
     csvData.push({
       'קריטריון': 'ציון משוקלל כולל',
-      'ציון (1-10)': results.weightedScore.toFixed(1),
+      'ציון (1-10)': parseFloat(results.weightedScore.toFixed(1)),
       'משקל (%)': '100',
       'הסבר': `רמת ישימות: ${results.feasibilityLevel === 'high' ? 'גבוהה' : 
                            results.feasibilityLevel === 'medium' ? 'בינונית' : 'נמוכה'}`,
