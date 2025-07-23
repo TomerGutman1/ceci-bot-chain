@@ -24,6 +24,12 @@ const ExampleQueries = ({ onQueryClick, onQueryEdit, position }: ExampleQueriesP
   const basicQueries: ExampleQuery[] = [
     {
       icon: <Search className="w-5 h-5" />,
+      title: "חיפוש לפי תאריך",
+      query: "החלטות ממשלה ב2024 בנושא בריאות",
+      category: "חיפוש"
+    },
+    {
+      icon: <Search className="w-5 h-5" />,
       title: "חיפוש פשוט",
       query: "החלטות בנושא מינהל ציבורי ושירות המדינה",
       category: "חיפוש"
@@ -50,12 +56,6 @@ const ExampleQueries = ({ onQueryClick, onQueryEdit, position }: ExampleQueriesP
       icon: <FileText className="w-5 h-5" />,
       title: "החלטות לפי משרד",
       query: "החלטות של משרד החינוך",
-      category: "חיפוש"
-    },
-    {
-      icon: <Search className="w-5 h-5" />,
-      title: "חיפוש לפי תאריך",
-      query: "החלטות ממשלה ב2024 בנושא בריאות",
       category: "חיפוש"
     }
   ];
