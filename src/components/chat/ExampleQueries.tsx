@@ -38,7 +38,7 @@ const ExampleQueries = ({ onQueryClick, onQueryEdit, position }: ExampleQueriesP
       icon: <BarChart3 className="w-5 h-5" />,
       title: "ספירת החלטות",
       query: "כמה החלטות בנושא ביטחון קיבלה ממשלה 37",
-      category: "ספירה"
+      category: "חיפוש"
     },
     {
       icon: <Calendar className="w-5 h-5" />,
@@ -50,13 +50,13 @@ const ExampleQueries = ({ onQueryClick, onQueryEdit, position }: ExampleQueriesP
       icon: <FileText className="w-5 h-5" />,
       title: "החלטות לפי משרד",
       query: "החלטות של משרד החינוך",
-      category: "משרדים"
+      category: "חיפוש"
     },
     {
       icon: <Search className="w-5 h-5" />,
       title: "חיפוש לפי תאריך",
       query: "החלטות ממשלה ב2024 בנושא בריאות",
-      category: "תאריכים"
+      category: "חיפוש"
     }
   ];
 
