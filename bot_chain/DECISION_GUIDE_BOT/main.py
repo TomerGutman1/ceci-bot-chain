@@ -10,6 +10,7 @@ import json
 import re
 import hashlib
 import time
+import asyncio
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -24,8 +25,9 @@ CACHE_EXPIRY_SECONDS = 3600  # 1 hour
 
 # Document size limits
 WARN_CHAR_LIMIT = 50000  # ~20 pages
-MAX_CHAR_LIMIT = 100000  # ~40 pages
-CHUNK_SIZE = 40000  # Size for each chunk when splitting
+MAX_CHAR_LIMIT = 500000  # ~200 pages (increased from 100K)
+CHUNK_SIZE = 30000  # Size for each chunk when splitting (safe for Hebrew)
+CHUNK_OVERLAP = 2000  # Overlap between chunks to maintain context
 
 # Configuration
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -56,6 +58,8 @@ class AnalyzeResponse(BaseModel):
     misuse_detected: bool = False
     misuse_message: Optional[str] = None
     retry_status: Optional[str] = None
+    progress_status: Optional[str] = None  # For reporting progress on large documents
+    chunk_info: Optional[Dict[str, Any]] = None  # Information about chunk processing
 
 # Criteria definitions
 CRITERIA = [
@@ -276,6 +280,260 @@ def detect_misuse(response_json: dict) -> tuple[bool, Optional[str]]:
         return True, enhanced_message
     return False, None
 
+def split_document(text: str) -> List[Dict[str, Any]]:
+    """Split a large document into chunks with overlap."""
+    chunks = []
+    text_length = len(text)
+    
+    # If document is small enough, return as single chunk
+    if text_length <= CHUNK_SIZE:
+        return [{"text": text, "start": 0, "end": text_length, "index": 0}]
+    
+    # Find natural break points (paragraphs/sections)
+    paragraphs = text.split('\n\n')
+    
+    current_chunk = ""
+    current_start = 0
+    chunk_index = 0
+    
+    for i, paragraph in enumerate(paragraphs):
+        # If adding this paragraph would exceed chunk size
+        if len(current_chunk) + len(paragraph) + 2 > CHUNK_SIZE and current_chunk:
+            # Save current chunk
+            chunks.append({
+                "text": current_chunk.strip(),
+                "start": current_start,
+                "end": current_start + len(current_chunk),
+                "index": chunk_index
+            })
+            
+            # Start new chunk with overlap from previous chunk
+            overlap_start = max(0, len(current_chunk) - CHUNK_OVERLAP)
+            current_chunk = current_chunk[overlap_start:] + "\n\n" + paragraph
+            current_start = current_start + overlap_start
+            chunk_index += 1
+        else:
+            # Add paragraph to current chunk
+            if current_chunk:
+                current_chunk += "\n\n" + paragraph
+            else:
+                current_chunk = paragraph
+    
+    # Don't forget the last chunk
+    if current_chunk:
+        chunks.append({
+            "text": current_chunk.strip(),
+            "start": current_start,
+            "end": current_start + len(current_chunk),
+            "index": chunk_index
+        })
+    
+    logger.info(f"Split document into {len(chunks)} chunks")
+    return chunks
+
+async def analyze_chunk(chunk: Dict[str, Any], doc_hash: str, total_chunks: int) -> Dict[str, Any]:
+    """Analyze a single chunk of a document."""
+    chunk_index = chunk["index"]
+    logger.info(f"Analyzing chunk {chunk_index + 1}/{total_chunks} for doc_hash: {doc_hash}")
+    
+    try:
+        # Create evaluation prompt for this chunk
+        prompt = create_evaluation_prompt(chunk["text"])
+        
+        # Call OpenAI API
+        response = await asyncio.to_thread(
+            client.chat.completions.create,
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": """אתה מומחה בניתוח החלטות ממשלה בישראל. 
+זהו חלק ממסמך גדול יותר. נתח את החלק הזה לפי הקריטריונים, תוך הבנה שאולי חסר הקשר מלא.
+אם קריטריון מסוים לא מופיע בחלק זה, תן ציון 0 וציין שהמידע לא נמצא בחלק זה.
+תמיד החזר תשובות בפורמט JSON תקין."""},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.0,
+            max_tokens=3000,
+            seed=42
+        )
+        
+        # Parse response
+        response_text = response.choices[0].message.content
+        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+        if json_match:
+            response_json = json.loads(json_match.group())
+        else:
+            raise ValueError(f"Failed to extract JSON from chunk {chunk_index}")
+        
+        # Log token usage
+        if hasattr(response, 'usage'):
+            logger.info(f"Chunk {chunk_index} token usage - Total: {response.usage.total_tokens}")
+        
+        return {
+            "chunk_index": chunk_index,
+            "response_json": response_json,
+            "success": True,
+            "error": None
+        }
+        
+    except Exception as e:
+        logger.error(f"Error analyzing chunk {chunk_index}: {str(e)}")
+        return {
+            "chunk_index": chunk_index,
+            "response_json": None,
+            "success": False,
+            "error": str(e)
+        }
+
+def aggregate_chunk_results(chunk_results: List[Dict[str, Any]], total_text_length: int) -> Dict[str, Any]:
+    """Aggregate analysis results from multiple chunks."""
+    # Initialize aggregated scores for each criterion
+    criteria_aggregated = {}
+    all_recommendations = []
+    all_references = {}
+    
+    # Process each successful chunk
+    successful_chunks = [r for r in chunk_results if r["success"]]
+    
+    if not successful_chunks:
+        raise ValueError("No chunks were successfully analyzed")
+    
+    for result in successful_chunks:
+        response_json = result["response_json"]
+        chunk_index = result["chunk_index"]
+        
+        # Skip if not a government decision
+        if not response_json.get("is_government_decision", True):
+            continue
+        
+        # Process criteria scores
+        for score_data in response_json.get("criteria_scores", []):
+            criterion = score_data["criterion"]
+            
+            if criterion not in criteria_aggregated:
+                criteria_aggregated[criterion] = {
+                    "scores": [],
+                    "explanations": [],
+                    "references": [],
+                    "improvements": []
+                }
+            
+            # Only count non-zero scores (criterion was found in this chunk)
+            if score_data["score"] > 0:
+                criteria_aggregated[criterion]["scores"].append(score_data["score"])
+                criteria_aggregated[criterion]["explanations"].append(
+                    f"חלק {chunk_index + 1}: {score_data['explanation']}"
+                )
+                
+                if score_data.get("reference_from_document"):
+                    criteria_aggregated[criterion]["references"].append(
+                        score_data["reference_from_document"]
+                    )
+                
+                if score_data.get("specific_improvement"):
+                    criteria_aggregated[criterion]["improvements"].append(
+                        score_data["specific_improvement"]
+                    )
+        
+        # Collect recommendations
+        all_recommendations.extend(response_json.get("recommendations", []))
+    
+    # Calculate final scores and build response
+    final_criteria_scores = []
+    
+    for criterion in CRITERIA:
+        if criterion in criteria_aggregated and criteria_aggregated[criterion]["scores"]:
+            # Average the scores where the criterion was found
+            avg_score = sum(criteria_aggregated[criterion]["scores"]) / len(criteria_aggregated[criterion]["scores"])
+            
+            # Combine explanations
+            combined_explanation = " | ".join(criteria_aggregated[criterion]["explanations"][:2])  # Limit to 2
+            
+            # Get first reference and improvement
+            reference = criteria_aggregated[criterion]["references"][0] if criteria_aggregated[criterion]["references"] else None
+            improvement = criteria_aggregated[criterion]["improvements"][0] if criteria_aggregated[criterion]["improvements"] else None
+            
+            final_criteria_scores.append({
+                "criterion": criterion,
+                "score": round(avg_score),  # Round to nearest integer
+                "explanation": combined_explanation,
+                "reference_from_document": reference,
+                "specific_improvement": improvement
+            })
+        else:
+            # Criterion not found in any chunk
+            final_criteria_scores.append({
+                "criterion": criterion,
+                "score": 0,
+                "explanation": "הקריטריון לא נמצא במסמך",
+                "reference_from_document": None,
+                "specific_improvement": f"יש להוסיף התייחסות ל{criterion} בהחלטה"
+            })
+    
+    # Deduplicate recommendations
+    unique_recommendations = list(dict.fromkeys(all_recommendations))[:10]  # Limit to 10
+    
+    # Add chunk processing note
+    chunk_note = f"המסמך נותח ב-{len(successful_chunks)} חלקים עקב אורכו ({total_text_length:,} תווים)"
+    unique_recommendations.insert(0, chunk_note)
+    
+    return {
+        "criteria_scores": final_criteria_scores,
+        "recommendations": unique_recommendations,
+        "chunk_info": {
+            "total_chunks": len(chunk_results),
+            "successful_chunks": len(successful_chunks),
+            "total_length": total_text_length
+        }
+    }
+
+async def analyze_large_document(text: str, doc_hash: str, request_id: str, 
+                                progress_callback: Optional[callable] = None) -> Dict[str, Any]:
+    """Analyze a large document by splitting it into chunks."""
+    logger.info(f"Starting large document analysis for doc_hash: {doc_hash}, length: {len(text)}")
+    
+    # Split document into chunks
+    chunks = split_document(text)
+    total_chunks = len(chunks)
+    
+    if progress_callback:
+        await progress_callback(f"מפצל מסמך ארוך ל-{total_chunks} חלקים...")
+    
+    # Analyze chunks concurrently (but limit concurrency to avoid rate limits)
+    chunk_results = []
+    batch_size = 3  # Process 3 chunks at a time
+    
+    for i in range(0, total_chunks, batch_size):
+        batch = chunks[i:i + batch_size]
+        
+        if progress_callback:
+            await progress_callback(f"מנתח חלקים {i+1}-{min(i+batch_size, total_chunks)} מתוך {total_chunks}...")
+        
+        # Analyze batch concurrently
+        batch_tasks = [analyze_chunk(chunk, doc_hash, total_chunks) for chunk in batch]
+        batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
+        
+        # Handle results
+        for result in batch_results:
+            if isinstance(result, Exception):
+                logger.error(f"Chunk analysis failed: {str(result)}")
+                chunk_results.append({
+                    "success": False,
+                    "error": str(result)
+                })
+            else:
+                chunk_results.append(result)
+    
+    if progress_callback:
+        await progress_callback("מאחד תוצאות הניתוח...")
+    
+    # Aggregate results
+    try:
+        aggregated = aggregate_chunk_results(chunk_results, len(text))
+        return aggregated
+    except Exception as e:
+        logger.error(f"Failed to aggregate results for doc_hash {doc_hash}: {str(e)}")
+        raise
+
 def perform_analysis(response_json: dict, model: str, doc_hash: str) -> AnalyzeResponse:
     """Perform the actual analysis of the document after validation"""
     try:
@@ -362,15 +620,15 @@ async def analyze_decision(request: AnalyzeRequest):
         doc_length = len(request.text)
         logger.info(f"Analyzing decision draft - text_length: {doc_length}, request_id: {request.requestId}, doc_hash: {doc_hash}")
         
-        # Check if document exceeds warning limit
+        # Check if document exceeds maximum size limit
         if doc_length > MAX_CHAR_LIMIT:
             logger.warning(f"Document exceeds maximum size limit - doc_hash: {doc_hash}, length: {doc_length}, max: {MAX_CHAR_LIMIT}")
             return AnalyzeResponse(
                 criteria_scores=[],
-                recommendations=[f"המסמך ארוך מדי ({doc_length:,} תווים). הגבלת המערכת היא {MAX_CHAR_LIMIT:,} תווים (כ-40 עמודים). אנא קצר את המסמך או חלק אותו למספר חלקים."],
+                recommendations=[f"המסמך גדול מאוד ({doc_length:,} תווים). המערכת תומכת עד {MAX_CHAR_LIMIT:,} תווים (כ-200 עמודים). אנא פנה לתמיכה לקבלת סיוע."],
                 model_used="none",
                 misuse_detected=False,
-                retry_status="מסמך גדול מדי"
+                retry_status="מסמך גדול מאוד"
             )
         
         if doc_length > WARN_CHAR_LIMIT:
@@ -391,7 +649,53 @@ async def analyze_decision(request: AnalyzeRequest):
                     cached_response.recommendations.insert(0, size_warning)
                 return cached_response
         
-        # Check cache for previous validation result
+        # For large documents, use chunking approach
+        if doc_length > CHUNK_SIZE:
+            logger.info(f"Document requires chunking - length: {doc_length}, chunk_size: {CHUNK_SIZE}")
+            
+            # Define progress callback
+            progress_messages = []
+            async def progress_callback(message: str):
+                progress_messages.append(message)
+                logger.info(f"Progress update for doc_hash {doc_hash}: {message}")
+            
+            try:
+                # Analyze large document
+                large_doc_result = await analyze_large_document(
+                    request.text, 
+                    doc_hash, 
+                    request.requestId,
+                    progress_callback
+                )
+                
+                # Build response
+                result = AnalyzeResponse(
+                    criteria_scores=[CriteriaScore(**cs) for cs in large_doc_result["criteria_scores"]],
+                    recommendations=large_doc_result["recommendations"],
+                    model_used="gpt-4o",
+                    misuse_detected=False,
+                    progress_status=" | ".join(progress_messages),
+                    chunk_info=large_doc_result.get("chunk_info")
+                )
+                
+                # Cache successful results
+                if result.criteria_scores:
+                    analysis_cache[analysis_cache_key] = (datetime.utcnow(), result)
+                    logger.info(f"Cached large document analysis for doc_hash: {doc_hash}")
+                
+                return result
+                
+            except Exception as e:
+                logger.error(f"Large document analysis failed for doc_hash {doc_hash}: {str(e)}")
+                return AnalyzeResponse(
+                    criteria_scores=[],
+                    recommendations=[f"ניתוח המסמך הארוך נכשל: {str(e)}"],
+                    model_used="gpt-4o",
+                    misuse_detected=False,
+                    retry_status="נכשל בניתוח מסמך גדול"
+                )
+        
+        # Check cache for previous validation result (for normal-sized documents)
         cache_key = f"validation_{doc_hash}"
         cached_result = validation_cache.get(cache_key)
         if cached_result:
