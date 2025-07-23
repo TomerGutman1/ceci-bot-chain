@@ -87,13 +87,18 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
   });
 
   const handleAnalyze = async () => {
+    console.log('handleAnalyze called!');
     if (!file && !textContent.trim()) {
       setError('אנא העלה קובץ או הדבק טקסט לניתוח.');
       return;
     }
 
+    console.log('Setting isAnalyzing to true...');
     setIsAnalyzing(true);
     setError(null);
+    
+    // Force a small delay to ensure the loading state is shown
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     try {
       
@@ -103,8 +108,8 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
       const elapsedTime = Date.now() - startTime;
       
       // If the request was too fast, wait a bit to show the loading state
-      if (elapsedTime < 2000) {
-        await new Promise(resolve => setTimeout(resolve, 2000 - elapsedTime));
+      if (elapsedTime < 3000) {
+        await new Promise(resolve => setTimeout(resolve, 3000 - elapsedTime));
       }
       
       setAnalysisResults(results);
@@ -138,9 +143,16 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
     onClose();
   };
 
+  console.log('DecisionGuideModal render - isAnalyzing:', isAnalyzing, 'analysisResults:', !!analysisResults);
+
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={onClose}>
+      <Dialog open={isOpen} onOpenChange={(open) => {
+        // Don't allow closing during analysis
+        if (!isAnalyzing && !open) {
+          onClose();
+        }
+      }}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         {isAnalyzing ? (
           // Loading state
