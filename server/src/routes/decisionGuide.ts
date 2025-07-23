@@ -80,6 +80,10 @@ router.post('/analyze', upload.single('file'), async (req: any, res: any) => {
     else if (req.body.text) {
       documentText = req.body.text;
       documentInfo.size = Buffer.byteLength(documentText, 'utf8');
+      // Also accept documentInfo from request body
+      if (req.body.documentInfo) {
+        documentInfo = { ...documentInfo, ...req.body.documentInfo };
+      }
     } else {
       return res.status(400).json({ error: 'No file or text provided' });
     }

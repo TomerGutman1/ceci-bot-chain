@@ -62,7 +62,7 @@ export async function processDecisionGuideRequest(
       documentInfo: request.documentInfo,
       requestId: request.id
     }, {
-      timeout: 60000, // 60 second timeout for long documents
+      timeout: 300000, // 300 second (5 minute) timeout for long documents
       headers: {
         'Content-Type': 'application/json'
       }
