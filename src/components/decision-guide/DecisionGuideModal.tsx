@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import {
   Dialog,
@@ -19,6 +19,16 @@ interface DecisionGuideModalProps {
   onClose: () => void;
 }
 
+// Analysis status messages
+const ANALYSIS_MESSAGES = [
+  'הטיוטה התקבלה. מתחילים בניתוח.',
+  'בודקים את מבנה הטיוטה ותקינות הנתונים.',
+  'מזהים קריטריונים רלוונטיים לציון.',
+  'מחשבים מדדי הערכה לפי מתודולוגיית המשרד.',
+  'מכינים דו״ח מסכם להצגה.',
+  'עוד רגע – מבצעים אימות סופי.'
+];
+
 export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps) {
   const [mode, setMode] = useState<'upload' | 'paste'>('upload');
   const [textContent, setTextContent] = useState('');
@@ -26,6 +36,31 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResults, setAnalysisResults] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
+
+  // Rotate analysis messages
+  useEffect(() => {
+    if (!isAnalyzing) {
+      setCurrentMessageIndex(0);
+      return;
+    }
+
+    // Show first message immediately
+    setCurrentMessageIndex(0);
+
+    // Set up interval to rotate messages every 8-12 seconds (we'll use 10 seconds)
+    const interval = setInterval(() => {
+      setCurrentMessageIndex((prevIndex) => {
+        // If we've shown all messages, loop back to messages 2-5 (indices 1-4)
+        if (prevIndex >= ANALYSIS_MESSAGES.length - 1) {
+          return 1; // Start looping from message 2
+        }
+        return prevIndex + 1;
+      });
+    }, 10000); // 10 seconds
+
+    return () => clearInterval(interval);
+  }, [isAnalyzing]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const uploadedFile = acceptedFiles[0];
@@ -69,9 +104,11 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
 
     setIsAnalyzing(true);
     setError(null);
+    console.log('Starting analysis...'); // Debug log
 
     try {
       const results = await analyzeDecisionDraft(file, textContent);
+      console.log('Analysis completed:', results); // Debug log
       setAnalysisResults(results);
       
       // Show toast if misuse detected
@@ -85,7 +122,7 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
         return;
       }
     } catch (err) {
-      setError('אירעה שגיאה בניתוח. אנא נסה שוב.');
+      setError('אירעה שגיאה זמנית. מומלץ לנסות שוב בעוד כמה דקות.');
       console.error('Analysis error:', err);
     } finally {
       setIsAnalyzing(false);
@@ -116,26 +153,39 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
             </DialogHeader>
 
             <div className="mt-6">
+              {/* Analysis Loading State - Show at the top when analyzing */}
+              {isAnalyzing && (
+                <div className="mb-6 p-6 bg-blue-50 border-2 border-blue-200 rounded-lg text-center">
+                  <div className="flex justify-center mb-4">
+                    {/* Simple spinner */}
+                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+                  </div>
+                  <p className="text-xl font-medium text-blue-900">{ANALYSIS_MESSAGES[currentMessageIndex]}</p>
+                </div>
+              )}
+
               {/* Mode Toggle */}
-              <div className="flex justify-center gap-4 mb-6">
-                <Button
-                  variant={mode === 'upload' ? 'default' : 'outline'}
-                  onClick={() => setMode('upload')}
-                >
-                  <Upload className="ml-2 h-4 w-4" />
-                  העלאת קובץ
-                </Button>
-                <Button
-                  variant={mode === 'paste' ? 'default' : 'outline'}
-                  onClick={() => setMode('paste')}
-                >
-                  <FileText className="ml-2 h-4 w-4" />
-                  הדבקת טקסט
-                </Button>
-              </div>
+              {!isAnalyzing && (
+                <div className="flex justify-center gap-4 mb-6">
+                  <Button
+                    variant={mode === 'upload' ? 'default' : 'outline'}
+                    onClick={() => setMode('upload')}
+                  >
+                    <Upload className="ml-2 h-4 w-4" />
+                    העלאת קובץ
+                  </Button>
+                  <Button
+                    variant={mode === 'paste' ? 'default' : 'outline'}
+                    onClick={() => setMode('paste')}
+                  >
+                    <FileText className="ml-2 h-4 w-4" />
+                    הדבקת טקסט
+                  </Button>
+                </div>
+              )}
 
               {/* Upload Mode */}
-              {mode === 'upload' && (
+              {mode === 'upload' && !isAnalyzing && (
                 <div
                   {...getRootProps()}
                   className={`
@@ -192,7 +242,7 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
               )}
 
               {/* Paste Mode */}
-              {mode === 'paste' && (
+              {mode === 'paste' && !isAnalyzing && (
                 <div className="space-y-4">
                   <Textarea
                     placeholder="הדבק כאן את טקסט טיוטת ההחלטה..."
@@ -217,14 +267,14 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
 
               {/* Action Buttons */}
               <div className="mt-6 flex justify-between">
-                <Button variant="outline" onClick={onClose}>
+                <Button variant="outline" onClick={onClose} disabled={isAnalyzing}>
                   ביטול
                 </Button>
                 <Button
                   onClick={handleAnalyze}
                   disabled={(!file && !textContent.trim()) || isAnalyzing}
                 >
-                  {isAnalyzing ? 'מנתח...' : 'שלח לניתוח'}
+                  {isAnalyzing ? 'מעבד...' : 'שלח לניתוח'}
                 </Button>
               </div>
             </div>
