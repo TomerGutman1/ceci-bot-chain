@@ -96,6 +96,16 @@ def format_analysis_results(content: Dict[str, Any]) -> str:
     lines.append(f"**כותרת ההחלטה:** {title}")
     lines.append("")
     
+    # Add full decision content if available
+    full_content = evaluation.get('content_analysis', {}).get('full_decision_content', '')
+    if full_content:
+        lines.append("### 📄 תוכן ההחלטה המלא:")
+        lines.append("")
+        lines.append(full_content)
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+    
     # Collect citations separately
     citations = []
     
@@ -833,11 +843,12 @@ async def format_response(request: FormatterRequest) -> FormatterResponse:
         
         # Add tips if many results
         if len(results) > 5:
-            response_parts.append("\n💡 רוצה לצמצם את התוצאות?")
-            response_parts.append("נסה להיות יותר ספציפי:")
-            response_parts.append("• **תאריכים מדויקים**: \"החלטות בנושא X בין ינואר למרץ 2025\"")
-            response_parts.append("• **נושא ספציפי**: \"החלטות בנושא חינוך יסודי\" במקום רק \"חינוך\"")
-            response_parts.append("• **ממשלה ספציפית**: \"החלטות בנושא X בממשלה 37\"")
+            response_parts.append("\n\n💡 רוצה לצמצם את התוצאות?")
+            response_parts.append("\nנסה להיות יותר ספציפי:")
+            response_parts.append("\n• **תאריכים מדויקים**: \"החלטות בנושא X בין ינואר למרץ 2025\"")
+            response_parts.append("\n• **נושא ספציפי**: \"החלטות בנושא חינוך יסודי\" במקום רק \"חינוך\"")
+            response_parts.append("\n• **ממשלה ספציפית**: \"החלטות בנושא X בממשלה 37\"")
+            response_parts.append("\n• **משרד מסוים**: \"החלטות משרד החינוך בנושא X\"")
         
         formatted_response = "\n".join(response_parts)
         

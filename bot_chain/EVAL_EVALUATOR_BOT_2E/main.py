@@ -944,7 +944,10 @@ async def perform_feasibility_analysis(decision_content: Dict[str, Any], request
                         "feasibility_analysis": summary, 
                         "decision_title": decision_title, 
                         "criteria_breakdown": criteria,
-                        "final_score": final_score
+                        "final_score": final_score,
+                        "full_decision_content": decision_text,
+                        "decision_number": decision_num,
+                        "government_number": gov_num
                     },
                     recommendations=specific_recommendations if specific_recommendations else [
                         "בהתבסס על הניתוח, מומלץ להתמקד בשיפור הקריטריונים שקיבלו ציון נמוך",
