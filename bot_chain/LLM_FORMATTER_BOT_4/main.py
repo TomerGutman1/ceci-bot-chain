@@ -325,14 +325,11 @@ def format_decision_typescript_style(decision: Dict[str, Any], index: int, inclu
     # Full content if requested
     if include_full_content:
         content = decision.get('content', decision.get('decision_content', ''))
-        if content and len(str(content)) > 500:
+        if content:
             lines.append("")  # Add blank line before content
             lines.append("📄 מתוך ההחלטה:")
-            # Show first 500 chars of content
-            content_preview = str(content)[:500]
-            if len(str(content)) > 500:
-                content_preview += '...'
-            lines.append(content_preview)
+            # Show FULL content - no truncation
+            lines.append(str(content))
     
     return '\n'.join(lines)
 
@@ -572,12 +569,9 @@ async def call_gpt_formatter(
             # Also truncate large text fields
             for result in truncated_content["results"]:
                 if isinstance(result, dict):
-                    # Truncate content field if it exists and is too long
-                    if "content" in result and isinstance(result["content"], str) and len(result["content"]) > 10000:
-                        result["content"] = result["content"][:9997] + "..."
-                    # Truncate summary field if it's too long
-                    if "summary" in result and isinstance(result["summary"], str) and len(result["summary"]) > 500:
-                        result["summary"] = result["summary"][:497] + "..."
+                    # NO TRUNCATION - show full content always
+                    # Keep all content intact regardless of length
+                    pass
         
         # Build the prompt - special handling for analysis
         if isinstance(truncated_content, dict) and 'decision_number' in truncated_content:
@@ -718,7 +712,9 @@ def fallback_format(data_type: DataType, content: Dict, query: str) -> str:
             if not results:
                 return "😔 לא נמצאו החלטות התואמות לבקשה"
             
-            # Check if full content is present
+            # Check if full content was requested or if any result has content > 500 chars
+            # Note: In this function we don't have access to request.entities
+            # So we rely on the presence of long content as indicator
             include_full = any(
                 result.get('content', '') and len(str(result.get('content', ''))) > 500 
                 for result in results
@@ -823,8 +819,11 @@ async def format_response(request: FormatterRequest) -> FormatterResponse:
                     logger.error(f"Invalid URL found: {url}")
                     result['decision_url'] = None  # Remove invalid URLs
         
-        # Check if any result has content > 500 chars (indicates full content request)
-        include_full = any(
+        # Check if full content was requested or if any result has content > 500 chars
+        # Check entities for explicit full_content request
+        full_content_requested = request.entities.get('full_content', False) if hasattr(request, 'entities') else False
+        
+        include_full = full_content_requested or any(
             result.get('content', '') and len(str(result.get('content', ''))) > 500 
             for result in results
         )
