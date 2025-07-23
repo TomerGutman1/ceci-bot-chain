@@ -12,22 +12,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Upload, FileText, AlertCircle } from 'lucide-react';
 import { analyzeDecisionDraft } from '@/services/decisionGuide.service';
 import { AnalysisResults } from './AnalysisResults';
+import { AnalysisLoadingModal } from './AnalysisLoadingModal';
 import { toast } from '@/components/ui/use-toast';
 
 interface DecisionGuideModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
-
-// Analysis status messages
-const ANALYSIS_MESSAGES = [
-  'הטיוטה התקבלה. מתחילים בניתוח.',
-  'בודקים את מבנה הטיוטה ותקינות הנתונים.',
-  'מזהים קריטריונים רלוונטיים לציון.',
-  'מחשבים מדדי הערכה לפי מתודולוגיית המשרד.',
-  'מכינים דו״ח מסכם להצגה.',
-  'עוד רגע – מבצעים אימות סופי.'
-];
 
 export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps) {
   const [mode, setMode] = useState<'upload' | 'paste'>('upload');
@@ -36,31 +27,6 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResults, setAnalysisResults] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
-  const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
-
-  // Rotate analysis messages
-  useEffect(() => {
-    if (!isAnalyzing) {
-      setCurrentMessageIndex(0);
-      return;
-    }
-
-    // Show first message immediately
-    setCurrentMessageIndex(0);
-
-    // Set up interval to rotate messages every 8-12 seconds (we'll use 10 seconds)
-    const interval = setInterval(() => {
-      setCurrentMessageIndex((prevIndex) => {
-        // If we've shown all messages, loop back to messages 2-5 (indices 1-4)
-        if (prevIndex >= ANALYSIS_MESSAGES.length - 1) {
-          return 1; // Start looping from message 2
-        }
-        return prevIndex + 1;
-      });
-    }, 10000); // 10 seconds
-
-    return () => clearInterval(interval);
-  }, [isAnalyzing]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const uploadedFile = acceptedFiles[0];
@@ -141,8 +107,9 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+    <>
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         {!analysisResults ? (
           <>
             <DialogHeader>
@@ -153,20 +120,8 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
             </DialogHeader>
 
             <div className="mt-6">
-              {/* Analysis Loading State - Show at the top when analyzing */}
-              {isAnalyzing && (
-                <div className="mb-6 p-6 bg-blue-50 border-2 border-blue-200 rounded-lg text-center">
-                  <div className="flex justify-center mb-4">
-                    {/* Simple spinner */}
-                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
-                  </div>
-                  <p className="text-xl font-medium text-blue-900">{ANALYSIS_MESSAGES[currentMessageIndex]}</p>
-                </div>
-              )}
-
               {/* Mode Toggle */}
-              {!isAnalyzing && (
-                <div className="flex justify-center gap-4 mb-6">
+              <div className="flex justify-center gap-4 mb-6">
                   <Button
                     variant={mode === 'upload' ? 'default' : 'outline'}
                     onClick={() => setMode('upload')}
@@ -182,10 +137,9 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
                     הדבקת טקסט
                   </Button>
                 </div>
-              )}
 
               {/* Upload Mode */}
-              {mode === 'upload' && !isAnalyzing && (
+              {mode === 'upload' && (
                 <div
                   {...getRootProps()}
                   className={`
@@ -242,7 +196,7 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
               )}
 
               {/* Paste Mode */}
-              {mode === 'paste' && !isAnalyzing && (
+              {mode === 'paste' && (
                 <div className="space-y-4">
                   <Textarea
                     placeholder="הדבק כאן את טקסט טיוטת ההחלטה..."
@@ -267,14 +221,14 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
 
               {/* Action Buttons */}
               <div className="mt-6 flex justify-between">
-                <Button variant="outline" onClick={onClose} disabled={isAnalyzing}>
+                <Button variant="outline" onClick={onClose}>
                   ביטול
                 </Button>
                 <Button
                   onClick={handleAnalyze}
-                  disabled={(!file && !textContent.trim()) || isAnalyzing}
+                  disabled={(!file && !textContent.trim())}
                 >
-                  {isAnalyzing ? 'מעבד...' : 'שלח לניתוח'}
+                  שלח לניתוח
                 </Button>
               </div>
             </div>
@@ -294,5 +248,9 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
         )}
       </DialogContent>
     </Dialog>
+    
+    {/* Loading Modal */}
+    <AnalysisLoadingModal isOpen={isAnalyzing} />
+    </>
   );
 }
