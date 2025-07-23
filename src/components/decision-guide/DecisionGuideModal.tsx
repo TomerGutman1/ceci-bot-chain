@@ -96,9 +96,12 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
     }
 
     console.log('Setting viewState to loading...');
+    alert('לפני שינוי viewState ל-loading');
     setViewState('loading');
     setIsAnalyzing(true);
     setError(null);
+    
+    alert('אחרי שינוי viewState ל-loading, viewState = ' + viewState);
     
     // Force a small delay to ensure the loading state is shown
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -150,6 +153,11 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
   };
 
   console.log('DecisionGuideModal render - viewState:', viewState, 'isAnalyzing:', isAnalyzing);
+  
+  // בדיקה אם יש לנו גישה ל-document
+  if (typeof document !== 'undefined') {
+    console.log('document.body exists:', !!document.body);
+  }
 
   return (
     <>
@@ -160,7 +168,20 @@ export function DecisionGuideModal({ isOpen, onClose }: DecisionGuideModalProps)
         }
       }}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        {viewState === 'results' && analysisResults ? (
+        {/* Debug Info */}
+        <div className="bg-red-100 p-2 text-sm">
+          Debug: viewState = {viewState}, isAnalyzing = {String(isAnalyzing)}
+        </div>
+        
+        {viewState === 'loading' ? (
+          <div className="py-16">
+            <h1 className="text-4xl text-center text-red-600">טוען!!!</h1>
+            <div className="flex justify-center mb-8">
+              <div className="animate-spin rounded-full h-20 w-20 border-4 border-blue-600 border-t-transparent"></div>
+            </div>
+            <p className="text-center text-2xl">{ANALYSIS_MESSAGES[currentMessageIndex]}</p>
+          </div>
+        ) : viewState === 'results' && analysisResults ? (
           <>
             <DialogHeader>
               <DialogTitle className="text-2xl text-center">תוצאות ניתוח ההחלטה</DialogTitle>
